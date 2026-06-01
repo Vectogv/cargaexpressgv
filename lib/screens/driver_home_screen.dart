@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'trip_history_screen.dart';
@@ -12,6 +15,8 @@ import '../services/trip_service.dart';
 import '../services/driver_service.dart';
 import '../services/auth_service.dart';
 import '../services/api_client.dart';
+import '../services/dispute_service.dart';
+import '../models/driver.dart';
 
 enum _DriverState { offline, online, tripRequest, onTrip, enCurso }
 
@@ -75,6 +80,26 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     capacity: '---',
   );
 
+  io.Socket? _socket;
+  DriverEarnings? _driverEarnings;
+  String? _clienteNombre;
+  double? _clienteReputation;
+  int _totalReportes = 0;
+  bool _tripJustCompleted = false;
+  bool _showOfertaEnviada = false;
+
+  String _estadoVerificacion = 'aprobado';
+  String? _motivoRechazo;
+
+  String _statusCedula = 'pendiente';
+  String _statusLicencia = 'pendiente';
+  String _statusVehiculo = 'pendiente';
+
+  String? _pathCedula;
+  String? _pathLicencia;
+  String? _pathVehiculo;
+  String? _userId;
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +112,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
 
   Future<void> _initData() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      _userId = prefs.getString('userId');
+
       final profile = await _api.get('/users/profile');
       final nombre = profile['nombre'] ?? '';
       final apellido = profile['apellido'] ?? '';
@@ -99,6 +127,35 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         _vehicleInfo.type = (c['tipoVehiculo'] as String?) ?? 'Camioneta';
         _vehicleInfo.plate = (c['placa'] as String?) ?? '---';
         _vehicleInfo.capacity = (c['capacidad'] as String?) ?? '---';
+      }
+
+      String storedVerif = prefs.getString('estadoVerificacion') ?? '';
+      String? storedMotivo = prefs.getString('motivoRechazo');
+      
+      String verifStatus = 'aprobado';
+      String? motivoRechazo;
+
+      if (profile['conductor'] != null) {
+        final c = profile['conductor'] as Map<String, dynamic>;
+        verifStatus = c['estadoVerificacion'] ?? 'aprobado';
+        motivoRechazo = c['motivoRechazo'] ?? c['notaAdmin'];
+      }
+      
+      if (storedVerif.isNotEmpty) {
+        verifStatus = storedVerif;
+        if (storedMotivo != null) {
+          motivoRechazo = storedMotivo;
+        }
+      }
+
+      setState(() {
+        _estadoVerificacion = verifStatus;
+        _motivoRechazo = motivoRechazo;
+      });
+
+      if (verifStatus == 'pendiente' || verifStatus == 'rechazado') {
+        _conectarSocketDriver();
+        return;
       }
 
       final active = await _tripService.getActiveTrip();
@@ -142,6 +199,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         _calificacion = stats.calificacion;
         _earnings = today['gananciasHoy']?.toDouble() ?? earnings.hoy;
         _tripCountToday = today['viajesHoy'] ?? stats.viajes;
+        _driverEarnings = earnings;
       });
     } catch (_) {}
   }
@@ -153,6 +211,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     _gpsTimer?.cancel();
     _gpsSubscription?.cancel();
     _pollTripTimer?.cancel();
+    _socket?.disconnect();
+    _socket?.dispose();
     super.dispose();
   }
 
@@ -257,6 +317,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
           _currentRequestDestino = t.destinoDireccion;
           _currentRequestLat = t.origenLat;
           _currentRequestLng = t.origenLng;
+          _clienteNombre = t.cliente?['nombre'];
+          _clienteReputation = (t.cliente?['reputacion'] as num?)?.toDouble();
+          _totalReportes = t.cliente?['reportes'] ?? 0;
           setState(() {
             _state = _DriverState.tripRequest;
             _countdown = 20;
@@ -265,6 +328,77 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
           _pollTripTimer?.cancel();
         }
       } catch (_) {}
+    });
+  }
+
+  String get _socketServerUrl {
+    final base = _api.baseUrl;
+    if (base.endsWith('/api')) {
+      return base.substring(0, base.length - 4);
+    }
+    return base;
+  }
+
+  void _conectarSocketDriver() {
+    if (_userId == null) return;
+
+    _socket?.disconnect();
+    _socket?.dispose();
+
+    _socket = io.io(_socketServerUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': false,
+    });
+
+    _socket!.connect();
+
+    _socket!.onConnect((_) {
+      _socket!.emit('join:driver', _userId);
+    });
+
+    _socket!.on('offer:accepted', (data) {
+      if (!mounted) return;
+      setState(() => _state = _DriverState.onTrip);
+    });
+
+    _socket!.on('offer:rejected', (data) {
+      if (!mounted) return;
+      setState(() {
+        _showOfertaEnviada = false;
+        _state = _DriverState.online;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tu oferta no fue aceptada'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      _pollForTrips();
+    });
+
+    _socket!.on('driver:approved', (_) {
+      if (!mounted) return;
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('estadoVerificacion', 'aprobado');
+      });
+      setState(() {
+        _estadoVerificacion = 'aprobado';
+      });
+      // Resume normal initialization
+      _initData();
+    });
+
+    _socket!.on('driver:rejected', (data) {
+      if (!mounted) return;
+      final motivo = data != null && data is Map ? data['motivo'] : 'Documentos rechazados';
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('estadoVerificacion', 'rechazado');
+        prefs.setString('motivoRechazo', motivo);
+      });
+      setState(() {
+        _estadoVerificacion = 'rechazado';
+        _motivoRechazo = motivo;
+      });
     });
   }
 
@@ -282,25 +416,135 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
     });
   }
 
-  Future<void> _acceptTrip() async {
-    if (_currentTripId == null) return;
-    try {
-      await _tripService.acceptTrip(_currentTripId!);
-      setState(() {
-        _state = _DriverState.onTrip;
-      });
-    } catch (_) {}
-  }
-
   Future<void> _declineTrip() async {
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
     if (_currentTripId != null) {
       try {
         await _tripService.declineTrip(_currentTripId!);
       } catch (_) {}
     }
     _currentTripId = null;
-    setState(() => _state = _DriverState.online);
+    setState(() {
+      _showOfertaEnviada = false;
+      _state = _DriverState.online;
+    });
     _pollForTrips();
+  }
+
+  void _showOfferSheet() {
+    final precioCtrl = TextEditingController(
+      text: _currentRequestPrecio.toStringAsFixed(2),
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Color(0xFF0D0D0D),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(24, 12, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4))),
+              SizedBox(height: 20),
+              Text('Tu oferta',
+                  style: TextStyle(color: Colors.white, fontSize: 22,
+                      fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Text('El cliente ofrece \$${_currentRequestPrecio.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 14)),
+              SizedBox(height: 20),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.attach_money, size: 20, color: Colors.greenAccent),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: precioCtrl,
+                        keyboardType: TextInputType.numberWithOptions(decimal: true),
+                        style: TextStyle(color: Colors.white, fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: 'Tu precio',
+                          hintStyle: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              fontSize: 15),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity, height: 54,
+                child: ElevatedButton(
+                  onPressed: () {
+                    final monto = double.tryParse(precioCtrl.text);
+                    if (monto == null || monto <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Ingresa un monto válido'),
+                            backgroundColor: Colors.red),
+                      );
+                      return;
+                    }
+                    Navigator.pop(ctx);
+                    _enviarOferta(monto);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF1A8CFF),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    elevation: 4,
+                    shadowColor: Color(0xFF1A8CFF).withValues(alpha: 0.4),
+                  ),
+                  child: Text('Enviar oferta',
+                      style: TextStyle(fontSize: 17,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+              SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _enviarOferta(double monto) async {
+    if (_currentTripId == null) return;
+
+    try {
+      await _tripService.sendOffer(_currentTripId!, monto: monto);
+      setState(() => _showOfertaEnviada = true);
+      _conectarSocketDriver();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al enviar oferta: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
   }
 
   Future<void> _startTrip() async {
@@ -319,19 +563,364 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
 
   Future<void> _completeTrip() async {
     if (_currentTripId == null) return;
-    final fare = 25 + Random().nextInt(40);
+
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.camera, maxWidth: 1024);
+
+    if (file == null) return;
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Subiendo foto de entrega...'), backgroundColor: Color(0xFF1A8CFF)),
+    );
+
     try {
+      await _api.upload('/trips/${_currentTripId}/delivery-photo', file.path, 'file');
+
+      final fare = 25 + Random().nextInt(40);
       await _tripService.finalizeTrip(_currentTripId!, montoFinal: fare.toDouble());
       await _loadStats();
-      _currentTripId = null;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
       setState(() {
         _trips++;
         _earnings += fare;
         _tripCountToday++;
         _state = _DriverState.online;
+        _tripJustCompleted = true;
       });
-      _pollForTrips();
-    } catch (_) {}
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al finalizar. Intenta de nuevo.'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Widget _buildTripCompletedCard() {
+    return _cardWrap(Column(
+      children: [
+        SizedBox(height: 12),
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 48),
+        ),
+        SizedBox(height: 16),
+        Text(
+          '¡Viaje Completado!',
+          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Has completado el envío con éxito.',
+          style: TextStyle(color: Colors.white60, fontSize: 14),
+        ),
+        SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: _showReportClientDialog,
+              icon: Icon(Icons.report_problem_rounded, size: 18),
+              label: Text('Reportar cliente'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.withValues(alpha: 0.15),
+                foregroundColor: Colors.redAccent,
+                side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: _showDisputeSheet,
+              icon: Icon(Icons.money_off, size: 18),
+              label: Text('Reportar no pago'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                foregroundColor: Colors.orangeAccent,
+                side: BorderSide(color: Colors.orange.withValues(alpha: 0.3)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _tripJustCompleted = false;
+                _currentTripId = null;
+              });
+              _pollForTrips();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF1A8CFF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 4,
+            ),
+            child: Text('Listo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ),
+        SizedBox(height: 8),
+      ],
+    ));
+  }
+
+  void _showReportClientDialog() {
+    final reportCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(0xFF1A1A1A),
+        title: Text('Reportar Cliente', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '¿Deseas reportar a este cliente? Indica el motivo (ej. no pago, comportamiento inadecuado):',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: reportCtrl,
+              maxLines: 3,
+              style: TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Motivo del reporte...',
+                hintStyle: TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (reportCtrl.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Por favor indica un motivo'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+
+              try {
+                await _tripService.reportClient(_currentTripId!, reportCtrl.text);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Reporte enviado con éxito. Gracias por ayudarnos a mantener segura la comunidad.'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error al enviar reporte: $e'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: Text('Enviar Reporte', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDisputeSheet() {
+    final versionCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(24, 12, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Icon(Icons.money_off, color: Colors.orangeAccent, size: 22),
+                  const SizedBox(width: 10),
+                  const Text('Reportar no pago',
+                      style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Describe tu versión de los hechos. El cliente podrá apelar.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: versionCtrl,
+                maxLines: 4,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Describe lo sucedido...',
+                  hintStyle: TextStyle(color: Colors.white38),
+                  filled: true, fillColor: Colors.white.withValues(alpha: 0.05),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity, height: 52,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (versionCtrl.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Por favor describe los hechos'), backgroundColor: Colors.red),
+                      );
+                      return;
+                    }
+                    Navigator.pop(ctx);
+                    try {
+                      await DisputeService().reportDispute(_currentTripId!, versionCtrl.text);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tu reporte fue enviado. El cliente será notificado.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error al enviar reporte: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orangeAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Enviar reporte', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showEmergencyDialog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(0xFF1A1A1A),
+        title: Row(
+          children: [
+            Icon(Icons.emergency_share, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text('Emergencia', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Text(
+          '¿Confirmar emergencia? Se alertará al equipo de soporte',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Confirmar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      _triggerEmergency();
+    }
+  }
+
+  Future<void> _triggerEmergency() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 16),
+            Text('Obteniendo ubicación...'),
+          ],
+        ),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      
+      await _api.post('/emergency', body: {
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Alerta enviada. El equipo fue notificado.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al enviar alerta: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _logout() {
@@ -352,6 +941,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_estadoVerificacion == 'pendiente') {
+      return _buildPendingVerificationScreen();
+    } else if (_estadoVerificacion == 'rechazado') {
+      return _buildRejectedVerificationScreen();
+    }
+
     return Scaffold(
       key: _scaffoldKey,
       drawer: _buildDrawer(),
@@ -361,16 +956,407 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
           _buildKmOverlay(),
           _buildTopBar(),
           _buildBottomSheet(),
+          if (_state == _DriverState.onTrip || _state == _DriverState.enCurso)
+            Positioned(
+              bottom: 340,
+              right: 16,
+              child: FloatingActionButton(
+                onPressed: _showEmergencyDialog,
+                backgroundColor: Colors.redAccent,
+                child: Icon(Icons.warning_amber_rounded, color: Colors.white, size: 28),
+              ),
+            ),
         ],
       ),
     );
   }
 
+  Widget _buildPendingVerificationScreen() {
+    return Scaffold(
+      backgroundColor: Color(0xFF0A0A0A),
+      body: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Spacer(),
+              Container(
+                padding: EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Color(0xFF1A8CFF).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.hourglass_empty_rounded,
+                  color: Color(0xFF1A8CFF),
+                  size: 64,
+                ),
+              ),
+              SizedBox(height: 32),
+              Text(
+                'Tu cuenta está siendo verificada',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Estamos revisando tus documentos de conductor. Esto suele tardar menos de 24 horas.\n\nTe notificaremos por este medio en tiempo real cuando tu cuenta sea aprobada.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+              ),
+              SizedBox(height: 32),
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation(Color(0xFF1A8CFF)),
+                ),
+              ),
+              Spacer(),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _logout,
+                  icon: Icon(Icons.logout_rounded),
+                  label: Text('Cerrar sesión', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.05),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRejectedVerificationScreen() {
+    return Scaffold(
+      backgroundColor: Color(0xFF0A0A0A),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.redAccent,
+                    size: 48,
+                  ),
+                ),
+              ),
+              SizedBox(height: 24),
+              Center(
+                child: Text(
+                  'Verificación Rechazada',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              SizedBox(height: 12),
+              Center(
+                child: Text(
+                  'Por favor corrige los siguientes documentos para poder activar tu cuenta.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.15)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.redAccent, size: 16),
+                        SizedBox(width: 8),
+                        Text(
+                          'Motivo del rechazo:',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      _motivoRechazo ?? 'Tus documentos no cumplen con los requisitos de legibilidad.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 32),
+              Text(
+                'Re-subir Documentos',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 16),
+              _buildHomeDocUploadButton(
+                documentLabel: 'Cédula de Identidad',
+                status: _statusCedula,
+                filePath: _pathCedula,
+                onTap: () => _pickHomeDocument('cedula'),
+              ),
+              SizedBox(height: 12),
+              _buildHomeDocUploadButton(
+                documentLabel: 'Licencia de Conducir',
+                status: _statusLicencia,
+                filePath: _pathLicencia,
+                onTap: () => _pickHomeDocument('licencia'),
+              ),
+              SizedBox(height: 12),
+              _buildHomeDocUploadButton(
+                documentLabel: 'Foto del Vehículo',
+                status: _statusVehiculo,
+                filePath: _pathVehiculo,
+                onTap: () => _pickHomeDocument('vehiculo'),
+              ),
+              SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: _enviarDocsDeNuevo,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF1A8CFF),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 4,
+                    shadowColor: Color(0xFF1A8CFF).withValues(alpha: 0.4),
+                  ),
+                  child: Text(
+                    'Enviar documentos de nuevo',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _logout,
+                  icon: Icon(Icons.logout_rounded),
+                  label: Text('Cerrar sesión', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.05),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHomeDocUploadButton({
+    required String documentLabel,
+    required String status,
+    required String? filePath,
+    required VoidCallback onTap,
+  }) {
+    Color borderColor;
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+
+    switch (status) {
+      case 'subido':
+        borderColor = Colors.blue.withValues(alpha: 0.3);
+        statusColor = Colors.blueAccent;
+        statusText = 'Listo para enviar';
+        statusIcon = Icons.check_circle_outline_rounded;
+        break;
+      default:
+        borderColor = Colors.white.withValues(alpha: 0.1);
+        statusColor = Colors.white.withValues(alpha: 0.35);
+        statusText = 'Pendiente por subir';
+        statusIcon = Icons.cloud_upload_outlined;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: borderColor,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(statusIcon, color: statusColor, size: 24),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    documentLabel,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (filePath != null && status == 'subido')
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  File(filePath),
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else
+              Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickHomeDocument(String docType) async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024);
+    if (file == null) return;
+
+    setState(() {
+      if (docType == 'cedula') {
+        _pathCedula = file.path;
+        _statusCedula = 'subido';
+      } else if (docType == 'licencia') {
+        _pathLicencia = file.path;
+        _statusLicencia = 'subido';
+      } else if (docType == 'vehiculo') {
+        _pathVehiculo = file.path;
+        _statusVehiculo = 'subido';
+      }
+    });
+  }
+
+  Future<void> _enviarDocsDeNuevo() async {
+    if (_statusCedula != 'subido' && _statusLicencia != 'subido' && _statusVehiculo != 'subido') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Por favor sube al menos un documento corregido para enviar'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Enviando documentos corregidos...'),
+        backgroundColor: Color(0xFF1A8CFF),
+      ),
+    );
+
+    await Future.delayed(Duration(seconds: 1));
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('estadoVerificacion', 'pendiente');
+
+    setState(() {
+      _estadoVerificacion = 'pendiente';
+      _statusCedula = 'pendiente';
+      _statusLicencia = 'pendiente';
+      _statusVehiculo = 'pendiente';
+      _pathCedula = null;
+      _pathLicencia = null;
+      _pathVehiculo = null;
+    });
+  }
+
+  bool _showFinanzas = false;
+
   Widget _buildDrawerEarnings() {
-    final avgPerTrip = _tripCountToday > 0 ? _earnings / _tripCountToday : 0;
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(14),
@@ -378,26 +1364,130 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
       ),
       child: Column(
         children: [
+          InkWell(
+            onTap: () => setState(() => _showFinanzas = !_showFinanzas),
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.monetization_on, size: 14, color: Colors.greenAccent),
+                  SizedBox(width: 6),
+                  Text('GANANCIAS',
+                      style: TextStyle(
+                          color: Colors.greenAccent, fontSize: 10,
+                          fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                  Spacer(),
+                  Text('\$${_earnings.toStringAsFixed(2)}',
+                      style: TextStyle(color: Colors.white, fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                  SizedBox(width: 6),
+                  Icon(
+                    _showFinanzas ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: Colors.white.withValues(alpha: 0.4), size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_showFinanzas) ...[
+            Container(height: 1, margin: EdgeInsets.symmetric(horizontal: 14),
+                color: Colors.white.withValues(alpha: 0.06)),
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  _buildFinanzaCard('Hoy', _tripCountToday, _earnings),
+                  SizedBox(height: 8),
+                  _buildFinanzaCard('Esta semana', _driverEarnings?.viajesSemana ?? 0, _driverEarnings?.semana ?? 0),
+                  SizedBox(height: 8),
+                  _buildFinanzaCard('Este mes', _driverEarnings?.viajesMes ?? 0, _driverEarnings?.mes ?? 0),
+                  SizedBox(height: 12),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, size: 14, color: Colors.redAccent),
+                        SizedBox(width: 8),
+                        Text(
+                          'Debes a la plataforma: \$${(_driverEarnings?.deuda ?? 0).toStringAsFixed(2)}',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFinanzaCard(String periodo, int viajes, double bruto) {
+    final comision = bruto * 0.15;
+    final neto = bruto - comision;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        children: [
           Row(
             children: [
-              Icon(Icons.monetization_on, size: 14, color: Colors.greenAccent),
-              SizedBox(width: 6),
-              Text('GANANCIAS',
-                  style: TextStyle(
-                      color: Colors.greenAccent, fontSize: 10,
-                      fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+              Text(periodo,
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
               Spacer(),
-              Text('\$${_earnings.toStringAsFixed(2)}',
-                  style: TextStyle(color: Colors.white, fontSize: 16,
-                      fontWeight: FontWeight.bold)),
+              Text('$viajes viaje(s)',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11)),
             ],
           ),
-          SizedBox(height: 10),
+          SizedBox(height: 8),
           Row(
             children: [
-              _DrawerStat(label: 'Viajes', value: '$_tripCountToday'),
-              _DrawerStat(label: 'Promedio', value: '\$${avgPerTrip.toStringAsFixed(0)}'),
-              _DrawerStat(label: 'Km', value: '${_kmToday.toStringAsFixed(1)}'),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Bruto',
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10)),
+                    Text('\$${bruto.toStringAsFixed(2)}',
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Comisión',
+                        style: TextStyle(color: Colors.redAccent.withValues(alpha: 0.6), fontSize: 10)),
+                    Text('\$${comision.toStringAsFixed(2)}',
+                        style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Neto',
+                        style: TextStyle(color: Colors.greenAccent.withValues(alpha: 0.6), fontSize: 10)),
+                    Text('\$${neto.toStringAsFixed(2)}',
+                        style: TextStyle(color: Colors.greenAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -781,7 +1871,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
         child: _state == _DriverState.offline
             ? _buildOfflineCard()
             : _state == _DriverState.online
-                ? _buildOnlineCard()
+                ? (_tripJustCompleted ? _buildTripCompletedCard() : _buildOnlineCard())
                 : _state == _DriverState.tripRequest
                     ? _buildTripRequestCard()
                     : _state == _DriverState.onTrip
@@ -914,6 +2004,77 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
   }
 
   Widget _buildTripRequestCard() {
+    if (_showOfertaEnviada) {
+      return _cardWrap(Column(
+        children: [
+          SizedBox(height: 4),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: Color(0xFF1A8CFF).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 8, height: 8,
+                    decoration: BoxDecoration(
+                        color: Color(0xFF1A8CFF), shape: BoxShape.circle)),
+                SizedBox(width: 6),
+                Text('OFERTA ENVIADA',
+                    style: TextStyle(color: Color(0xFF1A8CFF), fontSize: 11,
+                        fontWeight: FontWeight.w700, letterSpacing: 1)),
+              ],
+            ),
+          ),
+          SizedBox(height: 20),
+          SizedBox(
+            width: 72, height: 72,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation(Color(0xFF1A8CFF)),
+            ),
+          ),
+          SizedBox(height: 16),
+          Text('Tu oferta fue enviada',
+              style: TextStyle(color: Colors.white, fontSize: 18,
+                  fontWeight: FontWeight.w600)),
+          Text('Esperando respuesta del cliente...',
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                  fontSize: 13)),
+          SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity, height: 52,
+            child: ElevatedButton(
+              onPressed: () {
+                _socket?.disconnect();
+                _socket?.dispose();
+                _socket = null;
+                setState(() {
+                  _showOfertaEnviada = false;
+                  _state = _DriverState.online;
+                });
+                _pollForTrips();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                ),
+                elevation: 0,
+              ),
+              child: Text('Cancelar',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ),
+          SizedBox(height: 8),
+        ],
+      ));
+    }
+
     return _cardWrap(Column(
       children: [
         SizedBox(height: 4),
@@ -987,6 +2148,46 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
             ),
           ],
         ),
+        SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.info_outline, size: 14,
+                color: Colors.white.withValues(alpha: 0.35)),
+            SizedBox(width: 6),
+            Text('El cliente ofrece \$${_currentRequestPrecio.toStringAsFixed(2)}',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 12)),
+          ],
+        ),
+        SizedBox(height: 12),
+        Row(
+          children: [
+            Icon(Icons.person, size: 14, color: Colors.white.withValues(alpha: 0.35)),
+            SizedBox(width: 6),
+            Text(
+              '${_clienteNombre ?? "Cliente"} · ',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              '${(_clienteReputation ?? 5.0) >= 4.5 ? "🟢" : (_clienteReputation ?? 5.0) >= 3.0 ? "🟡" : "🔴"} ${(_clienteReputation ?? 5.0).toStringAsFixed(1)}',
+              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        if (_totalReportes > 0) ...[
+          SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 14, color: Colors.redAccent),
+              SizedBox(width: 6),
+              Text(
+                '⚠️ $_totalReportes reporte(s) de no pago',
+                style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ],
         SizedBox(height: 20),
         _infoRow(Icons.trip_origin, 'Dirección de recogida',
             _currentRequestOrigen),
@@ -1020,7 +2221,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
               child: SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _acceptTrip,
+                  onPressed: _showOfferSheet,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFF1A8CFF),
                     foregroundColor: Colors.white,
@@ -1029,7 +2230,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
                     elevation: 4,
                     shadowColor: Color(0xFF1A8CFF).withValues(alpha: 0.4),
                   ),
-                  child: Text('Aceptar',
+                  child: Text('Ofertar',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
               ),

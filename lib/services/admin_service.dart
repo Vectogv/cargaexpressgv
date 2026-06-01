@@ -280,4 +280,31 @@ class AdminService {
   Future<Map<String, dynamic>> uploadProfileAvatar(List<int> bytes, String filename) async {
     return await _api.uploadBytes('/admin/profile/avatar', bytes, filename, 'file');
   }
+
+  Future<Map<String, dynamic>> get(String path) async {
+    return await _api.get(path);
+  }
+
+  Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? body}) async {
+    return await _api.post(path, body: body);
+  }
+
+  Future<Map<String, dynamic>> getPendingPayments() async {
+    return await _api.get('/admin/payments/pending');
+  }
+
+  Future<void> confirmPayment(String paymentId) async {
+    await _api.post('/admin/payments/$paymentId/confirm');
+  }
+
+  Future<void> rejectPayment(String paymentId) async {
+    await _api.post('/admin/payments/$paymentId/reject');
+  }
+
+  Future<void> saveNequiConfig(String numero, String titular) async {
+    await _api.put('/admin/payments/nequi-config', body: {
+      'numero': numero,
+      'titular': titular,
+    });
+  }
 }

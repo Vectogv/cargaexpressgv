@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   static String get defaultBaseUrl {
+    const envUrl = String.fromEnvironment('API_URL');
+    if (envUrl.isNotEmpty) return envUrl;
     if (!kIsWeb && Platform.isAndroid) {
       return 'http://10.0.2.2:3333/api';
     }
@@ -80,11 +82,12 @@ class ApiClient {
     return _handle(res);
   }
 
-  Future<Map<String, dynamic>> upload(String path, String filePath, String field) async {
+  Future<Map<String, dynamic>> upload(String path, String filePath, String field, {Map<String, String>? fields}) async {
     final uri = Uri.parse('$baseUrl$path');
     final request = http.MultipartRequest('POST', uri);
     request.headers.addAll({'Authorization': 'Bearer $_token'});
     request.files.add(await http.MultipartFile.fromPath(field, filePath));
+    if (fields != null) request.fields.addAll(fields);
     final streamed = await request.send();
     final res = await http.Response.fromStream(streamed);
     return _handle(res);

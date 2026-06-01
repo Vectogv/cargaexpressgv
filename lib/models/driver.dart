@@ -48,14 +48,42 @@ class DriverEarnings {
   final double semana;
   final double mes;
   final double total;
+  final int viajesHoy;
+  final int viajesSemana;
+  final int viajesMes;
+  final double comisionHoy;
+  final double comisionSemana;
+  final double comisionMes;
 
-  DriverEarnings({required this.hoy, required this.semana, required this.mes, required this.total});
+  DriverEarnings({
+    required this.hoy,
+    required this.semana,
+    required this.mes,
+    required this.total,
+    this.viajesHoy = 0,
+    this.viajesSemana = 0,
+    this.viajesMes = 0,
+    this.comisionHoy = 0,
+    this.comisionSemana = 0,
+    this.comisionMes = 0,
+  });
+
+  double get netoHoy => hoy - comisionHoy;
+  double get netoSemana => semana - comisionSemana;
+  double get netoMes => mes - comisionMes;
+  double get deuda => comisionHoy + comisionSemana + comisionMes;
 
   factory DriverEarnings.fromJson(Map<String, dynamic> json) => DriverEarnings(
         hoy: (json['hoy'] ?? 0).toDouble(),
         semana: (json['semana'] ?? 0).toDouble(),
         mes: (json['mes'] ?? 0).toDouble(),
         total: (json['total'] ?? 0).toDouble(),
+        viajesHoy: json['viajesHoy'] ?? 0,
+        viajesSemana: json['viajesSemana'] ?? 0,
+        viajesMes: json['viajesMes'] ?? 0,
+        comisionHoy: (json['comisionHoy'] ?? 0).toDouble(),
+        comisionSemana: (json['comisionSemana'] ?? 0).toDouble(),
+        comisionMes: (json['comisionMes'] ?? 0).toDouble(),
       );
 }
 

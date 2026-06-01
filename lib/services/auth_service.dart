@@ -49,6 +49,7 @@ class AuthService {
     await _api.setRefreshToken(res['refreshToken']);
     final prefs = await SharedPreferences.getInstance();
     final user = User.fromJson(res);
+    await prefs.setString('userId', user.id);
     await prefs.setString('userEmail', user.email);
     await prefs.setString('userName', '${user.nombre} ${user.apellido}'.trim());
     return user;

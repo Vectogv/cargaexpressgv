@@ -1,7 +1,25 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../services/admin_service.dart';
 import '../services/api_client.dart';
+
+class _AdminNotification {
+  final String id;
+  final String tipo;
+  final String mensaje;
+  final DateTime createdAt;
+  bool leido;
+
+  _AdminNotification({
+    required this.id,
+    required this.tipo,
+    required this.mensaje,
+    required this.createdAt,
+    this.leido = false,
+  });
+}
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -10,8 +28,257 @@ class AdminScreen extends StatefulWidget {
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> {
+class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin {
+  final _service = AdminService();
   int _tab = 0;
+  final List<_AdminNotification> _notificaciones = [];
+  List<Map<String, dynamic>> _pendingPayments = [];
+  io.Socket? _socket;
+  late AnimationController _pulseCtrl;
+
+  String get _socketServerUrl {
+    final base = ApiClient().baseUrl;
+    if (base.endsWith('/api')) {
+      return base.substring(0, base.length - 4);
+    }
+    return base;
+  }
+
+  int get _unreadCount => _notificaciones.where((n) => !n.leido).length;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _conectarSocket();
+  }
+
+  void _conectarSocket() {
+    _socket?.disconnect();
+    _socket?.dispose();
+
+    _socket = io.io(_socketServerUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': false,
+    });
+
+    _socket!.connect();
+
+    _socket!.onConnect((_) {
+      _socket!.emit('join:admin', 'admin');
+    });
+
+    _socket!.on('emergency:new', (data) {
+      if (!mounted) return;
+      final notif = _AdminNotification(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tipo: 'emergency',
+        mensaje: data is Map ? data['mensaje'] ?? 'Emergencia reportada' : 'Emergencia reportada',
+        createdAt: DateTime.now(),
+      );
+      setState(() => _notificaciones.insert(0, notif));
+    });
+
+    _socket!.on('trip:new', (data) {
+      if (!mounted) return;
+      final notif = _AdminNotification(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tipo: 'trip',
+        mensaje: data is Map ? 'Nuevo viaje: ${data['origen'] ?? ''} → ${data['destino'] ?? ''}' : 'Nuevo viaje solicitado',
+        createdAt: DateTime.now(),
+      );
+      setState(() => _notificaciones.insert(0, notif));
+    });
+
+    _socket!.on('driver:new', (data) {
+      if (!mounted) return;
+      final notif = _AdminNotification(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        tipo: 'driver',
+        mensaje: data is Map ? 'Nuevo conductor: ${data['nombre'] ?? ''}' : 'Nuevo conductor registrado',
+        createdAt: DateTime.now(),
+      );
+      setState(() => _notificaciones.insert(0, notif));
+    });
+
+    _socket!.on('admin:payment_proof', (data) {
+      if (!mounted) return;
+      final pago = data is Map ? data as Map<String, dynamic> : <String, dynamic>{};
+      setState(() {
+        _pendingPayments.insert(0, pago);
+        _notificaciones.insert(0, _AdminNotification(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          tipo: 'payment',
+          mensaje: 'Nuevo comprobante de pago de ${pago['clienteNombre'] ?? 'cliente'}',
+          createdAt: DateTime.now(),
+        ));
+      });
+    });
+  }
+
+  void _showNotificationsPanel() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return SizedBox(
+              height: MediaQuery.of(ctx).size.height * 0.6,
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                    child: Row(
+                      children: [
+                        const Text('Notificaciones',
+                            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        const Spacer(),
+                        if (_unreadCount > 0)
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                for (final n in _notificaciones) {
+                                  n.leido = true;
+                                }
+                              });
+                              setModalState(() {});
+                            },
+                            child: const Text('Marcar todas leídas',
+                                style: TextStyle(color: Color(0xFF1A8CFF), fontSize: 13)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (_notificaciones.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text('Sin notificaciones',
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 14)),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        itemCount: _notificaciones.length,
+                        itemBuilder: (_, i) {
+                          final n = _notificaciones[i];
+                          final isEmergency = n.tipo == 'emergency';
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() => n.leido = true);
+                              setModalState(() {});
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isEmergency
+                                    ? Colors.red.withValues(alpha: n.leido ? 0.08 : 0.15)
+                                    : Colors.white.withValues(alpha: n.leido ? 0.03 : 0.06),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isEmergency
+                                      ? Colors.redAccent.withValues(alpha: n.leido ? 0.2 : 0.5)
+                                      : Colors.white.withValues(alpha: n.leido ? 0.03 : 0.06),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isEmergency
+                                          ? Colors.red.withValues(alpha: 0.2)
+                                          : const Color(0xFF1A8CFF).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      isEmergency ? Icons.warning_amber_rounded : Icons.notifications_rounded,
+                                      size: 20,
+                                      color: isEmergency ? Colors.redAccent : const Color(0xFF1A8CFF),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          n.mensaje,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: n.leido ? FontWeight.w400 : FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _formatTime(n.createdAt),
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(alpha: 0.3),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isEmergency && !n.leido)
+                                    Container(
+                                      width: 8, height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.redAccent,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return 'Ahora';
+    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    _socket?.disconnect();
+    _socket?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +295,29 @@ class _AdminScreenState extends State<AdminScreen> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
+          Stack(
+            children: [
+              IconButton(
+                icon: Icon(Icons.notifications_outlined, color: Colors.white.withValues(alpha: 0.7)),
+                onPressed: _showNotificationsPanel,
+              ),
+              if (_unreadCount > 0)
+                Positioned(
+                  right: 6, top: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$_unreadCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: Icon(Icons.person, color: Colors.white.withValues(alpha: 0.7)),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _AdminProfileScreen())),
@@ -36,12 +326,13 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       body: IndexedStack(
         index: _tab,
-        children: const [
-          _DashboardTab(),
-          _UsersTab(),
-          _DriversTab(),
-          _TripsTab(),
-          _EarningsTab(),
+        children: [
+          const _DashboardTab(),
+          const _UsersTab(),
+          const _DriversTab(),
+          const _TripsTab(),
+          const _EarningsTab(),
+          _PaymentsTab(payments: _pendingPayments, onChanged: _refreshPayments),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -51,15 +342,74 @@ class _AdminScreenState extends State<AdminScreen> {
         currentIndex: _tab,
         onTap: (i) => setState(() => _tab = i),
         type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Usuarios'),
-          BottomNavigationBarItem(icon: Icon(Icons.local_shipping), label: 'Conductores'),
-          BottomNavigationBarItem(icon: Icon(Icons.route), label: 'Viajes'),
-          BottomNavigationBarItem(icon: Icon(Icons.monetization_on), label: 'Ganancias'),
+        items: [
+          BottomNavigationBarItem(icon: _buildNavIcon(Icons.dashboard, 0), label: 'Dashboard'),
+          const BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Usuarios'),
+          const BottomNavigationBarItem(icon: Icon(Icons.local_shipping), label: 'Conductores'),
+          const BottomNavigationBarItem(icon: Icon(Icons.route), label: 'Viajes'),
+          const BottomNavigationBarItem(icon: Icon(Icons.monetization_on), label: 'Ganancias'),
+          BottomNavigationBarItem(
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.payment),
+                if (_pendingPayments.isNotEmpty)
+                  Positioned(
+                    right: -6, top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                      child: Text('${_pendingPayments.length}',
+                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+              ],
+            ),
+            label: 'Pagos',
+          ),
         ],
       ),
     );
+  }
+
+  void _refreshPayments() {
+    _service.getPendingPayments().then((res) {
+      final apiPayments = (res['payments'] as List<dynamic>?)
+              ?.map((e) => e as Map<String, dynamic>)
+              .toList() ?? [];
+      if (mounted) setState(() => _pendingPayments = apiPayments);
+    }).catchError((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  Widget _buildNavIcon(IconData icon, int index) {
+    if (index == 0 && _unreadCount > 0) {
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon),
+          Positioned(
+            right: -8, top: -4,
+            child: AnimatedBuilder(
+              animation: _pulseCtrl,
+              builder: (_, child) => Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.6 + _pulseCtrl.value * 0.4),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$_unreadCount',
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Icon(icon);
   }
 }
 
@@ -77,6 +427,8 @@ class _AdminProfileScreenState extends State<_AdminProfileScreen> {
   final _apellidoCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
+  final _nequiNumeroCtrl = TextEditingController();
+  final _nequiTitularCtrl = TextEditingController();
   bool _loading = true;
   bool _saving = false;
   String? _avatar;
@@ -93,18 +445,23 @@ class _AdminProfileScreenState extends State<_AdminProfileScreen> {
     _apellidoCtrl.dispose();
     _emailCtrl.dispose();
     _telefonoCtrl.dispose();
+    _nequiNumeroCtrl.dispose();
+    _nequiTitularCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     try {
       final p = await _service.getProfile();
+      final nequi = await _service.get('/admin/payments/nequi-config');
       if (mounted) setState(() {
         _nombreCtrl.text = p['nombre'] ?? '';
         _apellidoCtrl.text = p['apellido'] ?? '';
         _emailCtrl.text = p['email'] ?? '';
         _telefonoCtrl.text = p['telefono'] ?? '';
         _avatar = p['avatar'];
+        _nequiNumeroCtrl.text = nequi['numero'] ?? '';
+        _nequiTitularCtrl.text = nequi['titular'] ?? '';
         _loading = false;
       });
     } catch (_) {
@@ -134,6 +491,7 @@ class _AdminProfileScreenState extends State<_AdminProfileScreen> {
         'email': _emailCtrl.text,
         'telefono': _telefonoCtrl.text,
       });
+      await _service.saveNequiConfig(_nequiNumeroCtrl.text, _nequiTitularCtrl.text);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Perfil actualizado'), backgroundColor: Color(0xFF1A8CFF)));
     } catch (e) {
@@ -194,6 +552,13 @@ class _AdminProfileScreenState extends State<_AdminProfileScreen> {
                 _field('Email', _emailCtrl, keyboardType: TextInputType.emailAddress),
                 const SizedBox(height: 16),
                 _field('Teléfono', _telefonoCtrl, keyboardType: TextInputType.phone),
+                const SizedBox(height: 32),
+                const Text('CONFIGURACIÓN DE PAGOS',
+                    style: TextStyle(color: Color(0xFF1A8CFF), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                const SizedBox(height: 16),
+                _field('Número Nequi', _nequiNumeroCtrl, keyboardType: TextInputType.phone),
+                const SizedBox(height: 16),
+                _field('Nombre titular Nequi', _nequiTitularCtrl),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity, height: 50,
@@ -824,6 +1189,206 @@ class _TripsTabState extends State<_TripsTab> {
       Expanded(child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 12))),
     ]),
   );
+}
+
+// ─── PAYMENTS TAB ──────────────────────────────────────────────────────
+
+class _PaymentsTab extends StatefulWidget {
+  final List<Map<String, dynamic>> payments;
+  final VoidCallback onChanged;
+  const _PaymentsTab({required this.payments, required this.onChanged});
+  @override
+  State<_PaymentsTab> createState() => _PaymentsTabState();
+}
+
+class _PaymentsTabState extends State<_PaymentsTab> {
+  final _service = AdminService();
+  List<Map<String, dynamic>> _payments = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await _service.getPendingPayments();
+      if (mounted) {
+        setState(() {
+          _payments = (res['payments'] as List<dynamic>?)
+                  ?.map((e) => e as Map<String, dynamic>)
+                  .toList() ??
+              [];
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _confirmPayment(String paymentId) async {
+    try {
+      await _service.confirmPayment(paymentId);
+      await _load();
+      widget.onChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pago confirmado'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectPayment(String paymentId) async {
+    try {
+      await _service.rejectPayment(paymentId);
+      await _load();
+      widget.onChanged();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Pago rechazado'), backgroundColor: Colors.orange),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF1A8CFF)));
+    final seen = <String>{};
+    final allPayments = [..._payments, ...widget.payments].where((p) {
+      final id = '${p['id'] ?? ''}';
+      return id.isNotEmpty ? seen.add(id) : true;
+    }).toList();
+    if (allPayments.isEmpty) {
+      return Center(
+        child: Text('Sin pagos pendientes', style: TextStyle(color: Colors.white.withValues(alpha: 0.3))),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: allPayments.length,
+        itemBuilder: (_, i) {
+          final p = allPayments[i];
+          final nombre = p['clienteNombre'] ?? 'Cliente';
+          final monto = (p['monto'] ?? 0).toDouble();
+          final comprobante = p['comprobante'] as String?;
+          final createdAt = p['createdAt'] as String?;
+          final id = '${p['id'] ?? ''}';
+          final dias = p['diasEsperando'] ?? 0;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.greenAccent.withValues(alpha: 0.2),
+                    child: const Icon(Icons.payment, size: 18, color: Colors.greenAccent),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(nombre, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text('\$${monto.toStringAsFixed(2)}', style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ])),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Icon(Icons.access_time, size: 14, color: Colors.white.withValues(alpha: 0.4)),
+                  const SizedBox(width: 6),
+                  Text('$dias día(s) esperando',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 12)),
+                ]),
+                if (createdAt != null) ...[
+                  const SizedBox(height: 4),
+                  Text('Subido: $createdAt',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.25), fontSize: 11)),
+                ],
+                if (comprobante != null && comprobante.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A8CFF).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.image, size: 16, color: const Color(0xFF1A8CFF)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('Comprobante',
+                            style: TextStyle(color: const Color(0xFF1A8CFF), fontSize: 12)),
+                      ),
+                    ]),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 42,
+                      child: ElevatedButton(
+                        onPressed: () => _confirmPayment(id),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.greenAccent.withValues(alpha: 0.15),
+                          foregroundColor: Colors.greenAccent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          side: BorderSide(color: Colors.greenAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: const Text('Confirmar', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 42,
+                      child: ElevatedButton(
+                        onPressed: () => _rejectPayment(id),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent.withValues(alpha: 0.15),
+                          foregroundColor: Colors.redAccent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: const Text('Rechazar', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
 
 // ─── EARNINGS TAB ──────────────────────────────────────────────────────

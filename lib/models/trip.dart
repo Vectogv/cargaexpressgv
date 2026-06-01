@@ -17,6 +17,7 @@ class Trip {
   final String? enCursoAt;
   final String? completadoAt;
   final String? finalizadoAt;
+  final Map<String, dynamic>? cliente;
 
   Trip({
     required this.id,
@@ -37,6 +38,7 @@ class Trip {
     this.enCursoAt,
     this.completadoAt,
     this.finalizadoAt,
+    this.cliente,
   });
 
   bool get isActive => ['aceptado', 'en_curso'].contains(estado);
@@ -61,6 +63,7 @@ class Trip {
         enCursoAt: json['enCursoAt'],
         completadoAt: json['completadoAt'],
         finalizadoAt: json['finalizadoAt'],
+        cliente: json['cliente'] is Map ? json['cliente'] as Map<String, dynamic>? : null,
       );
 
   Map<String, dynamic> toRequest() => {

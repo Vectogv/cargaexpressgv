@@ -11,11 +11,13 @@ class TripService {
     required String destinoDireccion,
     required double destinoLat,
     required double destinoLng,
+    required double precioCliente,
     String? descripcion,
   }) async {
     final body = {
       'origen': {'direccion': origenDireccion, 'lat': origenLat, 'lng': origenLng},
       'destino': {'direccion': destinoDireccion, 'lat': destinoLat, 'lng': destinoLng},
+      'precioCliente': precioCliente,
       if (descripcion != null) 'descripcion': descripcion,
     };
     final res = await _api.post('/trips/request', body: body);
@@ -75,5 +77,22 @@ class TripService {
   Future<Trip> getTrip(String id) async {
     final res = await _api.get('/trips/$id');
     return Trip.fromJson(res);
+  }
+
+  Future<List<Map<String, dynamic>>> getOffers(String tripId) async {
+    final res = await _api.getList('/trips/$tripId/offers');
+    return res.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> acceptOffer(String tripId, String offerId) async {
+    return await _api.post('/trips/$tripId/offers/$offerId/accept');
+  }
+
+  Future<Map<String, dynamic>> sendOffer(String tripId, {required double monto}) async {
+    return await _api.post('/trips/$tripId/offers', body: {'monto': monto});
+  }
+
+  Future<void> reportClient(String tripId, String motivo) async {
+    await _api.post('/trips/$tripId/report-client', body: {'motivo': motivo});
   }
 }

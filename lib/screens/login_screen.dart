@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../services/auth_service.dart';
+import '../services/api_client.dart';
 import 'driver_home_screen.dart';
 import 'client_home_screen.dart';
 import 'admin_screen.dart';
+
+Future<void> registerFcmToken() async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true, badge: true, sound: true,
+    );
+    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional) {
+      final token = await messaging.getToken();
+      if (token != null) {
+        await ApiClient().put('/users/fcm-token', body: {'fcmToken': token});
+      }
+    }
+  } catch (_) {}
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -228,6 +246,7 @@ class _LoginFormState extends State<_LoginForm> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('userRole', user.rol);
       widget.onLogin?.call();
+      registerFcmToken();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -341,6 +360,7 @@ class _RegisterFormState extends State<_RegisterForm> {
         tipoVehiculo: _role == _Role.conductor && _tipoVehiculoCtrl.text.isNotEmpty ? _tipoVehiculoCtrl.text : null,
         capacidad: _role == _Role.conductor && _capacidadCtrl.text.isNotEmpty ? _capacidadCtrl.text : null,
       );
+      registerFcmToken();
       if (!mounted) return;
       if (_role == _Role.conductor) {
         Navigator.pushReplacement(
