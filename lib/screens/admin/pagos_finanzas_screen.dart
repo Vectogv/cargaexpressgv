@@ -37,7 +37,9 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       if (!_tabCtrl.indexIsChanging) setState(() {});
     });
     _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900));
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
     _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     _fetchAll();
   }
@@ -51,7 +53,11 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
 
   Future<void> _fetchAll() async {
     setState(() => _loading = true);
-    await Future.wait([_fetchEarnings(), _fetchCommissions(), _fetchPendingPayments()]);
+    await Future.wait([
+      _fetchEarnings(),
+      _fetchCommissions(),
+      _fetchPendingPayments(),
+    ]);
     _animCtrl.forward(from: 0);
     if (mounted) setState(() => _loading = false);
   }
@@ -71,11 +77,47 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       'totalIngresos': 1393.38,
       'totalTransacciones': 402.00,
       'dolarTransacciones': 252.00,
-      'grafica': [0.2, 0.35, 0.3, 0.5, 0.45, 0.6, 0.55, 0.75, 0.7, 0.9, 0.85, 1.0],
-      'etiquetas': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+      'grafica': [
+        0.2,
+        0.35,
+        0.3,
+        0.5,
+        0.45,
+        0.6,
+        0.55,
+        0.75,
+        0.7,
+        0.9,
+        0.85,
+        1.0,
+      ],
+      'etiquetas': [
+        'Ene',
+        'Feb',
+        'Mar',
+        'Abr',
+        'May',
+        'Jun',
+        'Jul',
+        'Ago',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dic',
+      ],
       'pagos': [
-        {'tipo': 'Transacciones', 'sub': '15 activas', 'monto': 393.00, 'icon': 'swap'},
-        {'tipo': 'Pagos', 'sub': '28 pines', 'monto': 558.00, 'icon': 'payment'},
+        {
+          'tipo': 'Transacciones',
+          'sub': '15 activas',
+          'monto': 393.00,
+          'icon': 'swap',
+        },
+        {
+          'tipo': 'Pagos',
+          'sub': '28 pines',
+          'monto': 558.00,
+          'icon': 'payment',
+        },
         {'tipo': 'Pasajeros', 'sub': '', 'monto': 506.00, 'icon': 'person'},
       ],
     };
@@ -89,15 +131,37 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
-        _commissions = List<Map<String, dynamic>>.from(body is List ? body : body['data'] ?? body['commissions'] ?? []);
+        _commissions = List<Map<String, dynamic>>.from(
+          body is List ? body : body['data'] ?? body['commissions'] ?? [],
+        );
         return;
       }
     } catch (_) {}
     _commissions = [
-      {'conductorId': 1, 'nombre': 'Carlos Mendoza', 'monto': 45.50, 'pagada': false},
-      {'conductorId': 2, 'nombre': 'Ana López', 'monto': 32.00, 'pagada': false},
-      {'conductorId': 3, 'nombre': 'Pedro Ramirez', 'monto': 78.25, 'pagada': true},
-      {'conductorId': 4, 'nombre': 'Lucía Fernández', 'monto': 12.80, 'pagada': false},
+      {
+        'conductorId': 1,
+        'nombre': 'Carlos Mendoza',
+        'monto': 45.50,
+        'pagada': false,
+      },
+      {
+        'conductorId': 2,
+        'nombre': 'Ana López',
+        'monto': 32.00,
+        'pagada': false,
+      },
+      {
+        'conductorId': 3,
+        'nombre': 'Pedro Ramirez',
+        'monto': 78.25,
+        'pagada': true,
+      },
+      {
+        'conductorId': 4,
+        'nombre': 'Lucía Fernández',
+        'monto': 12.80,
+        'pagada': false,
+      },
     ];
   }
 
@@ -109,21 +173,43 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
-        _pendingPayments = List<Map<String, dynamic>>.from(body is List ? body : body['data'] ?? body['payments'] ?? []);
+        _pendingPayments = List<Map<String, dynamic>>.from(
+          body is List ? body : body['data'] ?? body['payments'] ?? [],
+        );
         return;
       }
     } catch (_) {}
     _pendingPayments = [
-      {'userId': 101, 'nombre': 'María García', 'email': 'maria@mail.com', 'monto': 150.00, 'concepto': 'Pago de servicios'},
-      {'userId': 102, 'nombre': 'José Martinez', 'email': 'jose@mail.com', 'monto': 220.50, 'concepto': 'Comisión viajes'},
-      {'userId': 103, 'nombre': 'Elena Torres', 'email': 'elena@mail.com', 'monto': 89.99, 'concepto': 'Reembolso'},
+      {
+        'userId': 101,
+        'nombre': 'María García',
+        'email': 'maria@mail.com',
+        'monto': 150.00,
+        'concepto': 'Pago de servicios',
+      },
+      {
+        'userId': 102,
+        'nombre': 'José Martinez',
+        'email': 'jose@mail.com',
+        'monto': 220.50,
+        'concepto': 'Comisión viajes',
+      },
+      {
+        'userId': 103,
+        'nombre': 'Elena Torres',
+        'email': 'elena@mail.com',
+        'monto': 89.99,
+        'concepto': 'Reembolso',
+      },
     ];
   }
 
   Future<void> _markPaid(int conductorId) async {
     try {
       final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/commissions/$conductorId/paid'),
+        Uri.parse(
+          '${ApiClient.baseUrl}/api/admin/commissions/$conductorId/paid',
+        ),
         headers: _authHeaders,
       );
       if (res.statusCode == 200) {
@@ -133,9 +219,144 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       }
     } catch (_) {}
     setState(() {
-      final idx = _commissions.indexWhere((c) => c['conductorId'] == conductorId);
+      final idx = _commissions.indexWhere(
+        (c) => c['conductorId'] == conductorId,
+      );
       if (idx != -1) _commissions[idx]['pagada'] = true;
     });
+  }
+
+  Future<void> _showCommissionHistory(int conductorId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final res = await http.get(
+        Uri.parse(
+          '${ApiClient.baseUrl}/api/admin/commissions/$conductorId/history',
+        ),
+        headers: _authHeaders,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final List history = body is List
+            ? body
+            : (body['data'] ?? body['history'] ?? []);
+        _showHistoryDialog(conductorId, history);
+      } else {
+        _showCommissionError('Error al cargar historial');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      _showCommissionError('Error al cargar historial');
+    }
+  }
+
+  void _showHistoryDialog(int conductorId, List history) {
+    final conductor = _commissions.firstWhere(
+      (c) => c['conductorId'] == conductorId,
+      orElse: () => {'nombre': 'Conductor'},
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Historial - ${conductor['nombre']}',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (history.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Sin historial disponible',
+                    style: TextStyle(color: Colors.black45),
+                  ),
+                )
+              else
+                ...history.map(
+                  (h) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                h['concepto']?.toString() ?? '',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                h['fecha']?.toString() ?? '',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.black45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '\$${(h['monto'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color:
+                                (h['tipo'] == 'egreso' ||
+                                    (h['monto'] as num?)?.isNegative == true)
+                                ? const Color(0xFFE53935)
+                                : const Color(0xFF4CAF50),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cerrar'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCommissionError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _confirmPayment(int userId) async {
@@ -187,8 +408,14 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                 indicatorColor: Colors.black87,
                 labelColor: Colors.black87,
                 unselectedLabelColor: Colors.black38,
-                labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+                labelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
                 tabs: const [
                   Tab(text: 'Dashboard'),
                   Tab(text: 'Comisiones'),
@@ -259,7 +486,11 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.people_outline, size: 18, color: Colors.black87),
+                      const Icon(
+                        Icons.people_outline,
+                        size: 18,
+                        color: Colors.black87,
+                      ),
                       const SizedBox(width: 8),
                       const Text(
                         'Comisiones / Deudas',
@@ -272,7 +503,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                       const Spacer(),
                       Text(
                         '${_commissions.length} conductores',
-                        style: const TextStyle(fontSize: 11, color: Colors.black38),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black38,
+                        ),
                       ),
                     ],
                   ),
@@ -281,7 +515,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                 if (_commissions.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('Sin comisiones pendientes', style: TextStyle(color: Colors.black45)),
+                    child: Text(
+                      'Sin comisiones pendientes',
+                      style: TextStyle(color: Colors.black45),
+                    ),
                   )
                 else
                   ..._commissions.asMap().entries.map((entry) {
@@ -289,102 +526,137 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                     final c = entry.value;
                     final isLast = i == _commissions.length - 1;
                     final pagada = c['pagada'] == true;
-                    return Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: pagada
-                                      ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
-                                      : const Color(0xFFFB8C00).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
+                    return GestureDetector(
+                      onTap: () =>
+                          _showCommissionHistory(c['conductorId'] as int),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: pagada
+                                        ? const Color(
+                                            0xFF4CAF50,
+                                          ).withValues(alpha: 0.1)
+                                        : const Color(
+                                            0xFFFB8C00,
+                                          ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    pagada
+                                        ? Icons.check_circle_outline
+                                        : Icons.pending_outlined,
+                                    color: pagada
+                                        ? const Color(0xFF4CAF50)
+                                        : const Color(0xFFFB8C00),
+                                    size: 20,
+                                  ),
                                 ),
-                                child: Icon(
-                                  pagada ? Icons.check_circle_outline : Icons.pending_outlined,
-                                  color: pagada ? const Color(0xFF4CAF50) : const Color(0xFFFB8C00),
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      c['nombre'] ?? 'Sin nombre',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.black87,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        c['nombre'] ?? 'Sin nombre',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.black87,
+                                        ),
                                       ),
+                                      Text(
+                                        pagada ? 'Pagada' : 'Pendiente',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: pagada
+                                              ? const Color(0xFF4CAF50)
+                                              : const Color(0xFFFB8C00),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  '\$${(c['monto'] as num).toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                if (!pagada)
+                                  SizedBox(
+                                    height: 30,
+                                    child: ElevatedButton(
+                                      onPressed: () =>
+                                          _markPaid(c['conductorId'] as int),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFF1E88E5,
+                                        ),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      child: const Text('Pagar'),
                                     ),
-                                    Text(
-                                      pagada ? 'Pagada' : 'Pendiente',
+                                  )
+                                else
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(
+                                        0xFF4CAF50,
+                                      ).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      'Pagado',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                        color: pagada ? const Color(0xFF4CAF50) : const Color(0xFFFB8C00),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                '\$${(c['monto'] as num).toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              if (!pagada)
-                                SizedBox(
-                                  height: 30,
-                                  child: ElevatedButton(
-                                    onPressed: () => _markPaid(c['conductorId'] as int),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1E88E5),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      textStyle: const TextStyle(
-                                        fontSize: 11,
                                         fontWeight: FontWeight.w600,
+                                        color: Color(0xFF4CAF50),
                                       ),
                                     ),
-                                    child: const Text('Pagar'),
                                   ),
-                                )
-                              else
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Text(
-                                    'Pagado',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF4CAF50),
-                                    ),
-                                  ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        if (!isLast)
-                          const Divider(height: 1, indent: 68, endIndent: 16, color: Color(0xFFF0F0F0)),
-                      ],
+                          if (!isLast)
+                            const Divider(
+                              height: 1,
+                              indent: 68,
+                              endIndent: 16,
+                              color: Color(0xFFF0F0F0),
+                            ),
+                        ],
+                      ),
                     );
                   }),
               ],
@@ -419,7 +691,11 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.payment_outlined, size: 18, color: Colors.black87),
+                      const Icon(
+                        Icons.payment_outlined,
+                        size: 18,
+                        color: Colors.black87,
+                      ),
                       const SizedBox(width: 8),
                       const Text(
                         'Pagos Pendientes',
@@ -432,7 +708,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                       const Spacer(),
                       Text(
                         '${_pendingPayments.length} pendientes',
-                        style: const TextStyle(fontSize: 11, color: Colors.black38),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black38,
+                        ),
                       ),
                     ],
                   ),
@@ -441,7 +720,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                 if (_pendingPayments.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('Sin pagos pendientes', style: TextStyle(color: Colors.black45)),
+                    child: Text(
+                      'Sin pagos pendientes',
+                      style: TextStyle(color: Colors.black45),
+                    ),
                   )
                 else
                   ..._pendingPayments.asMap().entries.map((entry) {
@@ -451,7 +733,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                     return Column(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -461,7 +746,9 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF8E24AA).withValues(alpha: 0.1),
+                                      color: const Color(
+                                        0xFF8E24AA,
+                                      ).withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: const Icon(
@@ -473,7 +760,8 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           p['nombre'] ?? 'Sin nombre',
@@ -506,7 +794,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                               ),
                               if (p['concepto'] != null)
                                 Padding(
-                                  padding: const EdgeInsets.only(top: 6, left: 52),
+                                  padding: const EdgeInsets.only(
+                                    top: 6,
+                                    left: 52,
+                                  ),
                                   child: Text(
                                     p['concepto'],
                                     style: const TextStyle(
@@ -523,13 +814,22 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                   SizedBox(
                                     height: 30,
                                     child: OutlinedButton(
-                                      onPressed: () => _rejectPayment(p['userId'] as int),
+                                      onPressed: () =>
+                                          _rejectPayment(p['userId'] as int),
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFE53935),
-                                        side: const BorderSide(color: Color(0xFFE53935)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        foregroundColor: const Color(
+                                          0xFFE53935,
+                                        ),
+                                        side: const BorderSide(
+                                          color: Color(0xFFE53935),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         textStyle: const TextStyle(
                                           fontSize: 11,
@@ -543,13 +843,20 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                   SizedBox(
                                     height: 30,
                                     child: ElevatedButton(
-                                      onPressed: () => _confirmPayment(p['userId'] as int),
+                                      onPressed: () =>
+                                          _confirmPayment(p['userId'] as int),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF4CAF50),
+                                        backgroundColor: const Color(
+                                          0xFF4CAF50,
+                                        ),
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         textStyle: const TextStyle(
                                           fontSize: 11,
@@ -565,7 +872,12 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                           ),
                         ),
                         if (!isLast)
-                          const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFF0F0F0)),
+                          const Divider(
+                            height: 1,
+                            indent: 16,
+                            endIndent: 16,
+                            color: Color(0xFFF0F0F0),
+                          ),
                       ],
                     );
                   }),
@@ -584,7 +896,11 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.chevron_left, color: Colors.black87, size: 26),
+            icon: const Icon(
+              Icons.chevron_left,
+              color: Colors.black87,
+              size: 26,
+            ),
             onPressed: () => Navigator.maybePop(context),
           ),
           const Text(
@@ -663,15 +979,24 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: const Color(0xFF4CAF50).withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Row(
                     children: const [
-                      Icon(Icons.trending_up, size: 13, color: Color(0xFF4CAF50)),
+                      Icon(
+                        Icons.trending_up,
+                        size: 13,
+                        color: Color(0xFF4CAF50),
+                      ),
                       SizedBox(width: 4),
                       Text(
                         '+12.4%',
@@ -698,11 +1023,18 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: sel ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+                      color: sel
+                          ? Colors.white.withValues(alpha: 0.15)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: sel ? Colors.white30 : Colors.transparent),
+                      border: Border.all(
+                        color: sel ? Colors.white30 : Colors.transparent,
+                      ),
                     ),
                     child: Text(
                       p,
@@ -761,8 +1093,9 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
         return Expanded(
           child: Container(
             margin: EdgeInsets.only(
-                right: m == metricas.first ? 7 : 0,
-                left: m == metricas.last ? 7 : 0),
+              right: m == metricas.first ? 7 : 0,
+              left: m == metricas.last ? 7 : 0,
+            ),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -784,8 +1117,11 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                     color: (m['color'] as Color).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(m['icon'] as IconData,
-                      color: m['color'] as Color, size: 18),
+                  child: Icon(
+                    m['icon'] as IconData,
+                    color: m['color'] as Color,
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -795,9 +1131,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                       Text(
                         m['label'] as String,
                         style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.black45,
-                            fontWeight: FontWeight.w500),
+                          fontSize: 10,
+                          color: Colors.black45,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -861,9 +1198,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
           ...pagos.asMap().entries.map((entry) {
             final i = entry.key;
             final p = entry.value;
-            final pct = total > 0
-                ? (p['monto'] as num) / (total as num)
-                : 0.0;
+            final pct = total > 0 ? (p['monto'] as num) / (total as num) : 0.0;
             final isLast = i == pagos.length - 1;
             return _PagoRow(
               tipo: p['tipo'] ?? '',
@@ -879,7 +1214,6 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       ),
     );
   }
-
 }
 
 class _PagoRow extends StatelessWidget {
@@ -954,9 +1288,13 @@ class _PagoRow extends StatelessWidget {
                       ),
                     ),
                     if (sub.isNotEmpty)
-                      Text(sub,
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.black45)),
+                      Text(
+                        sub,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black45,
+                        ),
+                      ),
                     const SizedBox(height: 6),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
@@ -1000,10 +1338,11 @@ class _PagoRow extends StatelessWidget {
         ),
         if (!isLast)
           const Divider(
-              height: 1,
-              indent: 68,
-              endIndent: 16,
-              color: Color(0xFFF0F0F0)),
+            height: 1,
+            indent: 68,
+            endIndent: 16,
+            color: Color(0xFFF0F0F0),
+          ),
       ],
     );
   }
@@ -1049,11 +1388,21 @@ class _AreaChartPainter extends CustomPainter {
     fillPath.lineTo(offsets.first.dx, offsets.first.dy);
     for (int i = 1; i < offsets.length; i++) {
       final cp1 = Offset(
-          (offsets[i - 1].dx + offsets[i].dx) / 2, offsets[i - 1].dy);
+        (offsets[i - 1].dx + offsets[i].dx) / 2,
+        offsets[i - 1].dy,
+      );
       final cp2 = Offset(
-          (offsets[i - 1].dx + offsets[i].dx) / 2, offsets[i].dy);
+        (offsets[i - 1].dx + offsets[i].dx) / 2,
+        offsets[i].dy,
+      );
       fillPath.cubicTo(
-          cp1.dx, cp1.dy, cp2.dx, cp2.dy, offsets[i].dx, offsets[i].dy);
+        cp1.dx,
+        cp1.dy,
+        cp2.dx,
+        cp2.dy,
+        offsets[i].dx,
+        offsets[i].dy,
+      );
     }
     fillPath.lineTo(offsets.last.dx, paddingTop + chartH);
     fillPath.close();
@@ -1068,19 +1417,28 @@ class _AreaChartPainter extends CustomPainter {
             Colors.white.withValues(alpha: 0.25),
             Colors.white.withValues(alpha: 0.02),
           ],
-        ).createShader(
-            Rect.fromLTWH(0, paddingTop, size.width, chartH)),
+        ).createShader(Rect.fromLTWH(0, paddingTop, size.width, chartH)),
     );
 
     final linePath = Path();
     linePath.moveTo(offsets.first.dx, offsets.first.dy);
     for (int i = 1; i < offsets.length; i++) {
       final cp1 = Offset(
-          (offsets[i - 1].dx + offsets[i].dx) / 2, offsets[i - 1].dy);
+        (offsets[i - 1].dx + offsets[i].dx) / 2,
+        offsets[i - 1].dy,
+      );
       final cp2 = Offset(
-          (offsets[i - 1].dx + offsets[i].dx) / 2, offsets[i].dy);
+        (offsets[i - 1].dx + offsets[i].dx) / 2,
+        offsets[i].dy,
+      );
       linePath.cubicTo(
-          cp1.dx, cp1.dy, cp2.dx, cp2.dy, offsets[i].dx, offsets[i].dy);
+        cp1.dx,
+        cp1.dy,
+        cp2.dx,
+        cp2.dy,
+        offsets[i].dx,
+        offsets[i].dy,
+      );
     }
 
     canvas.drawPath(
@@ -1094,11 +1452,7 @@ class _AreaChartPainter extends CustomPainter {
     );
 
     if (offsets.isNotEmpty) {
-      canvas.drawCircle(
-        offsets.last,
-        4,
-        Paint()..color = Colors.white,
-      );
+      canvas.drawCircle(offsets.last, 4, Paint()..color = Colors.white);
       canvas.drawCircle(
         offsets.last,
         2,
@@ -1107,9 +1461,10 @@ class _AreaChartPainter extends CustomPainter {
     }
 
     final labelStyle = const TextStyle(
-        fontSize: 9.5,
-        color: Colors.white38,
-        fontWeight: FontWeight.w500);
+      fontSize: 9.5,
+      color: Colors.white38,
+      fontWeight: FontWeight.w500,
+    );
     final step = max(1, (labels.length / 6).round());
     for (int i = 0; i < labels.length; i += step) {
       if (i >= points.length) break;
@@ -1119,9 +1474,9 @@ class _AreaChartPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(
-          canvas,
-          Offset(x - tp.width / 2,
-              size.height - paddingBottom + 6));
+        canvas,
+        Offset(x - tp.width / 2, size.height - paddingBottom + 6),
+      );
     }
   }
 
