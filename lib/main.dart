@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/api_client.dart';
-import 'screens/login_screen.dart';
+import 'screens/user/auth_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -17,7 +17,7 @@ Future<void> main() async {
   } catch (_) {
     // Firebase no disponible en este entorno
   }
-  await ApiClient().init();
+  await ApiClient.instance.init();
   runApp(const MainApp());
 }
 
@@ -33,7 +33,7 @@ class MainApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         useMaterial3: true,
       ),
-      home: const LoginScreen(),
+      home: const AuthScreen(),
     );
   }
 }
