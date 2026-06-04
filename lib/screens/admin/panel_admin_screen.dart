@@ -6,6 +6,8 @@ import 'reportes_moderadores_screen.dart';
 import 'perfil_admin_screen.dart';
 import 'soporte_reportes_screen.dart';
 import 'gestion_emergencias_screen.dart';
+import 'gestion_comunicados_screen.dart';
+import 'mapa_vivo_screen.dart';
 
 class AdminPanelScreen extends StatelessWidget {
   const AdminPanelScreen({super.key});
@@ -33,6 +35,12 @@ class AdminPanelScreen extends StatelessWidget {
       }),
       _AdminPanelItem('Perfil Admin', Icons.person_rounded, () {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+      }),
+      _AdminPanelItem('Comunicados', Icons.campaign_rounded, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const GestionComunicadosScreen()));
+      }),
+      _AdminPanelItem('Mapa en Vivo', Icons.map_rounded, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const MapaVivoScreen()));
       }),
     ];
 

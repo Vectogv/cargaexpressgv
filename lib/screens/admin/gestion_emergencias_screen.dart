@@ -75,7 +75,6 @@ class EmergenciesScreen extends StatefulWidget {
 class _EmergenciesScreenState extends State<EmergenciesScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
-  int _selectedIndex = 0;
   bool _loading = true;
   List<Emergency> _emergencies = [];
 

@@ -14,7 +14,6 @@ class PagosFinanzasScreen extends StatefulWidget {
 class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
     with TickerProviderStateMixin {
   late TabController _tabCtrl;
-  int _selectedIndex = 1;
   bool _loading = true;
   Map<String, dynamic> _data = {};
   List<Map<String, dynamic>> _commissions = [];
@@ -210,7 +209,6 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                       ],
                     ),
             ),
-            _buildBottomNav(),
           ],
         ),
       ),
@@ -882,54 +880,6 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
     );
   }
 
-  Widget _buildBottomNav() {
-    final items = [
-      {'icon': Icons.home_rounded, 'label': 'Home'},
-      {'icon': Icons.payments_rounded, 'label': 'Finanzas'},
-      {'icon': Icons.directions_car_rounded, 'label': 'Drivers'},
-      {'icon': Icons.person_rounded, 'label': 'Perfil'},
-    ];
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final sel = _selectedIndex == i;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedIndex = i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i]['icon'] as IconData,
-                    size: 22,
-                    color: sel ? Colors.black87 : Colors.black38),
-                const SizedBox(height: 2),
-                Text(
-                  items[i]['label'] as String,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: sel ? Colors.black87 : Colors.black38,
-                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-                if (sel)
-                  Container(
-                    margin: const EdgeInsets.only(top: 3),
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: Colors.black87,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 class _PagoRow extends StatelessWidget {

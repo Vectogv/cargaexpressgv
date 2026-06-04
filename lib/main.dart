@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/api_client.dart';
 import 'screens/user/auth_screen.dart';
+import 'screens/admin/dashboard_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -33,7 +34,9 @@ class MainApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         useMaterial3: true,
       ),
-      home: const AuthScreen(),
+      home: ApiClient.instance.token != null
+          ? const DashboardScreen()
+          : const AuthScreen(),
     );
   }
 }

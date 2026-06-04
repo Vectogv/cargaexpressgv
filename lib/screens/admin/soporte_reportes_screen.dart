@@ -128,7 +128,6 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
   late List<Ticket> _tickets;
   bool _isSending = false;
   bool _isLoading = true;
-  int _selectedNav = 2;
 
   @override
   void initState() {
@@ -243,7 +242,6 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
@@ -536,61 +534,6 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    const items = [
-      (Icons.home_rounded, 'Inicio'),
-      (Icons.bar_chart_rounded, 'Reportes'),
-      (Icons.chat_bubble_outline_rounded, 'Soporte'),
-      (Icons.grid_view_rounded, 'Panel'),
-      (Icons.person_outline_rounded, 'Perfil'),
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE5E5EA), width: 0.5)),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 58,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (i) {
-              final selected = _selectedNav == i;
-              final color = selected
-                  ? const Color(0xFF667EEA)
-                  : Colors.grey.shade500;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedNav = i),
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 60,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(items[i].$1, color: color, size: 22),
-                      const SizedBox(height: 3),
-                      Text(
-                        items[i].$2,
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: color,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
       ),
     );
   }

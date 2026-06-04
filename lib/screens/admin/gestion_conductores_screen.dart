@@ -13,7 +13,6 @@ class GestionConductoresScreen extends StatefulWidget {
 
 class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     with SingleTickerProviderStateMixin {
-  int _selectedIndex = 2;
   bool _loading = true;
   List<Map<String, dynamic>> _conductores = [];
   List<Map<String, dynamic>> _verificaciones = [];
@@ -237,6 +236,76 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     }
   }
 
+  void _mostrarDocumentos(Map<String, dynamic> v) {
+    final docs = [
+      if (v['fotoCedula'] != null) _DocItem('Cédula', v['fotoCedula']),
+      if (v['fotoLicencia'] != null) _DocItem('Licencia', v['fotoLicencia']),
+      if (v['fotoVehiculo'] != null) _DocItem('Vehículo', v['fotoVehiculo']),
+    ];
+    if (docs.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Documentos del Conductor',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('${v['nombre'] ?? ''} ${v['apellido'] ?? ''}',
+                  style: const TextStyle(fontSize: 13, color: Colors.black45)),
+              const SizedBox(height: 16),
+              ...docs.map((doc) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(doc.label,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        '${ApiClient.baseUrl}${doc.url}',
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 200,
+                          color: const Color(0xFFF2F2F7),
+                          child: const Center(child: Text('Imagen no disponible', style: TextStyle(color: Colors.black45))),
+                        ),
+                        loadingBuilder: (_, child, progress) => progress == null ? child : const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cerrar'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
@@ -257,7 +326,6 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
                   ? _buildConductoresList()
                   : _buildVerificacionesList(),
             ),
-            _buildBottomNav(),
           ],
         ),
       ),
@@ -302,13 +370,21 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         itemCount: _verificaciones.length,
         itemBuilder: (_, i) {
           final v = _verificaciones[i];
+          final condId = v['conductorId'] ?? v['id'];
+          final usuario = v['usuario'] as Map<String, dynamic>?;
           return _ConductorCard(
-            conductor: v,
+            conductor: {
+              ...v,
+              'nombre': v['nombre'] ?? usuario?['nombre'] ?? '',
+              'apellido': v['apellido'] ?? usuario?['apellido'] ?? '',
+              'email': v['email'] ?? usuario?['email'] ?? '',
+            },
             idKey: 'conductorId',
-            onAprobar: () =>
-                _accionVerificacion(v['conductorId'], 'aprobar'),
-            onRechazar: () =>
-                _accionVerificacion(v['conductorId'], 'rechazar'),
+            onAprobar: () => _accionVerificacion(condId, 'aprobar'),
+            onRechazar: () => _accionVerificacion(condId, 'rechazar'),
+            onVerDocumentos: v['fotoCedula'] != null || v['fotoLicencia'] != null || v['fotoVehiculo'] != null
+                ? () => _mostrarDocumentos(v)
+                : null,
           );
         },
       ),
@@ -439,70 +515,20 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     );
   }
 
-  Widget _buildBottomNav() {
-    final items = [
-      {'icon': Icons.home_rounded, 'label': 'Home'},
-      {'icon': Icons.people_rounded, 'label': 'Users'},
-      {'icon': Icons.directions_car_rounded, 'label': 'Drivers'},
-      {'icon': Icons.person_rounded, 'label': 'Perfil'},
-    ];
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final selected = _selectedIndex == i;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedIndex = i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i]['icon'] as IconData,
-                    size: 22,
-                    color:
-                        selected ? Colors.black87 : Colors.black38),
-                const SizedBox(height: 2),
-                Text(
-                  items[i]['label'] as String,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color:
-                        selected ? Colors.black87 : Colors.black38,
-                    fontWeight: selected
-                        ? FontWeight.w600
-                        : FontWeight.w400,
-                  ),
-                ),
-                if (selected)
-                  Container(
-                    margin: const EdgeInsets.only(top: 3),
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: Colors.black87,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 class _ConductorCard extends StatelessWidget {
   final Map<String, dynamic> conductor;
   final VoidCallback onAprobar;
   final VoidCallback onRechazar;
+  final VoidCallback? onVerDocumentos;
   final String idKey;
 
   const _ConductorCard({
     required this.conductor,
     required this.onAprobar,
     required this.onRechazar,
+    this.onVerDocumentos,
     this.idKey = 'id',
   });
 
@@ -635,22 +661,44 @@ class _ConductorCard extends StatelessWidget {
           const Divider(height: 1, color: Color(0xFFF0F0F0)),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: _ActionButton(
-                    label: 'Aprobar',
-                    filled: true,
-                    onTap: onAprobar,
+                if (onVerDocumentos != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: onVerDocumentos,
+                        icon: const Icon(Icons.visibility_rounded, size: 16),
+                        label: const Text('Ver Documentos'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1565C0),
+                          side: const BorderSide(color: Color(0xFF1565C0)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _ActionButton(
-                    label: 'Rechazar',
-                    filled: false,
-                    onTap: onRechazar,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ActionButton(
+                        label: 'Aprobar',
+                        filled: true,
+                        onTap: onAprobar,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ActionButton(
+                        label: 'Rechazar',
+                        filled: false,
+                        onTap: onRechazar,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -784,6 +832,12 @@ class _AddDocButton extends StatelessWidget {
   }
 }
 
+class _DocItem {
+  final String label;
+  final String url;
+  const _DocItem(this.label, this.url);
+}
+
 class _ActionButton extends StatelessWidget {
   final String label;
   final bool filled;
@@ -800,9 +854,9 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 44,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: filled ? Colors.black87 : Colors.white,
+          color: filled ? Colors.black87 : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: filled ? Colors.black87 : const Color(0xFFE0E0E0),

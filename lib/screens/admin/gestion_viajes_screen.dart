@@ -11,7 +11,6 @@ class ViajesScreen extends StatefulWidget {
 }
 
 class _ViajesScreenState extends State<ViajesScreen> {
-  int _selectedIndex = 1;
   bool _loading = true;
   List<Map<String, dynamic>> _viajes = [];
   String _filtro = 'todos';
@@ -140,7 +139,6 @@ class _ViajesScreenState extends State<ViajesScreen> {
                           ),
                         ),
             ),
-            _buildBottomNav(),
           ],
         ),
       ),
@@ -227,55 +225,6 @@ class _ViajesScreenState extends State<ViajesScreen> {
     );
   }
 
-  Widget _buildBottomNav() {
-    final items = [
-      {'icon': Icons.home_rounded, 'label': 'Home'},
-      {'icon': Icons.route_rounded, 'label': 'Viajes'},
-      {'icon': Icons.directions_car_rounded, 'label': 'Drivers'},
-      {'icon': Icons.person_rounded, 'label': 'Perfil'},
-    ];
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final selected = _selectedIndex == i;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedIndex = i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i]['icon'] as IconData,
-                    size: 22,
-                    color: selected ? Colors.black87 : Colors.black38),
-                const SizedBox(height: 2),
-                Text(
-                  items[i]['label'] as String,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: selected ? Colors.black87 : Colors.black38,
-                    fontWeight:
-                        selected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-                if (selected)
-                  Container(
-                    margin: const EdgeInsets.only(top: 3),
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: Colors.black87,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 class _ViajeCard extends StatelessWidget {

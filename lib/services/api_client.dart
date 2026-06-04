@@ -10,16 +10,34 @@ class ApiClient {
   static const String baseUrl = 'http://localhost:3333';
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'auth_refresh_token';
+  static const String _nombreKey = 'auth_nombre';
+  static const String _apellidoKey = 'auth_apellido';
+  static const String _emailKey = 'auth_email';
+  static const String _rolKey = 'auth_rol';
 
   String? _token;
   String? _refreshToken;
+  String? _nombre;
+  String? _apellido;
+  String? _email;
+  String? _rol;
 
   String? get token => _token;
+  String? get nombre => _nombre;
+  String? get apellido => _apellido;
+  String? get email => _email;
+  String? get rol => _rol;
+
+  String get nombreCompleto => '${_nombre ?? 'Admin'} ${_apellido ?? ''}'.trim();
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString(_tokenKey);
     _refreshToken = prefs.getString(_refreshTokenKey);
+    _nombre = prefs.getString(_nombreKey);
+    _apellido = prefs.getString(_apellidoKey);
+    _email = prefs.getString(_emailKey);
+    _rol = prefs.getString(_rolKey);
   }
 
   Map<String, String> _headers({bool auth = false}) {
@@ -42,6 +60,7 @@ class ApiClient {
     }
     final auth = AuthResponse.fromJson(data);
     await _saveTokens(auth.token, auth.refreshToken);
+    await saveProfile(auth);
     return auth;
   }
 
@@ -67,6 +86,7 @@ class ApiClient {
     }
     final auth = AuthResponse.fromJson(data);
     await _saveTokens(auth.token, auth.refreshToken);
+    await saveProfile(auth);
     return auth;
   }
 
@@ -105,11 +125,31 @@ class ApiClient {
     await prefs.setString(_refreshTokenKey, refreshToken);
   }
 
+  Future<void> saveProfile(AuthResponse auth) async {
+    _nombre = auth.nombre;
+    _apellido = auth.apellido;
+    _email = auth.email;
+    _rol = auth.rol;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_nombreKey, auth.nombre);
+    await prefs.setString(_apellidoKey, auth.apellido);
+    await prefs.setString(_emailKey, auth.email);
+    await prefs.setString(_rolKey, auth.rol);
+  }
+
   Future<void> clearTokens() async {
     _token = null;
     _refreshToken = null;
+    _nombre = null;
+    _apellido = null;
+    _email = null;
+    _rol = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshTokenKey);
+    await prefs.remove(_nombreKey);
+    await prefs.remove(_apellidoKey);
+    await prefs.remove(_emailKey);
+    await prefs.remove(_rolKey);
   }
 }

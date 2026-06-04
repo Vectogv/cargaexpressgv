@@ -10,6 +10,11 @@ import 'pagos_finanzas_screen.dart';
 import 'gestion_emergencias_screen.dart';
 import 'soporte_reportes_screen.dart';
 import 'panel_admin_screen.dart';
+import 'perfil_admin_screen.dart';
+import 'configuracion_screen.dart';
+import '../../services/notification_service.dart';
+import 'gestion_comunicados_screen.dart';
+import 'mapa_vivo_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,10 +27,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   bool _loading = true;
   Map<String, dynamic> _data = {};
+  int _unreadCount = 0;
 
   @override
   void initState() {
     super.initState();
+    NotificationService.instance.init();
+    _unreadCount = NotificationService.instance.unreadCount;
+    NotificationService.instance.onNotification.listen((_) {
+      if (mounted) setState(() => _unreadCount = NotificationService.instance.unreadCount);
+    });
     _fetchDashboard();
   }
 
@@ -73,6 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F3F7),
+      drawer: _buildDrawer(context),
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -155,28 +167,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildTopBar() {
     return Container(
-      color: const Color(0xFFF2F3F7),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          Builder(builder: (ctx) {
+            return IconButton(
+              icon: const Icon(Icons.menu_rounded, color: Colors.black87),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            );
+          }),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.admin_panel_settings_rounded,
+                color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
-                'DASHBOARD PRINCIPAL',
-                style: TextStyle(
+                ApiClient.instance.nombreCompleto,
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: Colors.black87,
-                  letterSpacing: 0.3,
                 ),
               ),
-              Text(
-                'GET /api/admin/dashboard',
+              const Text(
+                'Dashboard Principal',
                 style: TextStyle(fontSize: 10, color: Colors.black45),
               ),
+            ],
+          ),
+          const Spacer(),
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined, color: Colors.black54),
+                onPressed: _showNotifications,
+              ),
+              if (_unreadCount > 0)
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFD32F2F),
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      '$_unreadCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
             ],
           ),
           IconButton(
@@ -187,6 +240,139 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  void _showNotifications() {
+    final notifs = NotificationService.instance.notifications;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('Notificaciones', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    const Spacer(),
+                    if (notifs.isNotEmpty)
+                      TextButton(
+                        onPressed: () {
+                          NotificationService.instance.markAllRead();
+                          setState(() => _unreadCount = 0);
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Marcar todas leídas'),
+                      ),
+                  ],
+                ),
+                const Divider(),
+                if (notifs.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(child: Text('Sin notificaciones', style: TextStyle(color: Colors.black45))),
+                  )
+                else
+                  ...notifs.take(20).map((n) => ListTile(
+                    dense: true,
+                    leading: Icon(Icons.circle, size: 8, color: n['read'] == true ? Colors.grey : const Color(0xFF1565C0)),
+                    title: Text('${n['__event'] ?? ''}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    subtitle: Text('${n['message'] ?? n['title'] ?? 'Sin detalle'}', style: const TextStyle(fontSize: 11)),
+                  )),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              color: const Color(0xFF1565C0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.white24,
+                    child: Icon(Icons.admin_panel_settings_rounded,
+                        color: Colors.white, size: 30),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    ApiClient.instance.nombreCompleto,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    ApiClient.instance.email ?? 'admin@cargaexpress.com',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text('ADMINISTRACIÓN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black45, letterSpacing: 0.5)),
+            ),
+            _DrawerItem(Icons.directions_car_rounded, 'Conductores', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const GestionConductoresScreen()));
+            }),
+            _DrawerItem(Icons.crisis_alert_rounded, 'Emergencias', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergenciesScreen()));
+            }),
+            _DrawerItem(Icons.headset_mic_rounded, 'Soporte y Reportes', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportReportsScreen()));
+            }),
+            _DrawerItem(Icons.campaign_rounded, 'Comunicados', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const GestionComunicadosScreen()));
+            }),
+            _DrawerItem(Icons.map_rounded, 'Mapa en Vivo', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const MapaVivoScreen()));
+            }),
+            const Divider(),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Text('HERRAMIENTAS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black45, letterSpacing: 0.5)),
+            ),
+            _DrawerItem(Icons.dashboard_rounded, 'Panel Completo', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()));
+            }),
+            _DrawerItem(Icons.person_rounded, 'Perfil', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+            }),
+            _DrawerItem(Icons.settings_rounded, 'Configuraciones', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ConfigScreen()));
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -218,10 +404,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       {'icon': Icons.home_rounded, 'label': 'Home'},
       {'icon': Icons.people_rounded, 'label': 'Usuarios'},
       {'icon': Icons.route_rounded, 'label': 'Viajes'},
-      {'icon': Icons.directions_car_rounded, 'label': 'Conductores'},
       {'icon': Icons.payments_rounded, 'label': 'Finanzas'},
-      {'icon': Icons.crisis_alert_rounded, 'label': 'Emergencias'},
-      {'icon': Icons.dashboard_rounded, 'label': 'Panel'},
     ];
     return Container(
       color: Colors.white,
@@ -246,22 +429,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               } else if (i == 3) {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const GestionConductoresScreen()),
-                );
-              } else if (i == 4) {
-                Navigator.push(
-                  context,
                   MaterialPageRoute(builder: (_) => const PagosFinanzasScreen()),
-                );
-              } else if (i == 5) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const EmergenciesScreen()),
-                );
-              } else if (i == 6) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
                 );
               }
             },
@@ -548,6 +716,23 @@ class _ActivityTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DrawerItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _DrawerItem(this.icon, this.label, this.onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFF1565C0)),
+      title: Text(label, style: const TextStyle(fontSize: 14)),
+      onTap: onTap,
+      dense: true,
     );
   }
 }
