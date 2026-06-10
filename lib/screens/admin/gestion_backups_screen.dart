@@ -136,7 +136,6 @@ class _BackupsScreenState extends State<BackupsScreen> {
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
       case 'completado':
-      case 'completado':
         return const Color(0xFF34C759);
       case 'fallido':
       case 'error':
@@ -151,7 +150,6 @@ class _BackupsScreenState extends State<BackupsScreen> {
 
   IconData _statusIcon(String status) {
     switch (status.toLowerCase()) {
-      case 'completado':
       case 'completado':
         return Icons.check_circle_rounded;
       case 'fallido':

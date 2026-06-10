@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../admin/dashboard_screen.dart';
+import '../conductor/home_screen.dart' as conductor;
+import '../cliente/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,9 +30,20 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (mounted) {
         _showSnack('Bienvenido ${auth.nombre}');
+        Widget destino;
+        switch (auth.rol) {
+          case 'admin':
+            destino = const DashboardScreen();
+          case 'conductor':
+            destino = const conductor.HomeScreen();
+          case 'cliente':
+            destino = const ClienteHomeScreen();
+          default:
+            destino = const DashboardScreen();
+        }
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          MaterialPageRoute(builder: (_) => destino),
         );
       }
     } catch (e) {

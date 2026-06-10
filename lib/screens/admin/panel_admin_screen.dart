@@ -9,6 +9,8 @@ import 'gestion_emergencias_screen.dart';
 import 'gestion_comunicados_screen.dart';
 import 'mapa_vivo_screen.dart';
 import 'gestion_encuestas_screen.dart';
+import '../../services/api_client.dart';
+import '../user/auth_screen.dart';
 
 class AdminPanelScreen extends StatelessWidget {
   const AdminPanelScreen({super.key});
@@ -46,6 +48,15 @@ class AdminPanelScreen extends StatelessWidget {
       _AdminPanelItem('Encuestas', Icons.poll_rounded, () {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const GestionEncuestasScreen()));
       }),
+      _AdminPanelItem('Cerrar sesión', Icons.logout, () async {
+        await ApiClient.instance.logout();
+        if (!context.mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AuthScreen()),
+          (_) => false,
+        );
+      }, isDestructive: true),
     ];
 
     return Scaffold(
@@ -69,7 +80,7 @@ class AdminPanelScreen extends StatelessWidget {
               onTap: item.onTap,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: item.isDestructive ? Colors.red.shade50 : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -82,15 +93,20 @@ class AdminPanelScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(item.icon, size: 40, color: const Color(0xFF1565C0)),
+                    Icon(item.icon, size: 40,
+                        color: item.isDestructive
+                            ? Colors.red
+                            : const Color(0xFF1565C0)),
                     const SizedBox(height: 12),
                     Text(
                       item.label,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        color: item.isDestructive
+                            ? Colors.red
+                            : Colors.black87,
                       ),
                     ),
                   ],
@@ -108,6 +124,8 @@ class _AdminPanelItem {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+  final bool isDestructive;
 
-  const _AdminPanelItem(this.label, this.icon, this.onTap);
+  const _AdminPanelItem(this.label, this.icon, this.onTap,
+      {this.isDestructive = false});
 }

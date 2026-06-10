@@ -4,10 +4,26 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/api_client.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/admin/dashboard_screen.dart';
+import 'screens/conductor/home_screen.dart' as conductor;
+import 'screens/cliente/home_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+}
+
+Widget _homeScreenByRole() {
+  final rol = ApiClient.instance.rol;
+  switch (rol) {
+    case 'admin':
+      return const DashboardScreen();
+    case 'conductor':
+      return const conductor.HomeScreen();
+    case 'cliente':
+      return const ClienteHomeScreen();
+    default:
+      return const AuthScreen();
+  }
 }
 
 Future<void> main() async {
@@ -35,7 +51,7 @@ class MainApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: ApiClient.instance.token != null
-          ? const DashboardScreen()
+          ? _homeScreenByRole()
           : const AuthScreen(),
     );
   }

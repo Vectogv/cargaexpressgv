@@ -24,12 +24,9 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {});
-      }
+      if (!_tabController.indexIsChanging) setState(() {});
     });
-    _fetchConductores();
-    _fetchVerificaciones();
+    _fetchAll();
   }
 
   @override
@@ -43,8 +40,13 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     'Authorization': 'Bearer ${ApiClient.instance.token}',
   };
 
-  Future<void> _fetchConductores() async {
+  Future<void> _fetchAll() async {
     setState(() => _loading = true);
+    await Future.wait([_fetchConductores(), _fetchVerificaciones()]);
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _fetchConductores() async {
     try {
       final res = await http.get(
         Uri.parse('${ApiClient.baseUrl}/api/admin/drivers'),
@@ -52,16 +54,9 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
       );
       if (res.statusCode == 200) {
         final List data = jsonDecode(res.body);
-        setState(() {
-          _conductores = List<Map<String, dynamic>>.from(data);
-          _loading = false;
-        });
-      } else {
-        _useFallback();
+        setState(() => _conductores = List<Map<String, dynamic>>.from(data));
       }
-    } catch (_) {
-      _useFallback();
-    }
+    } catch (_) {}
   }
 
   Future<void> _fetchVerificaciones() async {
@@ -72,164 +67,81 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
       );
       if (res.statusCode == 200) {
         final List data = jsonDecode(res.body);
-        setState(() {
-          _verificaciones = List<Map<String, dynamic>>.from(data);
-        });
-      } else {
-        _useVerificacionesFallback();
+        setState(() => _verificaciones = List<Map<String, dynamic>>.from(data));
       }
-    } catch (_) {
-      _useVerificacionesFallback();
-    }
-  }
-
-  void _useFallback() {
-    setState(() {
-      _conductores = [
-        {
-          'id': 1,
-          'nombre': 'Name',
-          'apellido': 'Baman',
-          'email': 'nbaman@gmail.com',
-          'tipoVehiculo': 'Sedán',
-          'placa': 'ABC123',
-          'cedula': '1234567890',
-          'estado': 'online',
-          'verificado': false,
-          'aprobado': false,
-          'documentos': [null, null],
-        },
-        {
-          'id': 2,
-          'nombre': 'Neine',
-          'apellido': 'Bernona',
-          'email': 'nbernona@gmail.com',
-          'tipoVehiculo': 'Camioneta',
-          'placa': 'XYZ789',
-          'cedula': '9876543210',
-          'estado': 'online',
-          'verificado': true,
-          'aprobado': false,
-          'documentos': [null, null],
-        },
-        {
-          'id': 3,
-          'nombre': 'Carlos',
-          'apellido': 'Ruiz',
-          'email': 'cruiz@gmail.com',
-          'tipoVehiculo': 'Camión',
-          'placa': 'DEF456',
-          'cedula': '1122334455',
-          'estado': 'offline',
-          'verificado': false,
-          'aprobado': true,
-          'documentos': [null],
-        },
-      ];
-      _loading = false;
-    });
-  }
-
-  void _useVerificacionesFallback() {
-    setState(() {
-      _verificaciones = [
-        {
-          'conductorId': 4,
-          'nombre': 'Maria',
-          'apellido': 'Gomez',
-          'email': 'mgomez@gmail.com',
-          'tipoVehiculo': 'Sedán',
-          'placa': 'LMN789',
-          'cedula': '5566778899',
-          'estado': 'online',
-          'verificado': false,
-          'aprobado': false,
-          'documentos': [null, null],
-        },
-        {
-          'conductorId': 5,
-          'nombre': 'Pedro',
-          'apellido': 'Lopez',
-          'email': 'plopez@gmail.com',
-          'tipoVehiculo': 'Camioneta',
-          'placa': 'OPQ321',
-          'cedula': '9988776655',
-          'estado': 'offline',
-          'verificado': false,
-          'aprobado': false,
-          'documentos': [null, null],
-        },
-      ];
-    });
+    } catch (_) {}
   }
 
   List<Map<String, dynamic>> get _filtrados {
     if (_filtro == 'todos') return _conductores;
     if (_filtro == 'online') {
-      return _conductores
-          .where((c) => c['estado'] == 'online')
-          .toList();
+      return _conductores.where((c) => c['online'] == true).toList();
     }
     if (_filtro == 'offline') {
-      return _conductores
-          .where((c) => c['estado'] == 'offline')
-          .toList();
-    }
-    if (_filtro == 'verificado') {
-      return _conductores
-          .where((c) => c['verificado'] == true)
-          .toList();
-    }
-    if (_filtro == 'pendiente') {
-      return _conductores
-          .where((c) => c['aprobado'] == false)
-          .toList();
+      return _conductores.where((c) => c['online'] == false).toList();
     }
     return _conductores;
   }
 
-  Future<void> _accion(int id, String tipo) async {
-    final endpoint = tipo == 'aprobar' ? 'approve' : 'reject';
+  Future<void> _aprobarVerificacion(dynamic conductorId) async {
     try {
       final res = await http.put(
-        Uri.parse(
-            '${ApiClient.baseUrl}/api/admin/drivers/$id/$endpoint'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/verifications/$conductorId/approve'),
         headers: _authHeaders,
       );
       if (res.statusCode == 200) {
-        setState(() {
-          final idx = _conductores.indexWhere((c) => c['id'] == id);
-          if (idx != -1) {
-            _conductores[idx]['aprobado'] = tipo == 'aprobar';
-          }
-        });
-        _showSnack(
-            tipo == 'aprobar' ? 'Conductor aprobado' : 'Conductor rechazado');
+        _verificaciones.removeWhere((v) => v['id'] == conductorId);
+        _showSnack('Conductor verificado correctamente');
+        _fetchConductores();
+        if (mounted) setState(() {});
       } else {
-        _showSnack('Error al procesar');
+        _showSnack('Error al aprobar');
       }
     } catch (_) {
       _showSnack('Error de conexión');
     }
   }
 
-  Future<void> _accionVerificacion(int conductorId, String tipo) async {
-    final endpoint = tipo == 'aprobar' ? 'approve' : 'reject';
+  Future<void> _rechazarVerificacion(dynamic conductorId) async {
+    final textCtrl = TextEditingController();
+    final nota = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Motivo del rechazo'),
+        content: TextField(
+          controller: textCtrl,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Indica el motivo del rechazo...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, textCtrl.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Rechazar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (nota == null || nota.isEmpty) return;
+
     try {
       final res = await http.put(
-        Uri.parse(
-            '${ApiClient.baseUrl}/api/admin/verifications/$conductorId/$endpoint'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/verifications/$conductorId/reject'),
         headers: _authHeaders,
+        body: jsonEncode({'nota': nota}),
       );
       if (res.statusCode == 200) {
-        setState(() {
-          _verificaciones.removeWhere((v) => v['conductorId'] == conductorId);
-        });
-        _showSnack(
-            tipo == 'aprobar' ? 'Verificación aprobada' : 'Verificación rechazada');
+        _verificaciones.removeWhere((v) => v['id'] == conductorId);
+        _showSnack('Conductor rechazado');
         _fetchConductores();
+        if (mounted) setState(() {});
       } else {
-        _showSnack('Error al procesar');
+        _showSnack('Error al rechazar');
       }
     } catch (_) {
       _showSnack('Error de conexión');
@@ -237,12 +149,13 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
   }
 
   void _mostrarDocumentos(Map<String, dynamic> v) {
-    final docs = [
-      if (v['fotoCedula'] != null) _DocItem('Cédula', v['fotoCedula']),
-      if (v['fotoLicencia'] != null) _DocItem('Licencia', v['fotoLicencia']),
-      if (v['fotoVehiculo'] != null) _DocItem('Vehículo', v['fotoVehiculo']),
-    ];
+    final usuario = v['usuario'] as Map<String, dynamic>?;
+    final docs = <_DocItem>[];
+    if (v['fotoCedula'] != null) docs.add(_DocItem('Cédula', v['fotoCedula']));
+    if (v['fotoLicencia'] != null) docs.add(_DocItem('Licencia', v['fotoLicencia']));
+    if (v['fotoVehiculo'] != null) docs.add(_DocItem('Vehículo', v['fotoVehiculo']));
     if (docs.isEmpty) return;
+
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -254,11 +167,13 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Documentos del Conductor',
+              const Text('Documentos',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
-              Text('${v['nombre'] ?? ''} ${v['apellido'] ?? ''}',
-                  style: const TextStyle(fontSize: 13, color: Colors.black45)),
+              Text(
+                '${usuario?['nombre'] ?? v['nombre'] ?? ''} ${usuario?['apellido'] ?? v['apellido'] ?? ''}',
+                style: const TextStyle(fontSize: 13, color: Colors.black45),
+              ),
               const SizedBox(height: 16),
               ...docs.map((doc) => Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -275,7 +190,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
                         height: 200,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (_, _, _) => Container(
                           height: 200,
                           color: const Color(0xFFF2F2F7),
                           child: const Center(child: Text('Imagen no disponible', style: TextStyle(color: Colors.black45))),
@@ -333,26 +248,16 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
   }
 
   Widget _buildConductoresList() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
     if (_filtrados.isEmpty) {
-      return const Center(
-        child: Text('Sin conductores',
-            style: TextStyle(color: Colors.black45)));
+      return const Center(child: Text('Sin conductores', style: TextStyle(color: Colors.black45)));
     }
     return RefreshIndicator(
       onRefresh: _fetchConductores,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: _filtrados.length,
-        itemBuilder: (_, i) => _ConductorCard(
-          conductor: _filtrados[i],
-          onAprobar: () =>
-              _accion(_filtrados[i]['id'], 'aprobar'),
-          onRechazar: () =>
-              _accion(_filtrados[i]['id'], 'rechazar'),
-        ),
+        itemBuilder: (_, i) => _ConductorCard(conductor: _filtrados[i]),
       ),
     );
   }
@@ -360,8 +265,8 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
   Widget _buildVerificacionesList() {
     if (_verificaciones.isEmpty) {
       return const Center(
-        child: Text('Sin verificaciones pendientes',
-            style: TextStyle(color: Colors.black45)));
+        child: Text('Sin verificaciones pendientes', style: TextStyle(color: Colors.black45)),
+      );
     }
     return RefreshIndicator(
       onRefresh: _fetchVerificaciones,
@@ -370,21 +275,18 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         itemCount: _verificaciones.length,
         itemBuilder: (_, i) {
           final v = _verificaciones[i];
-          final condId = v['conductorId'] ?? v['id'];
+          final condId = v['id'];
           final usuario = v['usuario'] as Map<String, dynamic>?;
-          return _ConductorCard(
-            conductor: {
-              ...v,
-              'nombre': v['nombre'] ?? usuario?['nombre'] ?? '',
-              'apellido': v['apellido'] ?? usuario?['apellido'] ?? '',
-              'email': v['email'] ?? usuario?['email'] ?? '',
-            },
-            idKey: 'conductorId',
-            onAprobar: () => _accionVerificacion(condId, 'aprobar'),
-            onRechazar: () => _accionVerificacion(condId, 'rechazar'),
-            onVerDocumentos: v['fotoCedula'] != null || v['fotoLicencia'] != null || v['fotoVehiculo'] != null
-                ? () => _mostrarDocumentos(v)
-                : null,
+          return _VerificacionCard(
+            nombre: usuario?['nombre'] as String? ?? '',
+            apellido: usuario?['apellido'] as String? ?? '',
+            email: usuario?['email'] as String? ?? '',
+            tipoVehiculo: v['tipoVehiculo'] as String? ?? '',
+            placa: v['placa'] as String? ?? '',
+            tieneDocs: v['fotoCedula'] != null || v['fotoLicencia'] != null || v['fotoVehiculo'] != null,
+            onVerDocumentos: () => _mostrarDocumentos(v),
+            onAprobar: () => _aprobarVerificacion(condId),
+            onRechazar: () => _rechazarVerificacion(condId),
           );
         },
       ),
@@ -398,26 +300,17 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.chevron_left,
-                color: Colors.black87, size: 26),
+            icon: const Icon(Icons.chevron_left, color: Colors.black87, size: 26),
             onPressed: () => Navigator.maybePop(context),
           ),
           const Text(
             'GESTIÓN DE CONDUCTORES',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-              letterSpacing: 0.3,
-            ),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87, letterSpacing: 0.3),
           ),
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.black45, size: 20),
-            onPressed: () {
-              _fetchConductores();
-              _fetchVerificaciones();
-            },
+            onPressed: _fetchAll,
           ),
         ],
       ),
@@ -432,31 +325,17 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
         ),
         child: TabBar(
           controller: _tabController,
-          indicator: BoxDecoration(
-            color: Colors.black87,
-            borderRadius: BorderRadius.circular(12),
-          ),
+          indicator: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(12)),
           indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: Colors.transparent,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.black54,
-          labelStyle: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
+          labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           tabs: const [
             Tab(text: 'Conductores'),
             Tab(text: 'Verificaciones'),
@@ -471,8 +350,6 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
       {'key': 'todos', 'label': 'Todos'},
       {'key': 'online', 'label': 'Online'},
       {'key': 'offline', 'label': 'Offline'},
-      {'key': 'verificado', 'label': 'Verificado'},
-      {'key': 'pendiente', 'label': 'Pendiente'},
     ];
     return SizedBox(
       height: 38,
@@ -487,17 +364,13 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.only(right: 8),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: selected ? Colors.black87 : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   if (!selected)
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                    ),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4),
                 ],
               ),
               child: Text(
@@ -514,49 +387,55 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
       ),
     );
   }
-
 }
 
 class _ConductorCard extends StatelessWidget {
   final Map<String, dynamic> conductor;
-  final VoidCallback onAprobar;
-  final VoidCallback onRechazar;
-  final VoidCallback? onVerDocumentos;
-  final String idKey;
 
-  const _ConductorCard({
-    required this.conductor,
-    required this.onAprobar,
-    required this.onRechazar,
-    this.onVerDocumentos,
-    this.idKey = 'id',
-  });
+  const _ConductorCard({required this.conductor});
 
-  bool get _online => conductor['estado'] == 'online';
-  bool get _verificado => conductor['verificado'] == true;
-  bool get _aprobado => conductor['aprobado'] == true;
+  bool get _online => conductor['online'] == true;
+
+  String get _estadoVerif => conductor['estadoVerificacion'] as String? ?? 'pendiente';
+
+  int get _docsCount {
+    int c = 0;
+    if (conductor['fotoCedula'] != null) c++;
+    if (conductor['fotoLicencia'] != null) c++;
+    if (conductor['fotoVehiculo'] != null) c++;
+    return c;
+  }
+
+  Widget _buildVerifPill() {
+    switch (_estadoVerif) {
+      case 'aprobado':
+        return _StatusPill(label: 'Aprobado', color: const Color(0xFF4CAF50), icon: Icons.check_circle);
+      case 'rechazado':
+        return _StatusPill(label: 'Rechazado', color: const Color(0xFFE53935), icon: Icons.cancel);
+      default:
+        return _StatusPill(label: 'Pendiente', color: const Color(0xFFFF9800), icon: Icons.schedule);
+    }
+  }
 
   String get _iniciales {
-    final n = (conductor['nombre'] ?? '').toString();
-    final a = (conductor['apellido'] ?? '').toString();
-    return '${n.isNotEmpty ? n[0] : ''}${a.isNotEmpty ? a[0] : ''}'
-        .toUpperCase();
+    final usuario = conductor['usuario'] as Map<String, dynamic>?;
+    final n = (usuario?['nombre'] ?? '').toString();
+    final a = (usuario?['apellido'] ?? '').toString();
+    return '${n.isNotEmpty ? n[0] : ''}${a.isNotEmpty ? a[0] : ''}'.toUpperCase();
   }
 
   @override
   Widget build(BuildContext context) {
+    final usuario = conductor['usuario'] as Map<String, dynamic>?;
+    final nombre = '${usuario?['nombre'] ?? ''} ${usuario?['apellido'] ?? ''}'.trim();
+    final email = usuario?['email'] as String? ?? '';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,23 +446,10 @@ class _ConductorCard extends StatelessWidget {
               children: [
                 _StatusPill(
                   label: _online ? 'Online' : 'Offline',
-                  color: _online
-                      ? const Color(0xFF4CAF50)
-                      : Colors.black38,
+                  color: _online ? const Color(0xFF4CAF50) : Colors.black38,
                 ),
                 const SizedBox(width: 8),
-                if (_verificado)
-                  _StatusPill(
-                    label: 'Verificado',
-                    color: const Color(0xFF1E88E5),
-                    icon: Icons.verified_rounded,
-                  ),
-                if (_aprobado && !_verificado)
-                  _StatusPill(
-                    label: 'Aprobado',
-                    color: const Color(0xFF43A047),
-                    icon: Icons.check_circle_outline,
-                  ),
+                _buildVerifPill(),
               ],
             ),
           ),
@@ -594,39 +460,129 @@ class _ConductorCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: const Color(0xFFE0E0E0),
-                  child: Text(
-                    _iniciales,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: Text(_iniciales, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '${conductor['nombre'] ?? ''} ${conductor['apellido'] ?? ''}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
-                      ),
+                      Text(nombre.isNotEmpty ? nombre : 'Sin nombre', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87)),
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(Icons.directions_car_outlined,
-                              size: 12, color: Colors.black38),
+                          const Icon(Icons.directions_car_outlined, size: 12, color: Colors.black38),
                           const SizedBox(width: 4),
                           Text(
                             '${conductor['tipoVehiculo'] ?? 'Vehículo'} · ${conductor['placa'] ?? ''}',
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.black45),
+                            style: const TextStyle(fontSize: 12, color: Colors.black45),
                           ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded, size: 16, color: Color(0xFFFFC107)),
+                        const SizedBox(width: 2),
+                        Text('${conductor['calificacion'] ?? '0.0'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    Text('${conductor['totalViajes'] ?? 0} viajes', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+            child: Row(
+              children: [
+                Text(email, style: const TextStyle(fontSize: 12, color: Colors.black45)),
+                const Spacer(),
+                Text('$_docsCount/3 docs', style: TextStyle(fontSize: 11, color: _docsCount == 3 ? const Color(0xFF4CAF50) : const Color(0xFFFF9800), fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerificacionCard extends StatelessWidget {
+  final String nombre;
+  final String apellido;
+  final String email;
+  final String tipoVehiculo;
+  final String placa;
+  final bool tieneDocs;
+  final VoidCallback onVerDocumentos;
+  final VoidCallback onAprobar;
+  final VoidCallback onRechazar;
+
+  const _VerificacionCard({
+    required this.nombre,
+    required this.apellido,
+    required this.email,
+    required this.tipoVehiculo,
+    required this.placa,
+    required this.tieneDocs,
+    required this.onVerDocumentos,
+    required this.onAprobar,
+    required this.onRechazar,
+  });
+
+  String get _iniciales {
+    return '${nombre.isNotEmpty ? nombre[0] : ''}${apellido.isNotEmpty ? apellido[0] : ''}'.toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: _StatusPill(
+              label: 'Pendiente',
+              color: const Color(0xFFFF9800),
+              icon: Icons.schedule,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: const Color(0xFFE0E0E0),
+                  child: Text(_iniciales, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('$nombre $apellido', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87)),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.directions_car_outlined, size: 12, color: Colors.black38),
+                          const SizedBox(width: 4),
+                          Text('$tipoVehiculo · $placa', style: const TextStyle(fontSize: 12, color: Colors.black45)),
                         ],
                       ),
                     ],
@@ -635,27 +591,10 @@ class _ConductorCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Documentos',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black45,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _DocumentosRow(
-                  count: (conductor['documentos'] as List?)?.length ?? 0,
-                ),
-              ],
-            ),
+            child: Text(email, style: const TextStyle(fontSize: 12, color: Colors.black45)),
           ),
           const SizedBox(height: 14),
           const Divider(height: 1, color: Color(0xFFF0F0F0)),
@@ -663,7 +602,7 @@ class _ConductorCard extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
-                if (onVerDocumentos != null)
+                if (tieneDocs)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: SizedBox(
@@ -684,19 +623,11 @@ class _ConductorCard extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: _ActionButton(
-                        label: 'Aprobar',
-                        filled: true,
-                        onTap: onAprobar,
-                      ),
+                      child: _ActionButton(label: 'Aprobar', filled: true, onTap: onAprobar),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _ActionButton(
-                        label: 'Rechazar',
-                        filled: false,
-                        onTap: onRechazar,
-                      ),
+                      child: _ActionButton(label: 'Rechazar', filled: false, onTap: onRechazar),
                     ),
                   ],
                 ),
@@ -714,11 +645,7 @@ class _StatusPill extends StatelessWidget {
   final Color color;
   final IconData? icon;
 
-  const _StatusPill({
-    required this.label,
-    required this.color,
-    this.icon,
-  });
+  const _StatusPill({required this.label, required this.color, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -732,102 +659,15 @@ class _StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-          ),
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 5),
           if (icon != null) ...[
             Icon(icon, size: 11, color: color),
             const SizedBox(width: 3),
           ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
-    );
-  }
-}
-
-class _DocumentosRow extends StatelessWidget {
-  final int count;
-  const _DocumentosRow({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        ...List.generate(count, (i) => _DocThumbnail(index: i)),
-        if (count < 3) const _AddDocButton(),
-      ],
-    );
-  }
-}
-
-class _DocThumbnail extends StatelessWidget {
-  final int index;
-  const _DocThumbnail({required this.index});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 64,
-      height: 52,
-      margin: const EdgeInsets.only(right: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            index == 0
-                ? Icons.badge_outlined
-                : Icons.directions_car_outlined,
-            size: 20,
-            color: const Color(0xFF90A4AE),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            index == 0 ? 'Cédula' : 'Licencia',
-            style: const TextStyle(
-                fontSize: 8,
-                color: Colors.black38,
-                fontWeight: FontWeight.w500),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddDocButton extends StatelessWidget {
-  const _AddDocButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: const Color(0xFFBBDEFB), width: 1.5),
-      ),
-      child: const Icon(Icons.add, color: Color(0xFF90CAF9), size: 22),
     );
   }
 }
@@ -843,11 +683,7 @@ class _ActionButton extends StatelessWidget {
   final bool filled;
   final VoidCallback onTap;
 
-  const _ActionButton({
-    required this.label,
-    required this.filled,
-    required this.onTap,
-  });
+  const _ActionButton({required this.label, required this.filled, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -858,19 +694,12 @@ class _ActionButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: filled ? Colors.black87 : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: filled ? Colors.black87 : const Color(0xFFE0E0E0),
-            width: 1.2,
-          ),
+          border: Border.all(color: filled ? Colors.black87 : const Color(0xFFE0E0E0), width: 1.2),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: filled ? Colors.white : Colors.black54,
-          ),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: filled ? Colors.white : Colors.black54),
         ),
       ),
     );

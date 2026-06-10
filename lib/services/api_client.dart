@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_response.dart';
@@ -135,6 +136,206 @@ class ApiClient {
     await prefs.setString(_apellidoKey, auth.apellido);
     await prefs.setString(_emailKey, auth.email);
     await prefs.setString(_rolKey, auth.rol);
+  }
+
+  Future<Map<String, dynamic>> getProfile() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/users/profile'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception('Error al obtener perfil');
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<void> updateProfile(Map<String, dynamic> data) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/api/users/profile'),
+      headers: _headers(auth: true),
+      body: jsonEncode(data),
+    );
+    if (res.statusCode != 200) throw Exception('Error al actualizar perfil');
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    if (body['nombre'] != null) _nombre = body['nombre'] as String;
+    if (body['apellido'] != null) _apellido = body['apellido'] as String;
+    if (body['email'] != null) _email = body['email'] as String;
+    final prefs = await SharedPreferences.getInstance();
+    if (_nombre != null) await prefs.setString(_nombreKey, _nombre!);
+    if (_apellido != null) await prefs.setString(_apellidoKey, _apellido!);
+    if (_email != null) await prefs.setString(_emailKey, _email!);
+  }
+
+  Future<String> uploadAvatar(File file) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/api/users/avatar'),
+    );
+    request.headers.addAll(_headers(auth: true));
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode != 200) throw Exception('Error al subir avatar');
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return body['avatar'] as String? ?? '';
+  }
+
+  Future<String> uploadDocumentCedula(File file) async {
+    return _uploadDocument('$baseUrl/api/drivers/verification/cedula', file, 'fotoCedula');
+  }
+
+  Future<String> uploadDocumentLicencia(File file) async {
+    return _uploadDocument('$baseUrl/api/drivers/verification/licencia', file, 'fotoLicencia');
+  }
+
+  Future<String> uploadDocumentVehiculo(File file) async {
+    return _uploadDocument('$baseUrl/api/drivers/verification/vehiculo', file, 'fotoVehiculo');
+  }
+
+  Future<String> uploadDocumentDriverPhoto(File file) async {
+    return _uploadDocument('$baseUrl/api/drivers/driver-photo', file, 'fotoConductor');
+  }
+
+  Future<String> _uploadDocument(String url, File file, String field) async {
+    final request = http.MultipartRequest('POST', Uri.parse(url));
+    request.headers.addAll(_headers(auth: true));
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode != 200) throw Exception('Error al subir documento');
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return body[field] as String? ?? '';
+  }
+
+  Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/request'),
+      headers: _headers(auth: true),
+      body: jsonEncode(data),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>?> getActiveTrip() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/trips/active'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode == 404) return null;
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20}) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/trips/history?page=$page&limit=$limit'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return (body['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+  }
+
+  Future<Map<String, dynamic>> getTripDetail(dynamic id) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/trips/$id'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> getOffers(dynamic tripId) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/trips/$tripId/offers'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    final body = jsonDecode(res.body) as List;
+    return body.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> acceptOffer(dynamic tripId, dynamic offerId) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$tripId/offers/$offerId/accept'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<void> cancelTrip(dynamic id, {String? motivo}) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$id/cancel'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'motivo': motivo}),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$id/rate'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'puntaje': puntaje, 'comentario': comentario}),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/trips/nearby?lat=$lat&lng=$lng&radio=$radio'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    final body = jsonDecode(res.body) as List;
+    return body.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$tripId/offers'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'monto': monto}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<void> startTrip(dynamic id) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$id/start-trip'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<void> completeTrip(dynamic id) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$id/complete'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<void> finalizeTrip(dynamic id) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$id/finalize'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<void> deliveryPhoto(dynamic tripId, File file) async {
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/api/trips/$tripId/delivery-photo'),
+    );
+    req.headers.addAll(_headers(auth: true));
+    req.files.add(await http.MultipartFile.fromPath('foto', file.path));
+    final res = await req.send();
+    if (res.statusCode != 200) {
+      final body = await res.stream.bytesToString();
+      throw Exception(_extractError(jsonDecode(body)));
+    }
   }
 
   Future<void> clearTokens() async {

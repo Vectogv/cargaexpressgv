@@ -15,6 +15,7 @@ import 'configuracion_screen.dart';
 import '../../services/notification_service.dart';
 import 'gestion_comunicados_screen.dart';
 import 'mapa_vivo_screen.dart';
+import '../user/auth_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -371,9 +372,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (_) => const ConfigScreen()));
             }),
+            const Divider(),
+            _DrawerItem(Icons.logout, 'Cerrar sesión', _logout, isDestructive: true),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _logout() async {
+    await ApiClient.instance.logout();
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+      (_) => false,
     );
   }
 
@@ -724,13 +737,21 @@ class _DrawerItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _DrawerItem(this.icon, this.label, this.onTap);
+  final bool isDestructive;
+  const _DrawerItem(this.icon, this.label, this.onTap,
+      {this.isDestructive = false});
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: const Color(0xFF1565C0)),
-      title: Text(label, style: const TextStyle(fontSize: 14)),
+      leading: Icon(icon,
+          color:
+              isDestructive ? Colors.red : const Color(0xFF1565C0)),
+      title: Text(label,
+          style: TextStyle(
+            fontSize: 14,
+            color: isDestructive ? Colors.red : null,
+          )),
       onTap: onTap,
       dense: true,
     );
