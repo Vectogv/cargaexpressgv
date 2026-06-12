@@ -296,8 +296,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
         _navItem(Icons.chat_bubble_outline, 'Chat', () {}),
         _navItem(Icons.phone_outlined, 'Llamar', () {}),
         _navItem(Icons.info_outline, 'Detalle', () {}),
-        if (estado == 'aceptado' || estado == 'en_curso')
+        if (estado == 'aceptado')
           _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
+        if (estado == 'en_curso')
+          _navItem(Icons.report_problem_outlined, 'Solicitar cancelación', () => _requestCancellation(t)),
       ]),
     );
   }
@@ -332,6 +334,42 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     try {
       await ApiClient.instance.cancelTrip(t['id'], motivo: motivo.isEmpty ? null : motivo);
       if (mounted) { _snack('Viaje cancelado'); Navigator.pop(context); }
+    } catch (e) {
+      _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+    }
+  }
+
+  Future<void> _requestCancellation(Map<String, dynamic> t) async {
+    final motivoCtrl = TextEditingController();
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Solicitar cancelación'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('El viaje está en curso. Enviarás una solicitud de cancelación al administrador para que la revise.', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(controller: motivoCtrl, decoration: const InputDecoration(labelText: 'Motivo', hintText: 'Explica por qué necesitas cancelar'), maxLines: 3),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            child: const Text('Solicitar cancelación'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true) return;
+    try {
+      await ApiClient.instance.requestCancellation(t['id'], motivo: motivoCtrl.text.trim().isEmpty ? null : motivoCtrl.text.trim());
+      if (mounted) {
+        _snack('Solicitud de cancelación enviada al administrador');
+        Navigator.pop(context);
+      }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     }

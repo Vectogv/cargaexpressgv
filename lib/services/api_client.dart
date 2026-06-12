@@ -8,7 +8,7 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
   ApiClient._();
 
-  static const String baseUrl = 'http://localhost:3333';
+  static const String baseUrl = 'https://zippy-trust-production.up.railway.app';
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'auth_refresh_token';
   static const String _nombreKey = 'auth_nombre';
@@ -265,6 +265,15 @@ class ApiClient {
   Future<void> cancelTrip(dynamic id, {String? motivo}) async {
     final res = await http.post(
       Uri.parse('$baseUrl/api/trips/$id/cancel'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'motivo': motivo}),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<void> requestCancellation(dynamic id, {String? motivo}) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$id/request-cancellation'),
       headers: _headers(auth: true),
       body: jsonEncode({'motivo': motivo}),
     );

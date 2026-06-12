@@ -166,14 +166,14 @@ class _RastreoScreenState extends State<RastreoScreen> {
           const SizedBox(height: 16),
           if (estado == 'buscando_conductor') _buildOffersSection(),
           if (estado == 'aceptado' || estado == 'en_curso') _buildDriverCard(),
-          const SizedBox(height: 16),
-          Center(
-            child: TextButton.icon(
-              onPressed: _cancelar,
-              icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
-              label: const Text('Cancelar viaje', style: TextStyle(color: Colors.red)),
+          if (estado == 'buscando_conductor')
+            Center(
+              child: TextButton.icon(
+                onPressed: _cancelar,
+                icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
+                label: const Text('Cancelar viaje', style: TextStyle(color: Colors.red)),
+              ),
             ),
-          ),
         ],
       ),
     );

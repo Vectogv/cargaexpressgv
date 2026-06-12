@@ -4,6 +4,7 @@ import '../user/auth_screen.dart';
 import 'nuevo_envio_screen.dart';
 import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
+import 'perfil_screen.dart';
 import '../conductor/notifications_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
@@ -71,7 +72,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
   void _onNavTap(int i) {
     if (i == 0) { setState(() => _bottomIndex = 0); return; }
-    if (i == 1) { Navigator.push(context, MaterialPageRoute(builder: (_) => const _ProfilePlaceholder())); return; }
+    if (i == 1) { Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen())); return; }
     if (i == 2) { Navigator.push(context, MaterialPageRoute(builder: (_) => const RastreoScreen())); return; }
     if (i == 3) { _snack('Próximamente'); return; }
     if (i == 4) { Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen())); return; }
@@ -296,7 +297,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             _buildDrawerItem(Icons.chat_bubble_outline, 'Chat', null),
             _buildDrawerItem(Icons.notifications_outlined, 'Notificaciones', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
             _buildDrawerItem(Icons.poll_outlined, 'Encuestas', null),
-            _buildDrawerItem(Icons.person_outline, 'Perfil', null),
+            _buildDrawerItem(Icons.person_outline, 'Perfil', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen()))),
             _buildDrawerItem(Icons.history_outlined, 'Historial', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
             const Spacer(),
             const Divider(),
@@ -326,13 +327,3 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   }
 }
 
-class _ProfilePlaceholder extends StatelessWidget {
-  const _ProfilePlaceholder();
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Perfil')),
-      body: const Center(child: Text('Próximamente')),
-    );
-  }
-}
