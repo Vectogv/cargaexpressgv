@@ -61,7 +61,6 @@ class NotificationsScreen extends StatelessWidget {
             ),
           ),
           _buildMarkAll(),
-          _buildBottomNav(context),
         ],
       ),
     );
@@ -167,37 +166,4 @@ class NotificationsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
-    return Container(
-      color: _white,
-      padding: const EdgeInsets.only(bottom: 20, top: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navItem(Icons.home_rounded, 'Inicio', false),
-          _navItem(Icons.local_shipping_outlined, 'Viajes', false),
-          _navItem(Icons.local_offer_outlined, 'Ofertas', false),
-          _navItem(Icons.chat_bubble_outline, 'Chat', false),
-          _navItem(Icons.person_outline, 'Perfil', false),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, bool isActive) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: isActive ? _primaryDark : _textGrey, size: 24),
-        const SizedBox(height: 3),
-        Text(label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isActive ? _primaryDark : _textGrey,
-              fontWeight:
-                  isActive ? FontWeight.w700 : FontWeight.normal,
-            )),
-      ],
-    );
-  }
 }
