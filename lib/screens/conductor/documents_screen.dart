@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
@@ -77,6 +76,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     while (true) {
       final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
       if (picked == null) return;
+      final bytes = await picked.readAsBytes();
 
       final confirmed = await showDialog<bool>(
         context: context,
@@ -89,7 +89,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(File(picked.path), height: 200, width: double.infinity, fit: BoxFit.cover),
+                child: Image.memory(bytes, height: 200, width: double.infinity, fit: BoxFit.cover),
               ),
             ],
           ),
@@ -112,13 +112,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         try {
           switch (docType) {
             case 'cedula':
-              await ApiClient.instance.uploadDocumentCedula(File(picked.path));
+              await ApiClient.instance.uploadDocumentCedula(bytes, picked.name);
             case 'licencia':
-              await ApiClient.instance.uploadDocumentLicencia(File(picked.path));
+              await ApiClient.instance.uploadDocumentLicencia(bytes, picked.name);
             case 'foto_vehiculo':
-              await ApiClient.instance.uploadDocumentVehiculo(File(picked.path));
+              await ApiClient.instance.uploadDocumentVehiculo(bytes, picked.name);
             case 'foto_conductor':
-              await ApiClient.instance.uploadDocumentDriverPhoto(File(picked.path));
+              await ApiClient.instance.uploadDocumentDriverPhoto(bytes, picked.name);
           }
           await _loadStatus();
           if (mounted) {

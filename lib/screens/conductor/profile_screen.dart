@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
@@ -42,7 +41,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked == null) return;
     try {
-      final url = await ApiClient.instance.uploadAvatar(File(picked.path));
+      final bytes = await picked.readAsBytes();
+      final url = await ApiClient.instance.uploadAvatar(bytes, picked.name);
       if (mounted && url.isNotEmpty) {
         setState(() { _profile?['avatar'] = url; });
         if (context.mounted) {

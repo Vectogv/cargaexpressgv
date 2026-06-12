@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_response.dart';
@@ -164,13 +164,13 @@ class ApiClient {
     if (_email != null) await prefs.setString(_emailKey, _email!);
   }
 
-  Future<String> uploadAvatar(File file) async {
+  Future<String> uploadAvatar(Uint8List bytes, String filename) async {
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$baseUrl/api/users/avatar'),
     );
     request.headers.addAll(_headers(auth: true));
-    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
     final streamed = await request.send();
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) throw Exception('Error al subir avatar');
@@ -178,26 +178,26 @@ class ApiClient {
     return body['avatar'] as String? ?? '';
   }
 
-  Future<String> uploadDocumentCedula(File file) async {
-    return _uploadDocument('$baseUrl/api/drivers/verification/cedula', file, 'fotoCedula');
+  Future<String> uploadDocumentCedula(Uint8List bytes, String filename) async {
+    return _uploadDocument('$baseUrl/api/drivers/verification/cedula', bytes, filename, 'fotoCedula');
   }
 
-  Future<String> uploadDocumentLicencia(File file) async {
-    return _uploadDocument('$baseUrl/api/drivers/verification/licencia', file, 'fotoLicencia');
+  Future<String> uploadDocumentLicencia(Uint8List bytes, String filename) async {
+    return _uploadDocument('$baseUrl/api/drivers/verification/licencia', bytes, filename, 'fotoLicencia');
   }
 
-  Future<String> uploadDocumentVehiculo(File file) async {
-    return _uploadDocument('$baseUrl/api/drivers/verification/vehiculo', file, 'fotoVehiculo');
+  Future<String> uploadDocumentVehiculo(Uint8List bytes, String filename) async {
+    return _uploadDocument('$baseUrl/api/drivers/verification/vehiculo', bytes, filename, 'fotoVehiculo');
   }
 
-  Future<String> uploadDocumentDriverPhoto(File file) async {
-    return _uploadDocument('$baseUrl/api/drivers/driver-photo', file, 'fotoConductor');
+  Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) async {
+    return _uploadDocument('$baseUrl/api/drivers/driver-photo', bytes, filename, 'fotoConductor');
   }
 
-  Future<String> _uploadDocument(String url, File file, String field) async {
+  Future<String> _uploadDocument(String url, Uint8List bytes, String filename, String field) async {
     final request = http.MultipartRequest('POST', Uri.parse(url));
     request.headers.addAll(_headers(auth: true));
-    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
     final streamed = await request.send();
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) throw Exception('Error al subir documento');
@@ -333,13 +333,13 @@ class ApiClient {
     if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
   }
 
-  Future<void> deliveryPhoto(dynamic tripId, File file) async {
+  Future<void> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) async {
     final req = http.MultipartRequest(
       'POST',
       Uri.parse('$baseUrl/api/trips/$tripId/delivery-photo'),
     );
     req.headers.addAll(_headers(auth: true));
-    req.files.add(await http.MultipartFile.fromPath('foto', file.path));
+    req.files.add(http.MultipartFile.fromBytes('foto', bytes, filename: filename));
     final res = await req.send();
     if (res.statusCode != 200) {
       final body = await res.stream.bytesToString();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 import 'services/api_client.dart';
 import 'services/notification_service.dart';
 import 'screens/user/auth_screen.dart';
@@ -31,10 +32,18 @@ Widget _homeScreenByRole() {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   } catch (_) {
-    // Firebase no disponible en este entorno
+    // Fallback: intentar sin options (Android/iOS usan google-services.json)
+    try {
+      await Firebase.initializeApp();
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    } catch (_) {
+      // Firebase no disponible en este entorno
+    }
   }
   await ApiClient.instance.init();
   unawaited(NotificationService.instance.init());
