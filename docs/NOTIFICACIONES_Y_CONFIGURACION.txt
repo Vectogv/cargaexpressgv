@@ -1,0 +1,186 @@
+======================================================
+CARGAEXPRESS - DOCUMENTACIÓN DE NOTIFICACIONES Y CONEXIONES
+======================================================
+
+1. ARQUITECTURA GENERAL
+------------------------
+Frontend: Flutter (Android + Web)
+Backend:  Node.js / AdonisJS (Railway)
+Base de datos: MySQL (Railway)
+Tiempo real: Socket.io
+Push notifications: Firebase Cloud Messaging (FCM)
+
+
+2. SISTEMA DE NOTIFICACIONES (2 canales)
+-----------------------------------------
+
+2.1. CANAL 1: Socket.io (Tiempo Real)
+──────────────────────────────────────
+Usa:     socket_io_client ^2.0.3 (Flutter)
+Backend: socket.io (Node.js)
+Puerto:  Mismo puerto del backend (443 en Railway)
+
+Eventos del servidor:
+
+  Evento                    ─> Receptor     Descripción
+  ─────────────────────────────────────────────────────────────
+  join:driver               -> Conductor    Unirse a sala de conductor
+  join:client               -> Cliente      Unirse a sala de cliente  
+  join:admin                -> Admin        Unirse a sala de admin
+  admin:new_user            -> Admin        Nuevo usuario registrado
+  admin:new_driver          -> Admin        Nuevo conductor registrado
+  admin:new_trip            -> Admin        Nuevo viaje solicitado
+  admin:trip_completed      -> Admin        Viaje completado
+  admin:payment_received    -> Admin        Pago recibido
+  admin:user_banned         -> Admin        Usuario suspendido
+  admin:driver_approved     -> Admin        Conductor aprobado
+  admin:report              -> Admin        Nuevo reporte/denuncia
+
+Salas:
+  - Conductor: `driver:{userId}`
+  - Cliente:   `client:{userId}`  
+  - Admin:     `admin` (única sala global)
+
+
+2.2. CANAL 2: Firebase Cloud Messaging (Push)
+───────────────────────────────────────────────
+Backend usa firebase-admin con cuenta de servicio.
+
+En Railway se configura la variable:
+  FIREBASE_CREDENTIALS_JSON = {"type":"service_account",...}
+
+start.sh escribe el JSON a build/firebase-credentials.json
+
+Eventos que envían push FCM:
+
+  ─ Viaje solicitado          -> conductores cercanos
+  ─ Oferta recibida           -> cliente
+  ─ Viaje aceptado            -> cliente  
+  ─ Viaje completado          -> cliente + conductor (con deuda)
+  ─ Mensaje de chat           -> destinatario
+  ─ Emergencia activada       -> admins
+  ─ Comunicado nuevo          -> conductores
+  ─ Moderador notifica        -> conductor específico
+  ─ Encuesta disponible       -> conductores
+  ─ Oferta superada           -> conductor anterior
+
+
+3. FLUJO DE AUTENTICACIÓN
+---------------------------
+POST /api/auth/login
+  Body:  { email, password }
+  Response: { id, nombre, apellido, email, rol, token, refreshToken }
+
+POST /api/auth/register
+  Body:  { nombre, apellido, email, password, telefono, edad, rol, ... }
+  Response: { id, nombre, apellido, email, rol, token, refreshToken }
+
+POST /api/auth/refresh-token
+  Body:  { refreshToken }
+  Response: { token, refreshToken }
+
+POST /api/auth/logout
+  Header: Authorization: Bearer {token}
+
+Token JWT expira en 7 días.
+Refresh Token expira en 30 días (guardado en BD).
+
+
+4. CONFIGURACIÓN DE FIREBASE WEB
+----------------------------------
+Archivo: lib/firebase_options.dart
+
+REQUIERE completar el appId de web manualmente:
+  - Ir a Firebase Console > app-cargaexpress
+  - Agregar app web (si no existe)
+  - Copiar el appId web
+  - Reemplazar en firebase_options.dart:
+      appId: '1:848686850284:web:EL_REAL_APP_ID'
+  - La apiKey puede ser la misma de Android
+
+Android usa google-services.json (ya configurado).
+
+
+5. COMPATIBILIDAD WEB
+---------------------
+Cambios realizados para que funcione en web:
+
+  Archivo                     Cambio
+  ─────────────────────────────────────────────────────────
+  lib/services/api_client.dart:
+    - Reemplazado `dart:io File` por `dart:typed_data Uint8List`
+    - Métodos ahora reciben bytes + filename en vez de File
+    - uploadAvatar, uploadDocument*, deliveryPhoto actualizados
+
+  lib/screens/cliente/perfil_screen.dart:
+    - Eliminado import dart:io  
+    - Usa readAsBytes() de image_picker
+
+  lib/screens/conductor/profile_screen.dart:
+    - Eliminado import dart:io
+    - Usa readAsBytes() de image_picker
+
+  lib/screens/conductor/documents_screen.dart:
+    - Eliminado import dart:io
+    - Image.file reemplazado por Image.memory
+    - Uploads ahora pasan bytes + filename
+
+  lib/main.dart:
+    - Agregado firebase_options.dart
+    - Firebase.initializeApp() con fallback
+
+  lib/firebase_options.dart (NUEVO):
+    - Config para web, android, ios, macos
+
+
+6. VARIABLES DE ENTORNO (Backend)
+-----------------------------------
+Archivo: .env.example
+
+  APP_KEY                    Clave de encriptación (node ace generate:key)
+  DB_HOST                    Host de MySQL
+  DB_PORT                    3306
+  DB_USER                    Usuario BD
+  DB_PASSWORD                Contraseña BD
+  DB_DATABASE                cargaexpress
+  CORS_ORIGIN                Orígenes permitidos separados por coma
+  FIREBASE_CREDENTIALS_JSON  JSON de cuenta de servicio Firebase
+  MAPBOX_ACCESS_TOKEN        Token de Mapbox (mapas)
+  HERE_API_KEY               API Key de HERE (geocodificación)
+  CLOUDINARY_CLOUD_NAME      Cloudinary (imágenes)
+  CLOUDINARY_API_KEY
+  CLOUDINARY_API_SECRET
+  SENTRY_DSN                 Monitoreo de errores
+
+
+7. CORS (Backend)
+------------------
+Archivo: config/cors.ts
+
+  Dev:   origin = true (acepta cualquier origen)
+  Prod:  origin = CORS_ORIGIN o '*' si no se define
+
+  Métodos permitidos: GET, HEAD, POST, PUT, PATCH, DELETE
+  Credentials: false
+  MaxAge: 86400s (24h)
+
+
+8. URLS
+--------
+  Backend (Railway): https://zippy-trust-production.up.railway.app
+  Health check:      https://zippy-trust-production.up.railway.app/health
+  Swagger docs:      https://zippy-trust-production.up.railway.app/docs
+  Frontend (dev):    http://localhost:53278 (Flutter web)
+
+
+9. DEPENDENCIAS (Flutter)
+---------------------------
+  flutter_map: ^8.3.0         (mapas)
+  http: ^1.6.0                (peticiones HTTP)
+  latlong2: ^0.9.1            (coordenadas)
+  shared_preferences: ^2.5.3  (almacenamiento local)
+  geolocator: ^13.0.2         (GPS)
+  image_picker: ^1.1.2        (cámara/galería)
+  socket_io_client: ^2.0.3    (WebSocket / tiempo real)
+  firebase_messaging: ^15.2.4 (push notifications)
+  firebase_core: ^3.12.1      (Firebase base)
