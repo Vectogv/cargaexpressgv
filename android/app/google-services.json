@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "848686850284",
+    "project_id": "app-cargaexpress",
+    "storage_bucket": "app-cargaexpress.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:848686850284:android:d5c68a1b3b489b813d45c9",
+        "android_client_info": {
+          "package_name": "com.example.cargaexpress"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQPBGK0CuoidlFBewtH7Fk2C8Als1kwII"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/api_client.dart';
+import 'services/notification_service.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/admin/dashboard_screen.dart';
 import 'screens/conductor/home_screen.dart' as conductor;
@@ -35,6 +37,7 @@ Future<void> main() async {
     // Firebase no disponible en este entorno
   }
   await ApiClient.instance.init();
+  unawaited(NotificationService.instance.init());
   runApp(const MainApp());
 }
 
