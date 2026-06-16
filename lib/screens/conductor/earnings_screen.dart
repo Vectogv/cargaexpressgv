@@ -1,13 +1,47 @@
 import 'package:flutter/material.dart';
+import '../../services/api_client.dart';
 
-class EarningsScreen extends StatelessWidget {
+class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
 
+  @override
+  State<EarningsScreen> createState() => _EarningsScreenState();
+}
+
+class _EarningsScreenState extends State<EarningsScreen> {
+  Map<String, dynamic>? _earnings;
+  Map<String, dynamic>? _stats;
+  Map<String, dynamic>? _commission;
+  bool _loading = true;
+
   static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _accentGreen = Color(0xFF4CAF50);
   static const Color _textGrey = Color(0xFF757575);
   static const Color _bgLight = Color(0xFFF5F7FA);
   static const Color _white = Colors.white;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        ApiClient.instance.getEarnings(),
+        ApiClient.instance.getDriverStats(),
+        ApiClient.instance.getDebt(),
+      ]);
+      if (mounted) setState(() {
+        _earnings = results[0];
+        _stats = results[1];
+        _commission = results[2];
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,20 +51,20 @@ class EarningsScreen extends StatelessWidget {
         children: [
           _buildHeader(context),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildEarningsCard(),
-                  const SizedBox(height: 12),
-                  _buildHistoryItem(),
-                  const SizedBox(height: 10),
-                  _buildDebtItem(),
-                  const SizedBox(height: 10),
-                  _buildUploadItem(),
-                ],
-              ),
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        _buildPeriodRow(),
+                        const SizedBox(height: 12),
+                        _buildStatsRow(),
+                        const SizedBox(height: 12),
+                        _buildCommissionCard(),
+                      ],
+                    ),
+                  ),
           ),
         ],
       ),
@@ -57,54 +91,62 @@ class EarningsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEarningsCard() {
+  num _toNum(dynamic v) {
+    if (v is num) return v;
+    if (v is Map) return (v['amount'] ?? v['monto'] ?? 0) as num;
+    return 0;
+  }
+
+  Widget _buildPeriodRow() {
+    return Row(
+      children: [
+        Expanded(child: _buildPeriodCard('Hoy', _toNum(_earnings?['hoy']))),
+        const SizedBox(width: 8),
+        Expanded(child: _buildPeriodCard('Semana', _toNum(_earnings?['semana']))),
+        const SizedBox(width: 8),
+        Expanded(child: _buildPeriodCard('Mes', _toNum(_earnings?['mes']))),
+      ],
+    );
+  }
+
+  Widget _buildPeriodCard(String label, num amount) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Total ganado (este mes)',
-            style: TextStyle(
-              fontSize: 13,
-              color: _textGrey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '\$2.450.000',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              color: _primaryDark,
-            ),
-          ),
-          const SizedBox(height: 6),
+          Text('\$${_formatAmount(amount)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _primaryDark)),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 11, color: _textGrey, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsRow() {
+    final viajes = _toNum(_stats?['viajes']);
+    final calificacion = _toNum(_stats?['calificacion']);
+    final total = _toNum(_earnings?['total']);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Icon(Icons.trending_up, color: _accentGreen, size: 16),
-              const SizedBox(width: 4),
-              Text(
-                '+12% vs mes anterior',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: _accentGreen,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              _statItem(Icons.route_outlined, '$viajes', 'Viajes\ncompletados'),
+              _statItem(Icons.star_rounded, calificacion.toStringAsFixed(1), 'Calificación'),
+              _statItem(Icons.monetization_on_outlined, '\$${_formatAmount(total)}', 'Total\nacumulado'),
             ],
           ),
         ],
@@ -112,86 +154,47 @@ class EarningsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHistoryItem() {
-    return _buildMenuCard(
-      icon: Icons.bar_chart_outlined,
-      iconBg: const Color(0xFFE3F2FD),
-      iconColor: const Color(0xFF1565C0),
-      title: 'Historial de ganancias',
-      trailing: Icon(Icons.chevron_right, color: Colors.grey.shade400),
+  Widget _statItem(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Icon(icon, color: _primaryDark, size: 22),
+        const SizedBox(height: 6),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 9, color: _textGrey), textAlign: TextAlign.center),
+      ],
     );
   }
 
-  Widget _buildDebtItem() {
-    return _buildMenuCard(
-      icon: Icons.account_balance_wallet_outlined,
-      iconBg: const Color(0xFFFCE4EC),
-      iconColor: Colors.red.shade700,
-      title: 'Deuda de comisión',
-      trailing: Text(
-        '\$120.000',
-        style: TextStyle(
-          color: Colors.red.shade700,
-          fontSize: 15,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUploadItem() {
-    return _buildMenuCard(
-      icon: Icons.upload_file_outlined,
-      iconBg: const Color(0xFFE8F5E9),
-      iconColor: const Color(0xFF2E7D32),
-      title: 'Subir comprobante de pago',
-      trailing: Icon(Icons.chevron_right, color: Colors.grey.shade400),
-    );
-  }
-
-  Widget _buildMenuCard({
-    required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
-    required String title,
-    required Widget trailing,
-  }) {
+  Widget _buildCommissionCard() {
+    final pendiente = _toNum(_commission?['monto'] ?? _commission?['deuda']);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: iconColor, size: 22),
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(12)),
+            child: Icon(Icons.account_balance_wallet_outlined, color: Colors.red.shade700, size: 22),
           ),
           const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-          ),
-          trailing,
+          Expanded(      child: Text('Deuda pendiente', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+          Text('\$${_formatAmount(pendiente)}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.red.shade700)),
         ],
       ),
     );
   }
 
+  String _formatAmount(num amount) {
+    if (amount >= 1000) {
+      return '${(amount / 1000).toStringAsFixed(amount % 1000 == 0 ? 0 : 1)}k';
+    }
+    return amount.toStringAsFixed(amount == amount.roundToDouble() ? 0 : 2);
+  }
 }

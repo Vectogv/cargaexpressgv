@@ -129,6 +129,12 @@ class NotificationService {
       'admin:report',
     ];
 
+    final driverEvents = [
+      'trip:accepted',
+      'trip:nearby',
+      'driver:stop_gps',
+    ];
+
     void handleEvent(Map<String, dynamic> data, String event) {
       final notification = Map<String, dynamic>.from(data);
       notification['__event'] = event;
@@ -137,7 +143,7 @@ class NotificationService {
       _controller.add(notification);
     }
 
-    for (final event in adminEvents) {
+    for (final event in [...adminEvents, ...driverEvents]) {
       _socket!.on(event, (data) {
         handleEvent(Map<String, dynamic>.from(data as Map), event);
       });

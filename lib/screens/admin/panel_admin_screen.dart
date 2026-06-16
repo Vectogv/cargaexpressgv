@@ -9,6 +9,10 @@ import 'gestion_emergencias_screen.dart';
 import 'gestion_comunicados_screen.dart';
 import 'mapa_vivo_screen.dart';
 import 'gestion_encuestas_screen.dart';
+import 'gestion_conductores_screen.dart';
+import 'gestion_usuarios_screen.dart';
+import 'gestion_viajes_screen.dart';
+import 'pagos_finanzas_screen.dart';
 import '../../services/api_client.dart';
 import '../user/auth_screen.dart';
 
@@ -47,6 +51,18 @@ class AdminPanelScreen extends StatelessWidget {
       }),
       _AdminPanelItem('Encuestas', Icons.poll_rounded, () {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const GestionEncuestasScreen()));
+      }),
+      _AdminPanelItem('Conductores', Icons.drive_eta_rounded, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const GestionConductoresScreen()));
+      }),
+      _AdminPanelItem('Usuarios', Icons.people_rounded, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const UsersScreen()));
+      }),
+      _AdminPanelItem('Viajes', Icons.route_rounded, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ViajesScreen()));
+      }),
+      _AdminPanelItem('Pagos', Icons.payments_rounded, () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const PagosFinanzasScreen()));
       }),
       _AdminPanelItem('Cerrar sesión', Icons.logout, () async {
         await ApiClient.instance.logout();

@@ -1,0 +1,74 @@
+import 'package:flutter/material.dart';
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  static const Color _textDark = Color(0xFF1A1A2E);
+  static const Color _textGrey = Color(0xFF757575);
+  static const Color _bgLight = Color(0xFFF5F7FA);
+  static const Color _white = Colors.white;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bgLight,
+      appBar: AppBar(
+        backgroundColor: _white, foregroundColor: _textDark, elevation: 0,
+        title: const Text('Ajustes', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildSection('Notificaciones', [
+            _buildSwitchItem('Sonido', true),
+            _buildSwitchItem('Vibrar', true),
+            _buildSwitchItem('Notificaciones de viaje', true),
+          ]),
+          const SizedBox(height: 12),
+          _buildSection('Privacidad', [
+            _buildSwitchItem('Compartir ubicación en vivo', true),
+            _buildSwitchItem('Visible para clientes', true),
+          ]),
+          const SizedBox(height: 12),
+          _buildSection('General', [
+            _buildInfoItem('Versión de la app', '1.0.0'),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
+        ),
+        Container(
+          decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
+          child: Column(children: children),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSwitchItem(String label, bool value) {
+    return SwitchListTile(
+      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      value: value,
+      onChanged: (_) {},
+      activeColor: const Color(0xFF1565C0),
+      dense: true,
+    );
+  }
+
+  Widget _buildInfoItem(String label, String value) {
+    return ListTile(
+      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      trailing: Text(value, style: TextStyle(fontSize: 14, color: _textGrey)),
+      dense: true,
+    );
+  }
+}

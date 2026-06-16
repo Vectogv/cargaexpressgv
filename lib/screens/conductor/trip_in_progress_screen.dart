@@ -1,5 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_client.dart';
+import '../../services/notification_service.dart';
 
 class TripInProgressScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -13,6 +17,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
   Map<String, dynamic>? _trip;
   bool _loading = true;
   bool _actionLoading = false;
+  Timer? _locationTimer;
+  StreamSubscription<Map<String, dynamic>>? _gpsSubscription;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -26,11 +32,27 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
   @override
   void initState() {
     super.initState();
+    _gpsSubscription = NotificationService.instance.onNotification.listen(_onSocketEvent);
     if (widget.trip != null) {
       _trip = widget.trip;
       _loading = false;
+      _startGpsTimer();
     } else {
       _fetchActiveTrip();
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopGpsTimer();
+    _gpsSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _onSocketEvent(Map<String, dynamic> event) {
+    final tipo = event['__event'] as String?;
+    if (tipo == 'driver:stop_gps') {
+      _stopGpsTimer();
     }
   }
 
@@ -38,8 +60,58 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     try {
       final trip = await ApiClient.instance.getActiveTrip();
       if (mounted) setState(() { _trip = trip; _loading = false; });
+      _startGpsTimer();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _startGpsTimer() async {
+    if (_locationTimer != null) return;
+
+    final granted = await _requestLocationPermission();
+    if (!granted) return;
+
+    _locationTimer = Timer.periodic(const Duration(seconds: 10), (_) => _sendLocation());
+    _sendLocation();
+  }
+
+  void _stopGpsTimer() {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+  }
+
+  Future<bool> _requestLocationPermission() async {
+    var status = await Permission.location.status;
+    if (status.isGranted) return true;
+    status = await Permission.location.request();
+    if (status.isGranted) return true;
+    if (!mounted) return false;
+    final shouldOpen = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Permiso de ubicación'),
+        content: const Text('Esta función requiere acceso a la ubicación para enviar tu posición en tiempo real.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Abrir ajustes')),
+        ],
+      ),
+    );
+    if (shouldOpen == true) {
+      await openAppSettings();
+    }
+    return false;
+  }
+
+  Future<void> _sendLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+    } catch (e) {
+      if (e.toString().contains('429') || e.toString().contains('RateLimited')) return;
     }
   }
 
@@ -51,6 +123,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
       _trip!['estado'] = 'en_curso';
       if (mounted) setState(() {});
       _snack('Viaje iniciado');
+      _startGpsTimer();
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
@@ -66,6 +139,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
       _trip!['estado'] = 'completado';
       if (mounted) setState(() {});
       _snack('Entrega completada');
+      _stopGpsTimer();
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
@@ -81,6 +155,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
       _trip!['estado'] = 'finalizado';
       if (mounted) setState(() {});
       _snack('Viaje finalizado');
+      _stopGpsTimer();
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
@@ -316,24 +391,77 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
   }
 
   Future<void> _cancelTrip(Map<String, dynamic> t) async {
-    final motivo = await showDialog<String>(
+    final motivoCtrl = TextEditingController();
+    String? motivoSeleccionado;
+
+    final confirmado = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        final ctrl = TextEditingController();
-        return AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Cancelar viaje'),
-          content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Motivo (opcional)'), maxLines: 2),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                child: Row(children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('El cliente será notificado. Esta acción será revisada.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              const Text('Motivo de cancelación:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const SizedBox(height: 8),
+              ...['Problema con el cliente', 'Vehículo no disponible', 'Emergencia', 'Otro'].map((m) => RadioListTile<String>(
+                title: Text(m, style: const TextStyle(fontSize: 14)),
+                value: m,
+                groupValue: motivoSeleccionado,
+                onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              )),
+              if (motivoSeleccionado != null) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: motivoCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'Describe el problema (opcional)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ],
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('No')),
-            TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Sí, cancelar')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
+            ElevatedButton(
+              onPressed: motivoSeleccionado == null ? null : () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
+              child: const Text('Cancelar viaje'),
+            ),
           ],
-        );
-      },
+        ),
+      ),
     );
-    if (motivo == null) return;
+
+    if (confirmado != true || motivoSeleccionado == null) return;
+
     try {
-      await ApiClient.instance.cancelTrip(t['id'], motivo: motivo.isEmpty ? null : motivo);
-      if (mounted) { _snack('Viaje cancelado'); Navigator.pop(context); }
+      await ApiClient.instance.disputeTrip(
+        t['id'],
+        motivo: motivoSeleccionado!,
+        descripcion: motivoCtrl.text.trim().isEmpty ? null : motivoCtrl.text.trim(),
+      );
+      await ApiClient.instance.cancelTrip(t['id'], motivo: motivoSeleccionado);
+      if (mounted) {
+        _snack('Viaje cancelado. Se ha notificado al cliente.');
+        Navigator.pop(context);
+      }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     }
@@ -341,33 +469,74 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
 
   Future<void> _requestCancellation(Map<String, dynamic> t) async {
     final motivoCtrl = TextEditingController();
+    String? motivoSeleccionado;
+
     final confirmado = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Solicitar cancelación'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('El viaje está en curso. Enviarás una solicitud de cancelación al administrador para que la revise.', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 12),
-            TextField(controller: motivoCtrl, decoration: const InputDecoration(labelText: 'Motivo', hintText: 'Explica por qué necesitas cancelar'), maxLines: 3),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Solicitar cancelación'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                child: Row(children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('El viaje está en curso. Se notificará al cliente y a soporte.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              const Text('Motivo de la solicitud:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const SizedBox(height: 8),
+              ...['Problema con el cliente', 'Emergencia', 'Vehículo averiado', 'Otro'].map((m) => RadioListTile<String>(
+                title: Text(m, style: const TextStyle(fontSize: 14)),
+                value: m,
+                groupValue: motivoSeleccionado,
+                onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              )),
+              if (motivoSeleccionado != null) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: motivoCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'Explica con detalle lo que está pasando',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
+            ElevatedButton(
+              onPressed: motivoSeleccionado == null ? null : () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade700, foregroundColor: Colors.white),
+              child: const Text('Enviar solicitud'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
-            child: const Text('Solicitar cancelación'),
-          ),
-        ],
       ),
     );
-    if (confirmado != true) return;
+
+    if (confirmado != true || motivoSeleccionado == null) return;
+
     try {
-      await ApiClient.instance.requestCancellation(t['id'], motivo: motivoCtrl.text.trim().isEmpty ? null : motivoCtrl.text.trim());
+      await ApiClient.instance.disputeTrip(
+        t['id'],
+        motivo: motivoSeleccionado!,
+        descripcion: motivoCtrl.text.trim().isEmpty ? null : motivoCtrl.text.trim(),
+      );
+      await ApiClient.instance.requestCancellation(t['id'], motivo: motivoSeleccionado);
       if (mounted) {
-        _snack('Solicitud de cancelación enviada al administrador');
+        _snack('Solicitud de cancelación enviada. Se notificará al cliente y a soporte.');
         Navigator.pop(context);
       }
     } catch (e) {

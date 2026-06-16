@@ -280,6 +280,15 @@ class ApiClient {
     if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
   }
 
+  Future<void> disputeTrip(dynamic id, {required String motivo, String? descripcion}) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$id/dispute'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'motivo': motivo, 'descripcion': descripcion}),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
   Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) async {
     final res = await http.post(
       Uri.parse('$baseUrl/api/trips/$id/rate'),
@@ -361,5 +370,169 @@ class ApiClient {
     await prefs.remove(_apellidoKey);
     await prefs.remove(_emailKey);
     await prefs.remove(_rolKey);
+  }
+
+  // --- Ganancias ---
+
+  Future<Map<String, dynamic>> getEarnings() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/drivers/earnings'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // --- Estadísticas del conductor ---
+
+  Future<Map<String, dynamic>> getDriverStats() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/drivers/stats'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getTodayStats() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/drivers/today-stats'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // --- Foro ---
+
+  Future<List<Map<String, dynamic>>> getForumPosts() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/foro'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createForumPost(Map<String, dynamic> data) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/foro'),
+      headers: _headers(auth: true),
+      body: jsonEncode(data),
+    );
+    if (res.statusCode == 422) throw Exception('Revise los campos requeridos');
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // --- Encuestas ---
+
+  Future<Map<String, dynamic>> getSurveyResults(dynamic id) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/moderator/encuestas/$id/results'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<void> answerSurvey(dynamic id, dynamic opcionId) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/moderator/encuestas/$id/answer'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'opcionId': opcionId}),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  // --- Notificaciones ---
+
+  Future<List<Map<String, dynamic>>> getNotifications() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/notifications'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> markNotificationRead(dynamic id) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/api/notifications/$id/read'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  // --- Chat de viaje ---
+
+  Future<List<Map<String, dynamic>>> getTripMessages(dynamic tripId) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/trips/$tripId/chat'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> sendTripMessage(dynamic tripId, String text) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/trips/$tripId/chat'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'text': text}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  // --- Estado del conductor ---
+
+  Future<void> setDriverStatus(bool online) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/api/drivers/status'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'online': online}),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  Future<void> updateLocation(double lat, double lng) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/api/drivers/location'),
+      headers: _headers(auth: true),
+      body: jsonEncode({'lat': lat, 'lng': lng}),
+    );
+    if (res.statusCode == 429) return;
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+  }
+
+  // --- Ayuda / Soporte ---
+
+  Future<Map<String, dynamic>> getHelp() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/support/help'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getEmergencyNumbers() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/support/emergency'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // --- Deuda / Comisión ---
+
+  Future<Map<String, dynamic>> getDebt() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/payment/debt'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 }

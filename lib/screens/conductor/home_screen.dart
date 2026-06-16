@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/notification_service.dart';
 import '../user/auth_screen.dart';
 import 'trip_in_progress_screen.dart';
 import 'offers_screen.dart';
@@ -12,6 +14,9 @@ import 'documents_screen.dart';
 import 'forum_screen.dart';
 import 'sos_alert_screen.dart';
 import 'conductor_trip_detail_screen.dart';
+import 'trip_history_screen.dart';
+import 'support_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,21 +30,16 @@ class _HomeScreenState extends State<HomeScreen> {
   int _bottomIndex = 0;
   List<Map<String, dynamic>> _nearbyTrips = [];
   bool _loadingTrips = true;
+  bool _online = true;
+  bool _statusLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchNearbyTrips();
-  }
+  Map<String, dynamic>? _earnings;
+  Map<String, dynamic>? _stats;
+  Map<String, dynamic>? _profile;
+  Map<String, dynamic>? _commission;
 
-  Future<void> _fetchNearbyTrips() async {
-    try {
-      final trips = await ApiClient.instance.getNearbyTrips(6.2476, -75.5658, radio: 50);
-      if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loadingTrips = false);
-    }
-  }
+  Timer? _refreshTimer;
+  StreamSubscription<Map<String, dynamic>>? _socketSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -49,48 +49,173 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color _bgLight = Color(0xFFF5F7FA);
   static const Color _white = Colors.white;
 
-  final List<_DrawerItem> _drawerItems = [
-    _DrawerItem('Viajes', Icons.local_shipping_outlined, 1),
-    _DrawerItem('Mis ofertas', Icons.local_offer_outlined, 2),
-    _DrawerItem('Notificaciones', Icons.notifications_none, 6, badge: '3'),
-    _DrawerItem('Chat', Icons.chat_bubble_outline, 5),
-    _DrawerItem('Perfil', Icons.person_outline, 9),
-    _DrawerItem('Documentos', Icons.description_outlined, 10),
-    _DrawerItem('Ajustes', Icons.settings_outlined, 11),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+    _socketSub = NotificationService.instance.onNotification.listen((event) {
+      if (event['__event'] == 'trip:nearby') {
+        _fetchNearbyTrips();
+        _showNewTripBanner(event);
+      }
+    });
+  }
 
-  final List<_BottomItem> _bottomItems = [
-    _BottomItem('Inicio', Icons.home_rounded, 0),
-    _BottomItem('Foro', Icons.forum_outlined, 7),
-    _BottomItem('Encuestas', Icons.poll_outlined, 8),
-    _BottomItem('Ganancias', Icons.monetization_on_outlined, 4),
-    _BottomItem('SOS', Icons.sos, -2),
-  ];
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _socketSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchData() async {
+    await _fetchProfileFirst();
+    await Future.wait([
+      _fetchNearbyTrips(),
+      _fetchStats(),
+    ]);
+    _startPeriodicRefresh();
+  }
+
+  Future<void> _fetchProfileFirst() async {
+    try {
+      final profile = await ApiClient.instance.getProfile();
+      if (mounted) setState(() => _profile = profile);
+    } catch (_) {}
+  }
+
+  Future<void> _fetchNearbyTrips() async {
+    if (_verificacionEstado != 'aprobado') {
+      if (mounted) setState(() => _loadingTrips = false);
+      return;
+    }
+    try {
+      final trips = await ApiClient.instance.getNearbyTrips(6.2476, -75.5658, radio: 50);
+      if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingTrips = false);
+    }
+  }
+
+  Future<void> _fetchStats() async {
+    try {
+      final results = await Future.wait([
+        ApiClient.instance.getEarnings(),
+        ApiClient.instance.getDriverStats(),
+        ApiClient.instance.getDebt(),
+      ]);
+      if (mounted) setState(() {
+        _earnings = results[0];
+        _stats = results[1];
+        _commission = results[2];
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleStatus() async {
+    setState(() => _statusLoading = true);
+    try {
+      await ApiClient.instance.setDriverStatus(!_online);
+      if (mounted) setState(() => _online = !_online);
+      _restartPeriodicRefresh();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
+    } finally {
+      if (mounted) setState(() => _statusLoading = false);
+    }
+  }
+
+  void _startPeriodicRefresh() {
+    _refreshTimer?.cancel();
+    if (!_online || _verificacionEstado != 'aprobado') return;
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _fetchNearbyTrips());
+  }
+
+  void _restartPeriodicRefresh() {
+    _refreshTimer?.cancel();
+    _startPeriodicRefresh();
+  }
+
+  void _showNewTripBanner(Map<String, dynamic> event) {
+    if (!mounted) return;
+    final origen = event['origen'] as String? ?? 'tu zona';
+    final precio = event['precio'] ?? event['precioEstimado'];
+    final msg = 'Nuevo viaje disponible cerca de $origen${precio != null ? ' — \$${precio}' : ''}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [
+          const Icon(Icons.local_shipping, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text(msg, style: const TextStyle(color: Colors.white))),
+        ]),
+        backgroundColor: const Color(0xFF1565C0),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Ver',
+          textColor: Colors.yellow,
+          onPressed: () {},
+        ),
+      ),
+    );
+  }
+
+  String? get _verificacionEstado {
+    final conductor = _profile?['conductor'] as Map<String, dynamic>?;
+    return conductor?['estadoVerificacion'] as String?;
+  }
+
+  bool get _tieneDocsFaltantes {
+    final conductor = _profile?['conductor'] as Map<String, dynamic>?;
+    if (conductor == null) return false;
+    final campos = ['fotoCedula', 'fotoLicencia', 'fotoVehiculo', 'fotoConductor'];
+    for (final c in campos) {
+      final val = conductor[c] as String?;
+      if (val == null || val.isEmpty) return true;
+    }
+    return false;
+  }
+
+  String _statusLabel() {
+    final estado = _verificacionEstado;
+    if (estado == 'rechazado' || estado == 'pendiente') return 'Pendiente de verificación';
+    if (!_online) return 'Fuera de línea';
+    return 'En línea';
+  }
+
+  Color _statusColor() {
+    final estado = _verificacionEstado;
+    if (estado == 'rechazado' || estado == 'pendiente') return Colors.orange;
+    if (!_online) return Colors.grey;
+    return _accentGreen;
+  }
+
+  IconData _statusIcon() {
+    final estado = _verificacionEstado;
+    if (estado == 'rechazado' || estado == 'pendiente') return Icons.verified_outlined;
+    if (!_online) return Icons.cloud_off;
+    return Icons.verified;
+  }
 
   void _navigate(int index) {
     final routes = <int, Widget>{
       1: const TripInProgressScreen(),
       2: const OffersScreen(),
-      3: const TripInProgressScreen(),
       4: const EarningsScreen(),
-      5: const TripChatScreen(),
+      5: TripChatScreen(trip: null),
       6: const NotificationsScreen(),
       7: const ForumScreen(),
       8: const SurveysScreen(),
       9: const ProfileScreen(),
       10: const DocumentsScreen(),
+      11: const TripHistoryScreen(),
+      12: const SupportScreen(),
+      13: const SettingsScreen(),
     };
     final route = routes[index];
     if (route != null) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => route));
     }
-  }
-
-  void _openSos() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SOSAlertScreen()),
-    );
   }
 
   @override
@@ -110,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const ForumScreen(),
                 const SurveysScreen(),
                 const EarningsScreen(),
-                const SOSAlertScreen(),
+                const SizedBox(),
               ],
             ),
           ),
@@ -149,8 +274,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 CircleAvatar(
                   radius: 30,
                   backgroundColor: _white.withOpacity(0.2),
-                  backgroundImage: const NetworkImage(
-                    'https://randomuser.me/api/portraits/men/32.jpg',
+                  child: Text(
+                    _initials(ApiClient.instance.nombreCompleto),
+                    style: TextStyle(color: _white, fontWeight: FontWeight.w700, fontSize: 18),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -160,24 +286,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Text(
                         ApiClient.instance.nombreCompleto,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: _accentGreen,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'En línea',
-                          style:
-                              TextStyle(color: Colors.white, fontSize: 11),
+                      GestureDetector(
+                        onTap: () {
+                          final estado = _verificacionEstado;
+                          if (estado == 'rechazado' || estado == 'pendiente') {
+                            Navigator.pop(context);
+                            _navigate(10);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _statusColor(),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _statusLabel(),
+                            style: const TextStyle(color: Colors.white, fontSize: 11),
+                          ),
                         ),
                       ),
                     ],
@@ -190,12 +319,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                ..._drawerItems.map((item) => _buildDrawerItem(item)),
+                _buildDrawerItem(Icons.person_outline, 'Perfil', 9),
+                _buildDrawerItem(Icons.description_outlined, 'Documentación', 10),
+                _buildDrawerItem(Icons.route_outlined, 'Historial de viajes', 11),
+                _buildDrawerItem(Icons.notifications_none, 'Notificaciones', 6),
+                _buildDrawerItem(Icons.settings_outlined, 'Ajustes', 13),
+                _buildDrawerItem(Icons.headset_mic_outlined, 'Soporte', 12),
                 const Divider(),
-                _buildDrawerItem(
-                  _DrawerItem('Cerrar sesión', Icons.logout, -1,
-                      isDestructive: true),
-                ),
+                _buildDrawerItem(Icons.logout, 'Cerrar sesión', -1, isDestructive: true),
               ],
             ),
           ),
@@ -204,40 +335,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDrawerItem(_DrawerItem item) {
+  Widget _buildDrawerItem(IconData icon, String label, int index, {bool isDestructive = false}) {
     return ListTile(
-      leading: Icon(item.icon,
-          color: item.isDestructive ? Colors.red : _textGrey),
+      leading: Icon(icon, color: isDestructive ? Colors.red : _textGrey),
       title: Text(
-        item.label,
+        label,
         style: TextStyle(
-          color: item.isDestructive ? Colors.red : _textDark,
+          color: isDestructive ? Colors.red : _textDark,
           fontWeight: FontWeight.w500,
         ),
       ),
-      trailing: item.badge != null
-          ? Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                item.badge!,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold),
-              ),
-            )
-          : null,
       onTap: () {
         Navigator.pop(context);
-        if (item.index == -1) {
+        if (index == -1) {
           _logout();
         } else {
-          _navigate(item.index);
+          _navigate(index);
         }
       },
     );
@@ -246,19 +359,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, -2))],
       ),
       child: BottomNavigationBar(
         currentIndex: _bottomIndex,
         onTap: (i) {
-          if (_bottomItems[i].index == -2) {
-            _openSos();
+          if (i == 4) {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
           } else {
             setState(() => _bottomIndex = i);
           }
@@ -270,25 +377,20 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedFontSize: 11,
         unselectedFontSize: 11,
         elevation: 0,
-        items: _bottomItems.map((item) {
-          if (item.index == -2) {
-            return BottomNavigationBarItem(
-              icon: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.sos, color: Colors.red.shade700, size: 22),
-              ),
-              label: 'SOS',
-            );
-          }
-          return BottomNavigationBarItem(
-            icon: Icon(item.icon),
-            label: item.label,
-          );
-        }).toList(),
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Inicio'),
+          BottomNavigationBarItem(icon: Icon(Icons.forum_outlined), label: 'Foro'),
+          BottomNavigationBarItem(icon: Icon(Icons.poll_outlined), label: 'Encuestas'),
+          BottomNavigationBarItem(icon: Icon(Icons.monetization_on_outlined), label: 'Ganancias'),
+          BottomNavigationBarItem(
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.sos, color: Colors.red.shade700, size: 22),
+            ),
+            label: 'SOS',
+          ),
+        ],
       ),
     );
   }
@@ -304,12 +406,8 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: _primaryDark,
-              borderRadius: BorderRadius.circular(10),
-            ),
+            width: 34, height: 34,
+            decoration: BoxDecoration(color: _primaryDark, borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.local_shipping, color: Colors.white, size: 18),
           ),
           const SizedBox(width: 10),
@@ -318,26 +416,23 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Buenos días, ${ApiClient.instance.nombre}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: _textDark,
-                  ),
+                  'Buenos días, ${ApiClient.instance.nombre ?? ''}',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark),
                 ),
-                Row(
-                  children: [
-                    Icon(Icons.verified, color: _accentGreen, size: 11),
-                    const SizedBox(width: 3),
-                    Text(
-                      'Conductor verificado',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: _accentGreen,
-                        fontWeight: FontWeight.w500,
+                GestureDetector(
+                  onTap: _tieneDocsFaltantes || _verificacionEstado == 'rechazado' || _verificacionEstado == 'pendiente'
+                      ? () => _navigate(10)
+                      : null,
+                  child: Row(
+                    children: [
+                      Icon(_statusIcon(), color: _statusColor(), size: 11),
+                      const SizedBox(width: 3),
+                      Text(
+                        _statusLabel(),
+                        style: TextStyle(fontSize: 10, color: _statusColor(), fontWeight: FontWeight.w500),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -345,23 +440,10 @@ class _HomeScreenState extends State<HomeScreen> {
           Stack(
             children: [
               IconButton(
-                icon: Icon(Icons.notifications_outlined,
-                    color: _textDark, size: 24),
+                icon: Icon(Icons.notifications_outlined, color: _textDark, size: 24),
                 onPressed: () => _navigate(6),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-              ),
-              Positioned(
-                top: 2,
-                right: 2,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                ),
               ),
             ],
           ),
@@ -376,128 +458,171 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsRow(),
+          _buildStatusToggle(),
+          const SizedBox(height: 16),
+          _buildMainCards(),
           const SizedBox(height: 20),
           _buildAvailableTrips(),
-          const SizedBox(height: 20),
-          _buildMoreTripsCard(),
         ],
       ),
     );
   }
 
-  Widget _buildStatsRow() {
-    return Row(
+  Widget _buildStatusToggle() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 12, height: 12,
+            decoration: BoxDecoration(color: _online ? _accentGreen : Colors.grey, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(_online ? 'En línea' : 'Fuera de línea', style: const TextStyle(fontWeight: FontWeight.w600))),
+          _statusLoading
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              : Switch(
+                  value: _online,
+                  onChanged: (_) => _toggleStatus(),
+                  activeColor: _accentGreen,
+                ),
+        ],
+      ),
+    );
+  }
+
+  num _toNum(dynamic v) {
+    if (v is num) return v;
+    if (v is Map) return (v['amount'] ?? v['monto'] ?? 0) as num;
+    return 0;
+  }
+
+  Widget _buildMainCards() {
+    final gananciaHoy = _toNum(_earnings?['hoy']);
+    final viajesHoy = _toNum(_stats?['viajesHoy']);
+    final viajesTotal = _toNum(_stats?['viajes']);
+    final calificacion = _toNum(_stats?['calificacion']);
+    final comision = _toNum(_commission?['monto'] ?? _commission?['deuda']);
+
+    return Column(
       children: [
-        Expanded(
-          child: _buildStatCard(
-            Icons.monetization_on_outlined,
-            '\$12,400',
-            'Ganancias del mes',
-            const Color(0xFFE8F5E9),
-            const Color(0xFF2E7D32),
-          ),
+        Row(
+          children: [
+            Expanded(child: _buildStatCard(Icons.monetization_on_outlined, '\$${_fmtAmount(gananciaHoy)}', 'Ganancias del día', const Color(0xFFE8F5E9), const Color(0xFF2E7D32))),
+            const SizedBox(width: 8),
+            Expanded(child: _buildStatCard(Icons.route_outlined, '$viajesHoy', 'Viajes hoy', const Color(0xFFE3F2FD), const Color(0xFF1565C0))),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _buildStatCard(
-            Icons.route_outlined,
-            '8',
-            'Viajes completados',
-            const Color(0xFFE3F2FD),
-            const Color(0xFF1565C0),
-          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: _buildStatCard(Icons.assignment_turned_in_outlined, '$viajesTotal', 'Total completados', const Color(0xFFFFF8E1), const Color(0xFFFF8F00))),
+            const SizedBox(width: 8),
+            Expanded(child: _buildStatCard(Icons.star_rounded, calificacion.toStringAsFixed(1), 'Calificación', const Color(0xFFF3E5F5), const Color(0xFF6A1B9A))),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _buildStatCard(
-            Icons.star_rounded,
-            '4.8',
-            'Calificación',
-            const Color(0xFFFFF8E1),
-            const Color(0xFFFF8F00),
-          ),
-        ),
+        const SizedBox(height: 8),
+        _buildCommissionCard(comision),
       ],
     );
   }
 
-  Widget _buildStatCard(
-      IconData icon, String value, String label, Color bg, Color iconColor) {
+  Widget _buildStatCard(IconData icon, String value, String label, Color bg, Color iconColor) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
         color: _white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(10),
-            ),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: iconColor, size: 18),
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: _textDark,
-            ),
-          ),
+          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _textDark)),
           const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(fontSize: 8.5, color: _textGrey),
-            textAlign: TextAlign.center,
+          Text(label, style: TextStyle(fontSize: 8.5, color: _textGrey), textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommissionCard(num comision) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.account_balance_wallet_outlined, color: Colors.red.shade700, size: 18),
           ),
+          const SizedBox(width: 12),
+          Expanded(child: Text('Deuda pendiente', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+          Text('\$${_fmtAmount(comision)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.red.shade700)),
         ],
       ),
     );
   }
 
   Widget _buildAvailableTrips() {
+    final estado = _verificacionEstado;
+    final verificado = estado == 'aprobado';
+    final sinConductor = _profile?['conductor'] == null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Viajes disponibles',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: _textDark,
+        Text('Viajes disponibles', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark)),
+        const SizedBox(height: 12),
+        if (sinConductor)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.blue.shade200)),
+            child: Column(
+              children: [
+                Icon(Icons.person_add_alt_1, size: 40, color: Colors.blue.shade400),
+                const SizedBox(height: 10),
+                const Text('Completa tu registro como conductor', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1))),
+                const SizedBox(height: 4),
+                Text('Toca para ir a Documentación', style: TextStyle(fontSize: 13, color: Colors.blue.shade700)),
+              ],
+            ),
+          )
+        else if (!verificado)
+          GestureDetector(
+            onTap: () => _navigate(10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.orange.shade200)),
+              child: Column(
+                children: [
+                  Icon(Icons.verified_outlined, size: 40, color: Colors.orange.shade400),
+                  const SizedBox(height: 10),
+                  const Text('Debes completar la verificación', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFE65100))),
+                  const SizedBox(height: 4),
+                  Text('Toca para ir a Documentación', style: TextStyle(fontSize: 13, color: Colors.orange.shade700)),
+                ],
               ),
             ),
-            if (_nearbyTrips.length > 3)
-              GestureDetector(
-                onTap: () => _showAllTrips(),
-                child: Text(
-                  'Ver todos',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _primaryBlue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_loadingTrips)
+          )
+        else if (_loadingTrips)
           const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
         else if (_nearbyTrips.isEmpty)
           Container(
@@ -506,25 +631,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: const Center(child: Text('No hay viajes disponibles cerca', style: TextStyle(color: Colors.black45))),
           )
         else
-          ..._nearbyTrips.take(3).map((t) => _buildTripCard(t)),
+          ..._nearbyTrips.take(10).map((t) => _buildTripCard(t)),
       ],
-    );
-  }
-
-  void _showAllTrips() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => _AllTripsScreen(trips: _nearbyTrips)));
-  }
-
-  Widget _buildMoreTripsCard() {
-    if (_nearbyTrips.length <= 3) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(16)),
-      child: ListTile(
-        title: const Text('Ver todos los viajes disponibles', style: TextStyle(fontWeight: FontWeight.w600)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: _showAllTrips,
-      ),
     );
   }
 
@@ -534,6 +642,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final precio = t['precioEstimado'] as num?;
     final distancia = t['distancia'] as num?;
     final carga = t['carga'] as String? ?? 'No especificada';
+    final cliente = t['cliente'] as Map<String, dynamic>?;
+    final descripcion = t['descripcion'] as String? ?? cliente?['nombre'] as String? ?? '';
+    final tiempo = t['tiempoEstimado'] as num?;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(16), boxShadow: [
@@ -548,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(color: _primaryBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                child: Text('#${t['id']}', style: TextStyle(fontSize: 11, color: _primaryBlue, fontWeight: FontWeight.w600)),
+                child: Text('${_fmtDate(t['createdAt'] as String?)}', style: TextStyle(fontSize: 11, color: _primaryBlue, fontWeight: FontWeight.w600)),
               ),
               const Spacer(),
               Container(
@@ -574,103 +686,94 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 14),
             const Divider(height: 1),
             const SizedBox(height: 14),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Expanded(child: Text(carga, style: const TextStyle(fontSize: 12, color: _textGrey), maxLines: 1, overflow: TextOverflow.ellipsis)),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('\$${precio?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _textDark)),
-                const Text('Presupuesto', style: TextStyle(fontSize: 10, color: _textGrey)),
-              ]),
+            Row(children: [
+              Icon(Icons.inventory_2_outlined, size: 16, color: _textGrey),
+              const SizedBox(width: 6),
+              Expanded(child: Text('Tipo: $carga', style: TextStyle(fontSize: 12, color: _textGrey))),
             ]),
+            if (descripcion.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(children: [
+                Icon(Icons.description_outlined, size: 16, color: _textGrey),
+                const SizedBox(width: 6),
+                Expanded(child: Text(descripcion, style: TextStyle(fontSize: 12, color: _textGrey), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ]),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('\$${precio?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _textDark)),
+                  const Text('Precio ofrecido', style: TextStyle(fontSize: 10, color: _textGrey)),
+                ]),
+                if (tiempo != null)
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text('$tiempo min', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textGrey)),
+                    const Text('Tiempo estimado', style: TextStyle(fontSize: 10, color: _textGrey)),
+                  ]),
+              ],
+            ),
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t))),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primaryDark, foregroundColor: _white, padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text('Ver ruta'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _primaryDark,
+                      side: BorderSide(color: _primaryDark.withOpacity(0.3)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ),
-                child: const Text('Ver detalles', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t))),
+                    icon: const Icon(Icons.send_rounded, size: 18),
+                    label: const Text('Enviar oferta'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryDark,
+                      foregroundColor: _white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _AllTripsScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> trips;
-  const _AllTripsScreen({required this.trips});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white, foregroundColor: const Color(0xFF1A1A2E), elevation: 0,
-        title: const Text('Viajes disponibles', style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: trips.length,
-        itemBuilder: (_, i) => _buildTripCard(context, trips[i]),
-      ),
-    );
+  String _fmtAmount(num amount) {
+    if (amount >= 1000) {
+      return '${(amount / 1000).toStringAsFixed(amount % 1000 == 0 ? 0 : 1)}k';
+    }
+    if (amount == amount.roundToDouble()) return amount.toInt().toString();
+    return amount.toStringAsFixed(2);
   }
 
-  Widget _buildTripCard(BuildContext context, Map<String, dynamic> t) {
-    final origen = t['origen'] as Map<String, dynamic>?;
-    final destino = t['destino'] as Map<String, dynamic>?;
-    final precio = t['precioEstimado'] as num?;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          Text(destino?['direccion'] as String? ?? '', style: const TextStyle(color: Colors.black54)),
-          const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(t['carga'] as String? ?? '', style: const TextStyle(fontSize: 12, color: Colors.black45)),
-            Text('\$${precio?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontWeight: FontWeight.w700)),
-          ]),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t))),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A3C6E), foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
-              ),
-              child: const Text('Ver detalles'),
-            ),
-          ),
-        ]),
-      ),
-    );
+  String _fmtDate(String? iso) {
+    if (iso == null) return '';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return '';
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
-}
 
-class _DrawerItem {
-  final String label;
-  final IconData icon;
-  final int index;
-  final String? badge;
-  final bool isDestructive;
-
-  const _DrawerItem(this.label, this.icon, this.index,
-      {this.badge, this.isDestructive = false});
-}
-
-class _BottomItem {
-  final String label;
-  final IconData icon;
-  final int index;
-
-  const _BottomItem(this.label, this.icon, this.index);
+  String _initials(String? name) {
+    if (name == null || name.isEmpty) return '?';
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return name[0].toUpperCase();
+  }
 }

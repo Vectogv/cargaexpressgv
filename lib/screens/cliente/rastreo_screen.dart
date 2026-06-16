@@ -1,8 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_client.dart';
+import '../../services/map_config.dart';
 
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
@@ -58,9 +63,77 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 
   Future<void> _cancelar() async {
+    final motivoCtrl = TextEditingController();
+    String? motivoSeleccionado;
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Cancelar viaje'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                child: Row(children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Esta acción será revisada por el equipo de soporte.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              const Text('Motivo de cancelación:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const SizedBox(height: 8),
+              ...['Problema con el conductor', 'Cambio de planes', 'Tiempo de espera muy largo', 'Otro'].map((m) => RadioListTile<String>(
+                title: Text(m, style: const TextStyle(fontSize: 14)),
+                value: m,
+                groupValue: motivoSeleccionado,
+                onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              )),
+              if (motivoSeleccionado != null) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: motivoCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'Describe el problema (opcional)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
+            ElevatedButton(
+              onPressed: motivoSeleccionado == null ? null : () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
+              child: const Text('Cancelar viaje'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmado != true || motivoSeleccionado == null) return;
+
     try {
-      await ApiClient.instance.cancelTrip(_trip!['id']);
-      if (mounted) { _snack('Viaje cancelado'); Navigator.pop(context); }
+      await ApiClient.instance.disputeTrip(
+        _trip!['id'],
+        motivo: motivoSeleccionado!,
+        descripcion: motivoCtrl.text.trim().isEmpty ? null : motivoCtrl.text.trim(),
+      );
+      await ApiClient.instance.cancelTrip(_trip!['id'], motivo: motivoSeleccionado);
+      if (mounted) {
+        _snack('Viaje cancelado. Se ha notificado al conductor.');
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     }
@@ -84,7 +157,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
       child: FlutterMap(
         options: MapOptions(initialCenter: center, initialZoom: 12),
         children: [
-          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.cargaexpress.app'),
+          TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app'),
           MarkerLayer(markers: [
             Marker(point: LatLng(oLat, oLng), width: 36, height: 36, child: const Icon(Icons.trip_origin, color: Colors.green, size: 36)),
             Marker(point: LatLng(dLat, dLng), width: 36, height: 36, child: const Icon(Icons.location_on, color: Colors.red, size: 36)),

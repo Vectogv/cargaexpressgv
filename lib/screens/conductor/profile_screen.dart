@@ -109,9 +109,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? get _conductor => _profile?['conductor'] as Map<String, dynamic>?;
 
   void _showVehicleInfo() {
-    final placa = _conductor?['placa'] as String? ?? 'ABC-123';
-    final tipo = _conductor?['tipoVehiculo'] as String? ?? 'Sedan';
-    final capacidad = _conductor?['capacidad'] as String? ?? '500 kg';
+    final placa = _conductor?['placa'] as String? ?? 'No registrada';
+    final tipo = _conductor?['tipoVehiculo'] as String? ?? 'No especificado';
+    final capacidad = _conductor?['capacidad'] as String? ?? 'No especificada';
 
     showDialog(
       context: context,
@@ -231,10 +231,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  nombre.isNotEmpty ? nombre : 'Juan Pérez',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
-                ),
+                  Text(
+                    nombre.isNotEmpty ? nombre : 'Sin nombre',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
+                  ),
                 const SizedBox(height: 2),
                 Text(email, style: TextStyle(fontSize: 12, color: _textGrey)),
                 const SizedBox(height: 4),

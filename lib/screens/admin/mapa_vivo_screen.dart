@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../services/api_client.dart';
+import '../../services/map_config.dart';
 
 class MapaVivoScreen extends StatefulWidget {
   const MapaVivoScreen({super.key});
@@ -126,7 +127,7 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate: MapConfig.tileUrl,
                     userAgentPackageName: 'com.cargaexpress.app',
                   ),
                   MarkerLayer(

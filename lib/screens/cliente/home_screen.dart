@@ -5,7 +5,7 @@ import 'nuevo_envio_screen.dart';
 import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
 import 'perfil_screen.dart';
-import '../conductor/notifications_screen.dart';
+import '../conductor/settings_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
   const ClienteHomeScreen({super.key});
@@ -133,10 +133,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             ],
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: Colors.black54),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
-          ),
         ],
       ),
     );
@@ -291,14 +287,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
                 ],
               ),
             ),
-            _buildDrawerItem(Icons.add_circle_outline, 'Nuevo envío', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NuevoEnvioScreen()))),
-            _buildDrawerItem(Icons.route_outlined, 'Mis envíos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
-            _buildDrawerItem(Icons.track_changes_outlined, 'Rastrear', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RastreoScreen()))),
-            _buildDrawerItem(Icons.chat_bubble_outline, 'Chat', null),
-            _buildDrawerItem(Icons.notifications_outlined, 'Notificaciones', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
-            _buildDrawerItem(Icons.poll_outlined, 'Encuestas', null),
             _buildDrawerItem(Icons.person_outline, 'Perfil', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen()))),
-            _buildDrawerItem(Icons.history_outlined, 'Historial', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
+            _buildDrawerItem(Icons.route_outlined, 'Historial de viajes realizados', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
+            _buildDrawerItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
             const Spacer(),
             const Divider(),
             _buildDrawerItem(Icons.logout, 'Cerrar sesión', _logout, isDestructive: true),
