@@ -535,4 +535,16 @@ class ApiClient {
     if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
+
+  // --- Config ---
+
+  Future<String> fetchMapboxToken() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/config/mapbox'),
+      headers: _headers(auth: true),
+    );
+    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return data['mapboxAccessToken'] as String;
+  }
 }

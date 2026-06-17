@@ -14,6 +14,7 @@ class NotificationService {
   final _controller = StreamController<Map<String, dynamic>>.broadcast();
   bool _initialized = false;
   String? _fcmToken;
+  final Set<String> _processedTripIds = {};
 
   List<Map<String, dynamic>> get notifications => List.unmodifiable(_notifications);
 
@@ -81,26 +82,41 @@ class NotificationService {
 
   void _handleForegroundMessage(RemoteMessage message) {
     final notif = message.notification;
-    final data = <String, dynamic>{
+    final data = message.data;
+
+    if (data['type'] == 'new_trip' || data['event'] == 'trip:nearby') {
+      final tripId = data['tripId'] ?? data['id'];
+      if (tripId != null && _processedTripIds.contains(tripId.toString())) return;
+      if (tripId != null) _processedTripIds.add(tripId.toString());
+    }
+
+    final entry = <String, dynamic>{
       if (notif?.title != null) 'title': notif!.title,
       if (notif?.body != null) 'body': notif!.body,
-      if (message.data.isNotEmpty) ...message.data,
+      if (data.isNotEmpty) ...data,
       '__source': 'fcm',
     };
-    _notifications.insert(0, data);
-    _controller.add(data);
+    _notifications.insert(0, entry);
+    _controller.add(entry);
   }
 
   void _handleNotificationTap(RemoteMessage message) {
     final notif = message.notification;
-    final data = <String, dynamic>{
+    final data = message.data;
+
+    final entry = <String, dynamic>{
       if (notif?.title != null) 'title': notif!.title,
       if (notif?.body != null) 'body': notif!.body,
-      if (message.data.isNotEmpty) ...message.data,
+      if (data.isNotEmpty) ...data,
       '__source': 'fcm',
       '__tap': true,
     };
-    _controller.add(data);
+
+    if (data['type'] == 'new_trip' || data['event'] == 'trip:nearby') {
+      entry['__navigate'] = 'offers';
+    }
+
+    _controller.add(entry);
   }
 
   void _initSocket() {
@@ -139,15 +155,33 @@ class NotificationService {
       final notification = Map<String, dynamic>.from(data);
       notification['__event'] = event;
       notification['__source'] = 'socket';
-      _notifications.insert(0, notification);
-      _controller.add(notification);
+
+      if (event == 'trip:nearby') {
+        final tripId = data['tripId'] ?? data['id'];
+        if (tripId != null && _processedTripIds.contains(tripId.toString())) return;
+        if (tripId != null) _processedTripIds.add(tripId.toString());
+        _notifications.insert(0, notification);
+        _controller.add(notification);
+      } else if (event == 'trip:accepted') {
+        _notifications.insert(0, notification);
+        _controller.add(notification);
+      } else {
+        _notifications.insert(0, notification);
+        _controller.add(notification);
+      }
     }
 
     for (final event in [...adminEvents, ...driverEvents]) {
       _socket!.on(event, (data) {
-        handleEvent(Map<String, dynamic>.from(data as Map), event);
+        if (data is Map) {
+          handleEvent(Map<String, dynamic>.from(data), event);
+        }
       });
     }
+  }
+
+  void clearDuplicateTracking() {
+    _processedTripIds.clear();
   }
 
   void markAllRead() {
@@ -162,4 +196,3 @@ class NotificationService {
     _controller.close();
   }
 }
-

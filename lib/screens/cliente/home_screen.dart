@@ -5,7 +5,8 @@ import 'nuevo_envio_screen.dart';
 import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
 import 'perfil_screen.dart';
-import '../conductor/settings_screen.dart';
+import 'pagos_screen.dart';
+import 'ajustes_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
   const ClienteHomeScreen({super.key});
@@ -21,25 +22,35 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   static const Color _bgLight = Color(0xFFF5F7FA);
   static const Color _white = Colors.white;
 
-  List<Map<String, dynamic>> _recentTrips = [];
-  bool _loadingTrips = true;
+  Map<String, dynamic>? _activeTrip;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchRecent();
+    _loadActiveTrip();
   }
 
-  Future<void> _fetchRecent() async {
+  Future<void> _loadActiveTrip() async {
     try {
-      final res = await ApiClient.instance.getTripHistory(limit: 5);
-      if (mounted) setState(() { _recentTrips = res; _loadingTrips = false; });
+      final trip = await ApiClient.instance.getActiveTrip();
+      if (mounted) setState(() { _activeTrip = trip; _loading = false; });
     } catch (_) {
-      if (mounted) setState(() => _loadingTrips = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  int _bottomIndex = 0;
+  String _estadoLabel(String? estado) {
+    switch (estado) {
+      case 'buscando_conductor': return 'Buscando conductor';
+      case 'aceptado': return 'Conductor asignado';
+      case 'en_curso': return 'En camino a destino';
+      case 'completado': return 'Entrega completada';
+      case 'finalizado': return 'Finalizado';
+      case 'cancelado': return 'Cancelado';
+      default: return estado ?? '';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,57 +62,14 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
           children: [
             _buildTopBar(),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildWelcomeCard(),
-                    const SizedBox(height: 20),
-                    _buildRecentTrips(),
-                  ],
-                ),
-              ),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _activeTrip != null
+                      ? _buildActiveTripView()
+                      : _buildNoTripView(),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: _buildBottomNav(),
-    );
-  }
-
-  void _onNavTap(int i) {
-    if (i == 0) { setState(() => _bottomIndex = 0); return; }
-    if (i == 1) { Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen())); return; }
-    if (i == 2) { Navigator.push(context, MaterialPageRoute(builder: (_) => const RastreoScreen())); return; }
-    if (i == 3) { _snack('Próximamente'); return; }
-    if (i == 4) { Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen())); return; }
-  }
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, -2))]),
-      child: BottomNavigationBar(
-        currentIndex: _bottomIndex,
-        onTap: _onNavTap,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: _white,
-        selectedItemColor: _primaryDark,
-        unselectedItemColor: _textGrey,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
-        elevation: 0,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Perfil'),
-          BottomNavigationBarItem(icon: Icon(Icons.track_changes_outlined), activeIcon: Icon(Icons.track_changes), label: 'Rastrear'),
-          BottomNavigationBarItem(icon: Icon(Icons.payments_outlined), activeIcon: Icon(Icons.payments), label: 'Pagos'),
-          BottomNavigationBarItem(icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history), label: 'Historial'),
-        ],
       ),
     );
   }
@@ -122,7 +90,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(color: _primaryDark, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.person_outline, color: Colors.white, size: 20),
+            child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
           ),
           const SizedBox(width: 10),
           Column(
@@ -138,36 +106,142 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     );
   }
 
-  Widget _buildWelcomeCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF1A3C6E), Color(0xFF1565C0)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(16),
+  Widget _buildNoTripView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.local_shipping, size: 80, color: _primaryDark.withOpacity(0.15)),
+            const SizedBox(height: 20),
+            const Text(
+              'No hay viajes en curso',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: _textDark),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Solicita un transporte de carga para comenzar',
+              style: TextStyle(fontSize: 14, color: _textGrey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 220, height: 52,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NuevoEnvioScreen()),
+                ).then((_) => _loadActiveTrip()),
+                icon: const Icon(Icons.add_circle_outline, size: 22),
+                label: const Text('Solicitar viaje', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryDark,
+                  foregroundColor: _white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildActiveTripView() {
+    final estado = _activeTrip!['estado'] as String?;
+    final origen = _activeTrip!['origen'] as Map<String, dynamic>?;
+    final destino = _activeTrip!['destino'] as Map<String, dynamic>?;
+    final conductor = _activeTrip!['conductor'] as Map<String, dynamic>?;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
       child: Column(
         children: [
           Container(
-            width: 64, height: 64,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-            child: const Icon(Icons.local_shipping, color: Colors.white, size: 32),
-          ),
-          const SizedBox(height: 12),
-          const Text('Pedir viaje', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text('${ApiClient.instance.nombre ?? ''}, solicita tu transporte', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13), textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: 180, height: 46,
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NuevoEnvioScreen())),
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text('Solicitar', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white, foregroundColor: const Color(0xFF1A3C6E),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_primaryDark, const Color(0xFF1565C0)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(color: _primaryDark.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 64, height: 64,
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                  child: Icon(Icons.local_shipping, color: _white, size: 32),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _estadoLabel(estado),
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                if (origen != null || destino != null) ...[
+                  const SizedBox(height: 16),
+                  if (origen != null)
+                    _routeInfo(Icons.trip_origin, 'Origen', origen['direccion'] as String? ?? ''),
+                  if (destino != null) ...[
+                    const SizedBox(height: 6),
+                    _routeInfo(Icons.location_on, 'Destino', destino['direccion'] as String? ?? ''),
+                  ],
+                ],
+                if (conductor != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.white24,
+                          child: Text(
+                            _initials(conductor['nombre'] as String? ?? ''),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(conductor['nombre'] as String? ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                              Text('${conductor['tipoVehiculo'] ?? ''} \u00b7 ${conductor['placa'] ?? ''}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity, height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RastreoScreen()),
+                    ).then((_) => _loadActiveTrip()),
+                    icon: const Icon(Icons.track_changes, size: 20),
+                    label: const Text('Ver seguimiento', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _white,
+                      foregroundColor: _primaryDark,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -175,92 +249,22 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     );
   }
 
-  Widget _buildRecentTrips() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _routeInfo(IconData icon, String label, String dir) {
+    return Row(
       children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Historial de viajes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-          GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen())),
-            child: Text('Ver todos', style: TextStyle(fontSize: 12, color: _primaryDark, fontWeight: FontWeight.w600)),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        if (_loadingTrips)
-          const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-        else if (_recentTrips.isEmpty)
-          Container(
-            width: double.infinity, padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
-            child: const Text('No hay viajes aún', style: TextStyle(color: Colors.black45), textAlign: TextAlign.center),
-          )
-        else
-          ...List.generate(_recentTrips.length, (i) => _buildTripTile(_recentTrips[i])),
+        Icon(icon, size: 16, color: Colors.white70),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text('$label: $dir', style: const TextStyle(color: Colors.white, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
       ],
     );
   }
 
-  Widget _buildTripTile(Map<String, dynamic> t) {
-    final origen = t['origen'] as Map<String, dynamic>?;
-    final destino = t['destino'] as Map<String, dynamic>?;
-    final estado = t['estado'] as String? ?? '';
-    return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen())),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
-        child: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: _estadoBg(estado), borderRadius: BorderRadius.circular(10)),
-            child: Icon(_estadoIcon(estado), color: _estadoColor(estado), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 11, color: _textGrey), maxLines: 1, overflow: TextOverflow.ellipsis),
-          ])),
-          Text('\$${_num(t['precioFinal'] ?? t['precioEstimado'])}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-        ]),
-      ),
-    );
-  }
-
-  Color _estadoColor(String e) {
-    switch (e) {
-      case 'buscando_conductor': return const Color(0xFFFF9800);
-      case 'aceptado': return const Color(0xFF1E88E5);
-      case 'en_curso': return const Color(0xFF1565C0);
-      case 'completado': return const Color(0xFF4CAF50);
-      case 'finalizado': return const Color(0xFF2E7D32);
-      case 'cancelado': return Colors.red;
-      default: return Colors.grey;
-    }
-  }
-
-  Color _estadoBg(String e) {
-    return _estadoColor(e).withOpacity(0.12);
-  }
-
-  String _num(dynamic v) {
-    if (v == null) return '0';
-    if (v is num) return v.toStringAsFixed(0);
-    final parsed = double.tryParse(v.toString());
-    return parsed != null ? parsed.toStringAsFixed(0) : '0';
-  }
-
-  IconData _estadoIcon(String e) {
-    switch (e) {
-      case 'buscando_conductor': return Icons.radar;
-      case 'aceptado': return Icons.check_circle_outline;
-      case 'en_curso': return Icons.local_shipping;
-      case 'completado': return Icons.done_all;
-      case 'finalizado': return Icons.star;
-      case 'cancelado': return Icons.cancel;
-      default: return Icons.circle;
-    }
+  String _initials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
   Widget _buildDrawer() {
@@ -288,11 +292,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
               ),
             ),
             _buildDrawerItem(Icons.person_outline, 'Perfil', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen()))),
-            _buildDrawerItem(Icons.route_outlined, 'Historial de viajes realizados', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
-            _buildDrawerItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+            _buildDrawerItem(Icons.route_outlined, 'Mis viajes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
+            _buildDrawerItem(Icons.payments_outlined, 'Pagos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PagosScreen()))),
+            _buildDrawerItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen()))),
             const Spacer(),
             const Divider(),
-            _buildDrawerItem(Icons.logout, 'Cerrar sesión', _logout, isDestructive: true),
+            _buildDrawerItem(Icons.logout, 'Cerrar sesi\u00f3n', _logout, isDestructive: true),
             const SizedBox(height: 8),
           ],
         ),
@@ -317,4 +322,3 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
   }
 }
-

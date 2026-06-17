@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/notification_service.dart';
+import '../../services/driver_location_service.dart';
 import '../user/auth_screen.dart';
 import 'trip_in_progress_screen.dart';
 import 'offers_screen.dart';
@@ -38,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _profile;
   Map<String, dynamic>? _commission;
 
-  Timer? _refreshTimer;
+  StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
@@ -53,17 +54,29 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchData();
+
     _socketSub = NotificationService.instance.onNotification.listen((event) {
-      if (event['__event'] == 'trip:nearby') {
-        _fetchNearbyTrips();
+      final tipo = event['__event'] as String?;
+      if (tipo == 'trip:nearby') {
         _showNewTripBanner(event);
+        _fetchNearbyTrips();
+      } else if (tipo == 'trip:accepted') {
+        final tripId = event['tripId'] ?? event['id'];
+        if (tripId != null) {
+          DriverLocationService.instance.removeTrip(tripId);
+        }
+        _fetchNearbyTrips();
       }
+    });
+
+    _tripSub = DriverLocationService.instance.onTripsUpdated.listen((trips) {
+      if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
     });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _tripSub?.cancel();
     _socketSub?.cancel();
     super.dispose();
   }
@@ -71,10 +84,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchData() async {
     await _fetchProfileFirst();
     await Future.wait([
-      _fetchNearbyTrips(),
       _fetchStats(),
     ]);
-    _startPeriodicRefresh();
+    if (_online && _verificacionEstado == 'aprobado') {
+      await DriverLocationService.instance.start();
+    }
+    await _fetchNearbyTrips();
   }
 
   Future<void> _fetchProfileFirst() async {
@@ -89,12 +104,18 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _loadingTrips = false);
       return;
     }
-    try {
-      final trips = await ApiClient.instance.getNearbyTrips(6.2476, -75.5658, radio: 50);
-      if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loadingTrips = false);
+    if (DriverLocationService.instance.lastLat != null && DriverLocationService.instance.lastLng != null) {
+      try {
+        final trips = await ApiClient.instance.getNearbyTrips(
+          DriverLocationService.instance.lastLat!,
+          DriverLocationService.instance.lastLng!,
+          radio: 20,
+        );
+        if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
+        return;
+      } catch (_) {}
     }
+    if (mounted) setState(() => _loadingTrips = false);
   }
 
   Future<void> _fetchStats() async {
@@ -116,8 +137,15 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _statusLoading = true);
     try {
       await ApiClient.instance.setDriverStatus(!_online);
-      if (mounted) setState(() => _online = !_online);
-      _restartPeriodicRefresh();
+      if (mounted) {
+        setState(() => _online = !_online);
+        if (_online) {
+          await DriverLocationService.instance.start();
+          _fetchNearbyTrips();
+        } else {
+          DriverLocationService.instance.pause();
+        }
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
     } finally {
@@ -125,22 +153,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _startPeriodicRefresh() {
-    _refreshTimer?.cancel();
-    if (!_online || _verificacionEstado != 'aprobado') return;
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _fetchNearbyTrips());
-  }
-
-  void _restartPeriodicRefresh() {
-    _refreshTimer?.cancel();
-    _startPeriodicRefresh();
-  }
-
   void _showNewTripBanner(Map<String, dynamic> event) {
     if (!mounted) return;
     final origen = event['origen'] as String? ?? 'tu zona';
     final precio = event['precio'] ?? event['precioEstimado'];
-    final msg = 'Nuevo viaje disponible cerca de $origen${precio != null ? ' — \$${precio}' : ''}';
+    final msg = 'Nuevo viaje disponible cerca de $origen${precio != null ? ' \u2014 \$${precio}' : ''}';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(children: [
@@ -154,11 +171,13 @@ class _HomeScreenState extends State<HomeScreen> {
         action: SnackBarAction(
           label: 'Ver',
           textColor: Colors.yellow,
-          onPressed: () {},
+          onPressed: () => _scrollToTrips(),
         ),
       ),
     );
   }
+
+  void _scrollToTrips() {}
 
   String? get _verificacionEstado {
     final conductor = _profile?['conductor'] as Map<String, dynamic>?;
@@ -178,9 +197,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _statusLabel() {
     final estado = _verificacionEstado;
-    if (estado == 'rechazado' || estado == 'pendiente') return 'Pendiente de verificación';
-    if (!_online) return 'Fuera de línea';
-    return 'En línea';
+    if (estado == 'rechazado' || estado == 'pendiente') return 'Pendiente de verificaci\u00f3n';
+    if (!_online) return 'Fuera de l\u00ednea';
+    return 'En l\u00ednea';
   }
 
   Color _statusColor() {
@@ -246,6 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout() async {
+    DriverLocationService.instance.stop();
     await ApiClient.instance.logout();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
@@ -320,13 +340,13 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: EdgeInsets.zero,
               children: [
                 _buildDrawerItem(Icons.person_outline, 'Perfil', 9),
-                _buildDrawerItem(Icons.description_outlined, 'Documentación', 10),
+                _buildDrawerItem(Icons.description_outlined, 'Documentaci\u00f3n', 10),
                 _buildDrawerItem(Icons.route_outlined, 'Historial de viajes', 11),
                 _buildDrawerItem(Icons.notifications_none, 'Notificaciones', 6),
                 _buildDrawerItem(Icons.settings_outlined, 'Ajustes', 13),
                 _buildDrawerItem(Icons.headset_mic_outlined, 'Soporte', 12),
                 const Divider(),
-                _buildDrawerItem(Icons.logout, 'Cerrar sesión', -1, isDestructive: true),
+                _buildDrawerItem(Icons.logout, 'Cerrar sesi\u00f3n', -1, isDestructive: true),
               ],
             ),
           ),
@@ -416,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Buenos días, ${ApiClient.instance.nombre ?? ''}',
+                  'Buenos d\u00edas, ${ApiClient.instance.nombre ?? ''}',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark),
                 ),
                 GestureDetector(
@@ -483,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: BoxDecoration(color: _online ? _accentGreen : Colors.grey, shape: BoxShape.circle),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(_online ? 'En línea' : 'Fuera de línea', style: const TextStyle(fontWeight: FontWeight.w600))),
+          Expanded(child: Text(_online ? 'En l\u00ednea' : 'Fuera de l\u00ednea', style: const TextStyle(fontWeight: FontWeight.w600))),
           _statusLoading
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
               : Switch(
@@ -513,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Row(
           children: [
-            Expanded(child: _buildStatCard(Icons.monetization_on_outlined, '\$${_fmtAmount(gananciaHoy)}', 'Ganancias del día', const Color(0xFFE8F5E9), const Color(0xFF2E7D32))),
+            Expanded(child: _buildStatCard(Icons.monetization_on_outlined, '\$${_fmtAmount(gananciaHoy)}', 'Ganancias del d\u00eda', const Color(0xFFE8F5E9), const Color(0xFF2E7D32))),
             const SizedBox(width: 8),
             Expanded(child: _buildStatCard(Icons.route_outlined, '$viajesHoy', 'Viajes hoy', const Color(0xFFE3F2FD), const Color(0xFF1565C0))),
           ],
@@ -523,7 +543,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Expanded(child: _buildStatCard(Icons.assignment_turned_in_outlined, '$viajesTotal', 'Total completados', const Color(0xFFFFF8E1), const Color(0xFFFF8F00))),
             const SizedBox(width: 8),
-            Expanded(child: _buildStatCard(Icons.star_rounded, calificacion.toStringAsFixed(1), 'Calificación', const Color(0xFFF3E5F5), const Color(0xFF6A1B9A))),
+            Expanded(child: _buildStatCard(Icons.star_rounded, calificacion.toStringAsFixed(1), 'Calificaci\u00f3n', const Color(0xFFF3E5F5), const Color(0xFF6A1B9A))),
           ],
         ),
         const SizedBox(height: 8),
@@ -600,7 +620,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 10),
                 const Text('Completa tu registro como conductor', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1))),
                 const SizedBox(height: 4),
-                Text('Toca para ir a Documentación', style: TextStyle(fontSize: 13, color: Colors.blue.shade700)),
+                Text('Toca para ir a Documentaci\u00f3n', style: TextStyle(fontSize: 13, color: Colors.blue.shade700)),
               ],
             ),
           )
@@ -615,9 +635,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Icon(Icons.verified_outlined, size: 40, color: Colors.orange.shade400),
                   const SizedBox(height: 10),
-                  const Text('Debes completar la verificación', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFE65100))),
+                  const Text('Debes completar la verificaci\u00f3n', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFE65100))),
                   const SizedBox(height: 4),
-                  Text('Toca para ir a Documentación', style: TextStyle(fontSize: 13, color: Colors.orange.shade700)),
+                  Text('Toca para ir a Documentaci\u00f3n', style: TextStyle(fontSize: 13, color: Colors.orange.shade700)),
                 ],
               ),
             ),
@@ -733,7 +753,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t))),
+                    onPressed: () {
+                      DriverLocationService.instance.removeTrip(t['id']);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t)));
+                    },
                     icon: const Icon(Icons.send_rounded, size: 18),
                     label: const Text('Enviar oferta'),
                     style: ElevatedButton.styleFrom(

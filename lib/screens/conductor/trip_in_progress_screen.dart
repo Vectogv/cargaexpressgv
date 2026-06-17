@@ -452,11 +452,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     if (confirmado != true || motivoSeleccionado == null) return;
 
     try {
-      await ApiClient.instance.disputeTrip(
-        t['id'],
-        motivo: motivoSeleccionado!,
-        descripcion: motivoCtrl.text.trim().isEmpty ? null : motivoCtrl.text.trim(),
-      );
       await ApiClient.instance.cancelTrip(t['id'], motivo: motivoSeleccionado);
       if (mounted) {
         _snack('Viaje cancelado. Se ha notificado al cliente.');
@@ -529,11 +524,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     if (confirmado != true || motivoSeleccionado == null) return;
 
     try {
-      await ApiClient.instance.disputeTrip(
-        t['id'],
-        motivo: motivoSeleccionado!,
-        descripcion: motivoCtrl.text.trim().isEmpty ? null : motivoCtrl.text.trim(),
-      );
       await ApiClient.instance.requestCancellation(t['id'], motivo: motivoSeleccionado);
       if (mounted) {
         _snack('Solicitud de cancelación enviada. Se notificará al cliente y a soporte.');
