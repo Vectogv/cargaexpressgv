@@ -64,9 +64,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     final cliente = t['cliente'] as Map<String, dynamic>?;
     final carga = t['carga'] as String? ?? 'No especificada';
     final descripcion = t['descripcion'] as String? ?? '';
-    final precioEstimado = _toNum(t['precioEstimado']);
-    final distancia = _toNum(t['distancia']);
-    final tiempoEstimado = _toNum(t['tiempoEstimado']);
 
     return Scaffold(
       backgroundColor: _bgLight,
@@ -172,10 +169,10 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         children: [
           const Text('Informaci\u00f3n del viaje', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
           const SizedBox(height: 12),
-          _infoRow('Presupuesto del cliente', '\$${(precioEstimado?.toStringAsFixed(0) ?? '0')}'),
-          _infoRow('Distancia', '${(distancia?.toStringAsFixed(1) ?? '?')} km'),
-          if (tiempoEstimado != null)
-            _infoRow('Tiempo estimado', '${tiempoEstimado} min'),
+          _infoRow('Presupuesto del cliente', '\$${(_toNum(t['precioEstimado'])?.toStringAsFixed(0) ?? '0')}'),
+          _infoRow('Distancia', '${(_toNum(t['distancia'])?.toStringAsFixed(1) ?? '?')} km'),
+          if (_toNum(t['tiempoEstimado']) != null)
+            _infoRow('Tiempo estimado', '${_toNum(t['tiempoEstimado'])} min'),
           _infoRow('Publicado', _formatDate(t['createdAt'] as String?)),
         ],
       ),
@@ -281,7 +278,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           Row(children: [
             Icon(Icons.info_outline, size: 14, color: _textGrey),
             const SizedBox(width: 6),
-            Text('Presupuesto del cliente: \$${(precioEstimado?.toStringAsFixed(0) ?? '0')}', style: TextStyle(fontSize: 12, color: _textGrey)),
+            Text('Presupuesto del cliente: \$${(_toNum(t['precioEstimado'])?.toStringAsFixed(0) ?? '0')}', style: TextStyle(fontSize: 12, color: _textGrey)),
           ]),
           const SizedBox(height: 16),
           SizedBox(

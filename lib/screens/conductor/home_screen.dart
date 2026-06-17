@@ -660,11 +660,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTripCard(Map<String, dynamic> t) {
     final origen = t['origen'] as Map<String, dynamic>?;
     final destino = t['destino'] as Map<String, dynamic>?;
-    final precio = _toNum(t['precioEstimado']);
-    final distancia = _toNum(t['distancia']);
+    final precio = t['precioEstimado'] is num ? t['precioEstimado'] as num : num.tryParse('${t['precioEstimado']}');
+    final distancia = t['distancia'] is num ? t['distancia'] as num : num.tryParse('${t['distancia']}');
     final carga = t['carga'] as String? ?? 'No especificada';
     final descripcion = t['descripcion'] as String? ?? '';
-    final tiempo = _toNum(t['tiempoEstimado']);
+    final tiempo = t['tiempoEstimado'] is num ? t['tiempoEstimado'] as num : num.tryParse('${t['tiempoEstimado']}');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -748,7 +748,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: double.infinity, height: 48,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  DriverLocationService.instance.removeTrip(t['id']);
+                  DriverLocationService.instance.removeTrip(t['_id'] ?? t['id']);
                   Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t)));
                 },
                 icon: const Icon(Icons.send_rounded, size: 20),
@@ -789,11 +789,5 @@ class _HomeScreenState extends State<HomeScreen> {
     final parts = name.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name[0].toUpperCase();
-  }
-
-  num? _toNum(dynamic v) {
-    if (v == null) return null;
-    if (v is num) return v;
-    return num.tryParse(v.toString());
   }
 }
