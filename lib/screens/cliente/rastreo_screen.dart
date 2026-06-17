@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/proximity_service.dart';
+import '../../services/socket_service_client.dart';
+import 'chat_screen.dart';
 
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
@@ -18,9 +21,15 @@ class _RastreoScreenState extends State<RastreoScreen> {
   List<Map<String, dynamic>> _offers = [];
   bool _loading = true;
   bool _mapError = false;
-  Timer? _pollTimer;
   Timer? _refreshTimer;
   final ProximityService _proximityService = ProximityService();
+  StreamSubscription<Map<String, dynamic>>? _offerSub;
+  StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
+  StreamSubscription<Map<String, dynamic>>? _tripCompletedSub;
+  StreamSubscription<Map<String, dynamic>>? _tripCancelledSub;
+  StreamSubscription<Map<String, dynamic>>? _driverLocSub;
+  double? _driverLat;
+  double? _driverLng;
 
   @override
   void initState() {
@@ -30,7 +39,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _offerSub?.cancel();
+    _tripStatusSub?.cancel();
+    _tripCompletedSub?.cancel();
+    _tripCancelledSub?.cancel();
+    _driverLocSub?.cancel();
     _refreshTimer?.cancel();
     _proximityService.stopMonitoring();
     super.dispose();
@@ -41,46 +54,77 @@ class _RastreoScreenState extends State<RastreoScreen> {
       final trip = await ApiClient.instance.getActiveTrip();
       if (mounted) setState(() { _trip = trip; _loading = false; _mapError = false; });
       if (trip != null) {
-        if (trip['estado'] == 'buscando_conductor') {
-          _pollOffers(trip['id']);
-        }
+        _setupSocketListeners(trip['id']);
         _proximityService.startMonitoring(trip, _showProximityAlert);
-        _startRefreshTimer();
+        if (trip['estado'] == 'buscando_conductor') {
+          _fetchOffers(trip['id']);
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _startRefreshTimer() {
-    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refreshTrip());
-  }
-
-  Future<void> _refreshTrip() async {
-    if (_trip == null) return;
-    try {
-      final trip = await ApiClient.instance.getActiveTrip();
-      if (mounted && trip != null) {
-        final oldEstado = _trip!['estado'] as String?;
-        setState(() { _trip = trip; _mapError = false; });
-        final newEstado = trip['estado'] as String?;
-        if (newEstado != oldEstado && (newEstado == 'cancelado' || newEstado == 'completado' || newEstado == 'finalizado')) {
-          _proximityService.stopMonitoring();
-          _snack('Viaje ${newEstado == 'cancelado' ? 'cancelado' : 'finalizado'}');
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted) Navigator.pop(context);
-          });
-        }
+  void _setupSocketListeners(dynamic tripId) {
+    _offerSub = SocketServiceClient.instance.onNewOffer.listen((data) {
+      if (data['tripId']?.toString() == tripId.toString()) {
+        _fetchOffers(tripId);
       }
-    } catch (_) {}
+    });
+
+    _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
+      if (data['tripId']?.toString() == tripId.toString()) {
+        _handleTripUpdate(data);
+      }
+    });
+
+    _tripCompletedSub = SocketServiceClient.instance.onTripCompleted.listen((data) {
+      if (data['tripId']?.toString() == tripId.toString()) {
+        _proximityService.stopMonitoring();
+        _snack('Viaje completado');
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) Navigator.pop(context);
+        });
+      }
+    });
+
+    _tripCancelledSub = SocketServiceClient.instance.onTripCancelled.listen((data) {
+      if (data['tripId']?.toString() == tripId.toString()) {
+        _proximityService.stopMonitoring();
+        _snack('Viaje cancelado');
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) Navigator.pop(context);
+        });
+      }
+    });
+
+    _driverLocSub = SocketServiceClient.instance.onDriverLocation.listen((data) {
+      final lat = double.tryParse(data['latitude']?.toString() ?? '');
+      final lng = double.tryParse(data['longitude']?.toString() ?? '');
+      if (lat != null && lng != null && mounted) {
+        setState(() {
+          _driverLat = lat;
+          _driverLng = lng;
+        });
+      }
+    });
   }
 
-  Future<void> _pollOffers(dynamic tripId) async {
+  void _handleTripUpdate(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final newEstado = data['estado'] as String?;
+    if (newEstado != null && _trip != null) {
+      setState(() {
+        _trip = {..._trip!, 'estado': newEstado, ...data};
+      });
+    }
+  }
+
+  Future<void> _fetchOffers(dynamic tripId) async {
     try {
       final offers = await ApiClient.instance.getOffers(tripId);
       if (mounted) setState(() => _offers = offers);
     } catch (_) {}
-    _pollTimer = Timer(const Duration(seconds: 5), () => _pollOffers(tripId));
   }
 
   Future<void> _aceptarOferta(dynamic offerId) async {
@@ -194,6 +238,22 @@ class _RastreoScreenState extends State<RastreoScreen> {
       return _buildMapError();
     }
 
+    final markers = <Marker>[
+      Marker(point: LatLng(oLat, oLng), width: 36, height: 36, child: const Icon(Icons.trip_origin, color: Colors.green, size: 36)),
+      Marker(point: LatLng(dLat, dLng), width: 36, height: 36, child: const Icon(Icons.location_on, color: Colors.red, size: 36)),
+    ];
+
+    if (_driverLat != null && _driverLng != null) {
+      markers.add(Marker(
+        point: LatLng(_driverLat!, _driverLng!),
+        width: 40, height: 40,
+        child: Container(
+          decoration: BoxDecoration(color: const Color(0xFF1565C0), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
+          child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
+        ),
+      ));
+    }
+
     return Container(
       height: 200,
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE0E0E0))),
@@ -204,12 +264,14 @@ class _RastreoScreenState extends State<RastreoScreen> {
             options: MapOptions(initialCenter: center, initialZoom: 12),
             children: [
               TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app', errorImage: const AssetImage('')),
-              MarkerLayer(markers: [
-                Marker(point: LatLng(oLat, oLng), width: 36, height: 36, child: const Icon(Icons.trip_origin, color: Colors.green, size: 36)),
-                Marker(point: LatLng(dLat, dLng), width: 36, height: 36, child: const Icon(Icons.location_on, color: Colors.red, size: 36)),
-              ]),
+              MarkerLayer(markers: markers),
             ],
           ),
+          if (_driverLat != null && _driverLng != null && _trip?['conductor'] != null)
+            Positioned(
+              left: 8, top: 8,
+              child: _buildDriverDistanceCard(oLat, oLng),
+            ),
           Positioned(
             right: 8, top: 8,
             child: Material(
@@ -230,6 +292,39 @@ class _RastreoScreenState extends State<RastreoScreen> {
       ),
     );
   }
+
+  Widget _buildDriverDistanceCard(double oLat, double oLng) {
+    final distKm = _haversine(_driverLat!, _driverLng!, oLat, oLng);
+    final velocidadKmph = 30;
+    final min = distKm > 0 ? (distKm / velocidadKmph * 60).round() : 0;
+    return Material(
+      elevation: 3,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.local_shipping, size: 14, color: const Color(0xFF1565C0)),
+          const SizedBox(width: 6),
+          Text('${distKm.toStringAsFixed(1)} km', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+          const Text(' \u00b7 ', style: TextStyle(fontSize: 11, color: Colors.black26)),
+          Text('$min min', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF4CAF50))),
+        ]),
+      ),
+    );
+  }
+
+  double _haversine(double lat1, double lon1, double lat2, double lon2) {
+    const R = 6371.0;
+    final dLat = _toRad(lat2 - lat1);
+    final dLon = _toRad(lon2 - lon1);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRad(lat1)) * cos(_toRad(lat2)) * sin(dLon / 2) * sin(dLon / 2);
+    final c = 2 * asin(sqrt(a));
+    return R * c;
+  }
+
+  double _toRad(double deg) => deg * pi / 180.0;
 
   Widget _buildMapError() {
     return Container(
@@ -349,6 +444,23 @@ class _RastreoScreenState extends State<RastreoScreen> {
                 onPressed: _cancelar,
                 icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
                 label: const Text('Cancelar viaje', style: TextStyle(color: Colors.red)),
+              ),
+            ),
+          if (estado == 'en_curso')
+            const SizedBox(height: 8),
+          if (estado == 'en_curso')
+            SizedBox(
+              width: double.infinity, height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(trip: _trip!))),
+                icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                label: const Text('Chat con el conductor', style: TextStyle(fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1565C0),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
               ),
             ),
         ],
@@ -525,52 +637,94 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   Widget _buildOfferCard(Map<String, dynamic> offer) {
     final conductor = offer['conductor'] as Map<String, dynamic>?;
+    final monto = offer['monto'] as num? ?? 0;
+    final presupuesto = _trip?['precioEstimado'] as num? ?? 0;
+    final diff = presupuesto > 0 ? ((monto - presupuesto) / presupuesto * 100).round() : 0;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: const Color(0xFF1A3C6E),
-            child: Text(
-              _initials(conductor?['nombre'] as String? ?? ''),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(conductor?['nombre'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFF1A3C6E),
+                child: Text(
+                  _initials(conductor?['nombre'] as String? ?? ''),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(conductor?['nombre'] as String? ?? 'Conductor', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                 Text('${conductor?['tipoVehiculo'] ?? ''} \u00b7 ${offer['placa'] ?? conductor?['placa'] ?? ''}', style: const TextStyle(fontSize: 12, color: Colors.black45)),
-              ],
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: diff <= 10 ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  diff <= 0 ? 'Bajo presupuesto' : '+$diff%',
+                  style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w700,
+                    color: diff <= 10 ? const Color(0xFF2E7D32) : const Color(0xFFE65100),
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            Center(
+              child: Column(children: [
+                Text('MONTO DE LA OFERTA', style: TextStyle(fontSize: 10, color: Colors.grey.shade500, letterSpacing: 1.5)),
+                const SizedBox(height: 4),
+                Text('\$${monto.toStringAsFixed(0)}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Color(0xFF1A3C6E))),
+                if (presupuesto > 0)
+                  Text('Presupuesto: \$${presupuesto.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              ]),
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('\$${(offer['monto'] as num?)?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
-              const SizedBox(height: 4),
-              SizedBox(
-                height: 28,
-                child: ElevatedButton(
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(
+                child: SizedBox(height: 48, child: OutlinedButton(
+                  onPressed: () {
+                    setState(() => _offers.removeWhere((o) => o['id'] == offer['id']));
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: BorderSide(color: Colors.red.shade200),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Rechazar', style: TextStyle(fontWeight: FontWeight.w600)),
+                )),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: SizedBox(height: 48, child: ElevatedButton.icon(
                   onPressed: () => _aceptarOferta(offer['id']),
+                  icon: const Icon(Icons.check_circle, size: 20),
+                  label: const Text('Aceptar oferta', style: TextStyle(fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text('Aceptar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                ),
+                )),
               ),
-            ],
-          ),
-        ],
+            ]),
+          ],
+        ),
       ),
     );
   }

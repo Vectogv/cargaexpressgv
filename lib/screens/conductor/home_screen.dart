@@ -155,9 +155,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showNewTripBanner(Map<String, dynamic> event) {
     if (!mounted) return;
-    final origen = event['origen'] as String? ?? 'tu zona';
+    final origen = event['origen'] as Map<String, dynamic>?;
+    final dir = origen?['direccion'] as String? ?? 'tu zona';
     final precio = event['precio'] ?? event['precioEstimado'];
-    final msg = 'Nuevo viaje disponible cerca de $origen${precio != null ? ' \u2014 \$${precio}' : ''}';
+    final msg = 'Nuevo viaje disponible cerca de $dir${precio != null ? ' \u2014 \$${precio}' : ''}';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(children: [
@@ -171,13 +172,13 @@ class _HomeScreenState extends State<HomeScreen> {
         action: SnackBarAction(
           label: 'Ver',
           textColor: Colors.yellow,
-          onPressed: () => _scrollToTrips(),
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: event)));
+          },
         ),
       ),
     );
   }
-
-  void _scrollToTrips() {}
 
   String? get _verificacionEstado {
     final conductor = _profile?['conductor'] as Map<String, dynamic>?;
@@ -662,8 +663,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final precio = t['precioEstimado'] as num?;
     final distancia = t['distancia'] as num?;
     final carga = t['carga'] as String? ?? 'No especificada';
-    final cliente = t['cliente'] as Map<String, dynamic>?;
-    final descripcion = t['descripcion'] as String? ?? cliente?['nombre'] as String? ?? '';
+    final descripcion = t['descripcion'] as String? ?? '';
     final tiempo = t['tiempoEstimado'] as num?;
 
     return Container(
@@ -677,98 +677,89 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: _primaryBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                child: Text('${_fmtDate(t['createdAt'] as String?)}', style: TextStyle(fontSize: 11, color: _primaryBlue, fontWeight: FontWeight.w600)),
-              ),
+              Icon(Icons.access_time, size: 14, color: _textGrey),
+              const SizedBox(width: 4),
+              Text('${_fmtDate(t['createdAt'] as String?)}', style: TextStyle(fontSize: 12, color: _textGrey)),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: _accentGreen.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-                child: Text('${distancia?.toStringAsFixed(1) ?? '?'} km', style: TextStyle(color: _accentGreen, fontSize: 11, fontWeight: FontWeight.w700)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: _accentGreen.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.near_me, size: 12, color: _accentGreen),
+                  const SizedBox(width: 4),
+                  Text('${distancia?.toStringAsFixed(1) ?? '?'} km', style: TextStyle(color: _accentGreen, fontSize: 12, fontWeight: FontWeight.w700)),
+                ]),
               ),
             ]),
             const SizedBox(height: 14),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Column(children: [
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: _accentGreen, shape: BoxShape.circle, border: Border.all(color: _white, width: 2), boxShadow: [BoxShadow(color: _accentGreen.withOpacity(0.4), blurRadius: 4)])),
-                Container(width: 2, height: 30, color: _textGrey.withOpacity(0.3), margin: const EdgeInsets.symmetric(vertical: 3)),
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: _white, width: 2), boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 4)])),
+                Container(width: 10, height: 10, decoration: BoxDecoration(color: const Color(0xFF1E88E5), shape: BoxShape.circle)),
+                Container(width: 2, height: 28, color: Colors.grey.shade300),
+                Container(width: 10, height: 10, decoration: BoxDecoration(border: Border.all(color: const Color(0xFF4CAF50), width: 2), shape: BoxShape.circle)),
               ]),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(origen?['direccion'] as String? ?? 'Origen', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
+                Text('Salida', style: TextStyle(fontSize: 11, color: _textGrey)),
+                Text(origen?['direccion'] as String? ?? 'Origen', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
                 const SizedBox(height: 14),
-                Text(destino?['direccion'] as String? ?? 'Destino', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
+                Text('Llegada', style: TextStyle(fontSize: 11, color: _textGrey)),
+                Text(destino?['direccion'] as String? ?? 'Destino', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
               ])),
             ]),
             const SizedBox(height: 14),
             const Divider(height: 1),
             const SizedBox(height: 14),
-            Row(children: [
-              Icon(Icons.inventory_2_outlined, size: 16, color: _textGrey),
-              const SizedBox(width: 6),
-              Expanded(child: Text('Tipo: $carga', style: TextStyle(fontSize: 12, color: _textGrey))),
-            ]),
-            if (descripcion.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Row(children: [
-                Icon(Icons.description_outlined, size: 16, color: _textGrey),
-                const SizedBox(width: 6),
-                Expanded(child: Text(descripcion, style: TextStyle(fontSize: 12, color: _textGrey), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(10)),
+              child: Row(children: [
+                Icon(Icons.inventory_2_outlined, size: 18, color: _primaryDark),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(carga, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
+                  if (descripcion.isNotEmpty)
+                    Text(descripcion, style: TextStyle(fontSize: 12, color: _textGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
+                ])),
               ]),
-            ],
-            const SizedBox(height: 8),
+            ),
+            const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('\$${precio?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _textDark)),
-                  const Text('Precio ofrecido', style: TextStyle(fontSize: 10, color: _textGrey)),
+                  Text('Presupuesto', style: TextStyle(fontSize: 11, color: _textGrey)),
+                  Text('\$${precio?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _primaryDark)),
                 ]),
                 if (tiempo != null)
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('$tiempo min', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textGrey)),
-                    const Text('Tiempo estimado', style: TextStyle(fontSize: 10, color: _textGrey)),
+                    Text('Tiempo estimado', style: TextStyle(fontSize: 11, color: _textGrey)),
+                    Row(children: [
+                      Icon(Icons.schedule, size: 16, color: _textGrey),
+                      const SizedBox(width: 4),
+                      Text('$tiempo min', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark)),
+                    ]),
                   ]),
               ],
             ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.map_outlined, size: 18),
-                    label: const Text('Ver ruta'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _primaryDark,
-                      side: BorderSide(color: _primaryDark.withOpacity(0.3)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity, height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  DriverLocationService.instance.removeTrip(t['id']);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t)));
+                },
+                icon: const Icon(Icons.send_rounded, size: 20),
+                label: const Text('Enviar oferta', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryDark,
+                  foregroundColor: _white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      DriverLocationService.instance.removeTrip(t['id']);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t)));
-                    },
-                    icon: const Icon(Icons.send_rounded, size: 18),
-                    label: const Text('Enviar oferta'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _primaryDark,
-                      foregroundColor: _white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),

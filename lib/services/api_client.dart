@@ -3,6 +3,13 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_response.dart';
+import 'api/auth_service.dart';
+import 'api/trip_service.dart';
+import 'api/offer_service.dart';
+import 'api/chat_service.dart';
+import 'api/driver_service.dart';
+import 'api/profile_service.dart';
+import 'api/payment_service.dart';
 
 class ApiClient {
   static final ApiClient instance = ApiClient._();
@@ -11,6 +18,7 @@ class ApiClient {
   static const String baseUrl = 'https://zippy-trust-production.up.railway.app';
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'auth_refresh_token';
+  static const String _userIdKey = 'auth_user_id';
   static const String _nombreKey = 'auth_nombre';
   static const String _apellidoKey = 'auth_apellido';
   static const String _emailKey = 'auth_email';
@@ -18,12 +26,14 @@ class ApiClient {
 
   String? _token;
   String? _refreshToken;
+  String? _userId;
   String? _nombre;
   String? _apellido;
   String? _email;
   String? _rol;
 
   String? get token => _token;
+  String? get userId => _userId;
   String? get nombre => _nombre;
   String? get apellido => _apellido;
   String? get email => _email;
@@ -35,6 +45,7 @@ class ApiClient {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString(_tokenKey);
     _refreshToken = prefs.getString(_refreshTokenKey);
+    _userId = prefs.getString(_userIdKey);
     _nombre = prefs.getString(_nombreKey);
     _apellido = prefs.getString(_apellidoKey);
     _email = prefs.getString(_emailKey);
@@ -43,49 +54,21 @@ class ApiClient {
 
   Map<String, String> _headers({bool auth = false}) {
     final headers = <String, String>{'Content-Type': 'application/json'};
-    if (auth && _token != null) {
-      headers['Authorization'] = 'Bearer $_token';
-    }
+    if (auth && _token != null) headers['Authorization'] = 'Bearer $_token';
     return headers;
   }
 
+  // --- Auth ---
+
   Future<AuthResponse> login(String email, String password) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/auth/login'),
-      headers: _headers(),
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode != 200) {
-      throw Exception(_extractError(data));
-    }
-    final auth = AuthResponse.fromJson(data);
+    final auth = await AuthService.login(email, password);
     await _saveTokens(auth.token, auth.refreshToken);
     await saveProfile(auth);
     return auth;
   }
 
-  String _extractError(Map<String, dynamic> data) {
-    if (data['message'] != null) return data['message'] as String;
-    final errors = data['errors'];
-    if (errors is List && errors.isNotEmpty) {
-      return (errors[0] as Map<String, dynamic>)['message'] as String? ?? 'Error desconocido';
-    }
-    if (data['error'] != null) return data['error'] as String;
-    return 'Error desconocido';
-  }
-
   Future<AuthResponse> register(Map<String, dynamic> body) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/auth/register'),
-      headers: _headers(),
-      body: jsonEncode(body),
-    );
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode != 200 && res.statusCode != 201) {
-      throw Exception(_extractError(data));
-    }
-    final auth = AuthResponse.fromJson(data);
+    final auth = await AuthService.register(body);
     await _saveTokens(auth.token, auth.refreshToken);
     await saveProfile(auth);
     return auth;
@@ -93,27 +76,19 @@ class ApiClient {
 
   Future<AuthResponse> refreshToken() async {
     if (_refreshToken == null) throw Exception('No hay refresh token');
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/auth/refresh-token'),
-      headers: _headers(),
-      body: jsonEncode({'refreshToken': _refreshToken}),
-    );
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode != 200) {
+    try {
+      final auth = await AuthService.refreshToken(_refreshToken!);
+      await _saveTokens(auth.token, auth.refreshToken);
+      return auth;
+    } catch (_) {
       await clearTokens();
-      throw Exception('Sesión expirada');
+      rethrow;
     }
-    final auth = AuthResponse.fromJson(data);
-    await _saveTokens(auth.token, auth.refreshToken);
-    return auth;
   }
 
   Future<void> logout() async {
     try {
-      await http.post(
-        Uri.parse('$baseUrl/api/auth/logout'),
-        headers: _headers(auth: true),
-      );
+      await AuthService.logout();
     } catch (_) {}
     await clearTokens();
   }
@@ -127,34 +102,43 @@ class ApiClient {
   }
 
   Future<void> saveProfile(AuthResponse auth) async {
+    _userId = auth.id;
     _nombre = auth.nombre;
     _apellido = auth.apellido;
     _email = auth.email;
     _rol = auth.rol;
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userIdKey, auth.id);
     await prefs.setString(_nombreKey, auth.nombre);
     await prefs.setString(_apellidoKey, auth.apellido);
     await prefs.setString(_emailKey, auth.email);
     await prefs.setString(_rolKey, auth.rol);
   }
 
-  Future<Map<String, dynamic>> getProfile() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/users/profile'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception('Error al obtener perfil');
-    return jsonDecode(res.body) as Map<String, dynamic>;
+  Future<void> clearTokens() async {
+    _token = null;
+    _refreshToken = null;
+    _userId = null;
+    _nombre = null;
+    _apellido = null;
+    _email = null;
+    _rol = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_refreshTokenKey);
+    await prefs.remove(_userIdKey);
+    await prefs.remove(_nombreKey);
+    await prefs.remove(_apellidoKey);
+    await prefs.remove(_emailKey);
+    await prefs.remove(_rolKey);
   }
 
+  // --- Profile ---
+
+  Future<Map<String, dynamic>> getProfile() => ProfileService.getProfile();
+
   Future<void> updateProfile(Map<String, dynamic> data) async {
-    final res = await http.put(
-      Uri.parse('$baseUrl/api/users/profile'),
-      headers: _headers(auth: true),
-      body: jsonEncode(data),
-    );
-    if (res.statusCode != 200) throw Exception('Error al actualizar perfil');
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final body = await ProfileService.updateProfile(data);
     if (body['nombre'] != null) _nombre = body['nombre'] as String;
     if (body['apellido'] != null) _apellido = body['apellido'] as String;
     if (body['email'] != null) _email = body['email'] as String;
@@ -164,387 +148,60 @@ class ApiClient {
     if (_email != null) await prefs.setString(_emailKey, _email!);
   }
 
-  Future<String> uploadAvatar(Uint8List bytes, String filename) async {
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$baseUrl/api/users/avatar'),
-    );
-    request.headers.addAll(_headers(auth: true));
-    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
-    final streamed = await request.send();
-    final res = await http.Response.fromStream(streamed);
-    if (res.statusCode != 200) throw Exception('Error al subir avatar');
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
-    return body['avatar'] as String? ?? '';
-  }
+  Future<String> uploadAvatar(Uint8List bytes, String filename) => ProfileService.uploadAvatar(bytes, filename);
 
-  Future<String> uploadDocumentCedula(Uint8List bytes, String filename) async {
-    return _uploadDocument('$baseUrl/api/drivers/verification/cedula', bytes, filename, 'fotoCedula');
-  }
+  // --- Documents ---
 
-  Future<String> uploadDocumentLicencia(Uint8List bytes, String filename) async {
-    return _uploadDocument('$baseUrl/api/drivers/verification/licencia', bytes, filename, 'fotoLicencia');
-  }
+  Future<String> uploadDocumentCedula(Uint8List bytes, String filename) => DriverService.uploadDocumentCedula(bytes, filename);
+  Future<String> uploadDocumentLicencia(Uint8List bytes, String filename) => DriverService.uploadDocumentLicencia(bytes, filename);
+  Future<String> uploadDocumentVehiculo(Uint8List bytes, String filename) => DriverService.uploadDocumentVehiculo(bytes, filename);
+  Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) => DriverService.uploadDocumentDriverPhoto(bytes, filename);
 
-  Future<String> uploadDocumentVehiculo(Uint8List bytes, String filename) async {
-    return _uploadDocument('$baseUrl/api/drivers/verification/vehiculo', bytes, filename, 'fotoVehiculo');
-  }
+  // --- Trips ---
 
-  Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) async {
-    return _uploadDocument('$baseUrl/api/drivers/driver-photo', bytes, filename, 'fotoConductor');
-  }
+  Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) => TripService.requestTrip(data);
+  Future<Map<String, dynamic>?> getActiveTrip() => TripService.getActiveTrip();
+  Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20}) => TripService.getTripHistory(page: page, limit: limit);
+  Future<Map<String, dynamic>> getTripDetail(dynamic id) => TripService.getTripDetail(id);
+  Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) => TripService.getNearbyTrips(lat, lng, radio: radio);
+  Future<void> startTrip(dynamic id) => TripService.startTrip(id);
+  Future<void> completeTrip(dynamic id) => TripService.completeTrip(id);
+  Future<void> finalizeTrip(dynamic id) => TripService.finalizeTrip(id);
+  Future<void> cancelTrip(dynamic id, {String? motivo}) => TripService.cancelTrip(id, motivo: motivo);
+  Future<void> requestCancellation(dynamic id, {String? motivo}) => TripService.requestCancellation(id, motivo: motivo);
+  Future<void> disputeTrip(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeTrip(id, motivo: motivo, descripcion: descripcion);
+  Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) => TripService.rateTrip(id, puntaje, comentario: comentario);
+  Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) => TripService.deliveryPhoto(tripId, bytes, filename);
 
-  Future<String> _uploadDocument(String url, Uint8List bytes, String filename, String field) async {
-    final request = http.MultipartRequest('POST', Uri.parse(url));
-    request.headers.addAll(_headers(auth: true));
-    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
-    final streamed = await request.send();
-    final res = await http.Response.fromStream(streamed);
-    if (res.statusCode != 200) throw Exception('Error al subir documento');
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
-    return body[field] as String? ?? '';
-  }
+  // --- Offers ---
 
-  Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/request'),
-      headers: _headers(auth: true),
-      body: jsonEncode(data),
-    );
-    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
+  Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto) => OfferService.makeOffer(tripId, monto);
+  Future<List<Map<String, dynamic>>> getOffers(dynamic tripId) => OfferService.getOffers(tripId);
+  Future<void> acceptOffer(dynamic tripId, dynamic offerId) => OfferService.acceptOffer(tripId, offerId);
 
-  Future<Map<String, dynamic>?> getActiveTrip() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/trips/active'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode == 404) return null;
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
+  // --- Chat ---
 
-  Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20}) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/trips/history?page=$page&limit=$limit'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
-    return (body['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-  }
+  Future<List<Map<String, dynamic>>> getTripMessages(dynamic tripId) => ChatService.getTripMessages(tripId);
+  Future<void> sendTripMessage(dynamic tripId, String text) => ChatService.sendTripMessage(tripId, text);
 
-  Future<Map<String, dynamic>> getTripDetail(dynamic id) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/trips/$id'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
+  // --- Driver ---
 
-  Future<List<Map<String, dynamic>>> getOffers(dynamic tripId) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/trips/$tripId/offers'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    final body = jsonDecode(res.body) as List;
-    return body.cast<Map<String, dynamic>>();
-  }
+  Future<void> setDriverStatus(bool online) => DriverService.setDriverStatus(online);
+  Future<void> updateLocation(double lat, double lng) => DriverService.updateLocation(lat, lng);
+  Future<Map<String, dynamic>> getEarnings() => DriverService.getEarnings();
+  Future<Map<String, dynamic>> getDriverStats() => DriverService.getDriverStats();
+  Future<Map<String, dynamic>> getTodayStats() => DriverService.getTodayStats();
+  Future<Map<String, dynamic>> getDebt() => DriverService.getDebt();
 
-  Future<void> acceptOffer(dynamic tripId, dynamic offerId) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$tripId/offers/$offerId/accept'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
+  // --- Notifications & Misc ---
 
-  Future<void> cancelTrip(dynamic id, {String? motivo}) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$id/cancel'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'motivo': motivo}),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<void> requestCancellation(dynamic id, {String? motivo}) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$id/request-cancellation'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'motivo': motivo}),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<void> disputeTrip(dynamic id, {required String motivo, String? descripcion}) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$id/dispute'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'motivo': motivo, 'descripcion': descripcion}),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$id/rate'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'puntaje': puntaje, 'comentario': comentario}),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/trips/nearby?lat=$lat&lng=$lng&radio=$radio'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    final body = jsonDecode(res.body) as List;
-    return body.cast<Map<String, dynamic>>();
-  }
-
-  Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$tripId/offers'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'monto': monto}),
-    );
-    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  Future<void> startTrip(dynamic id) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$id/start-trip'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<void> completeTrip(dynamic id) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$id/complete'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<void> finalizeTrip(dynamic id) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$id/finalize'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<void> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) async {
-    final req = http.MultipartRequest(
-      'POST',
-      Uri.parse('$baseUrl/api/trips/$tripId/delivery-photo'),
-    );
-    req.headers.addAll(_headers(auth: true));
-    req.files.add(http.MultipartFile.fromBytes('foto', bytes, filename: filename));
-    final res = await req.send();
-    if (res.statusCode != 200) {
-      final body = await res.stream.bytesToString();
-      throw Exception(_extractError(jsonDecode(body)));
-    }
-  }
-
-  Future<void> clearTokens() async {
-    _token = null;
-    _refreshToken = null;
-    _nombre = null;
-    _apellido = null;
-    _email = null;
-    _rol = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    await prefs.remove(_refreshTokenKey);
-    await prefs.remove(_nombreKey);
-    await prefs.remove(_apellidoKey);
-    await prefs.remove(_emailKey);
-    await prefs.remove(_rolKey);
-  }
-
-  // --- Ganancias ---
-
-  Future<Map<String, dynamic>> getEarnings() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/drivers/earnings'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  // --- Estadísticas del conductor ---
-
-  Future<Map<String, dynamic>> getDriverStats() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/drivers/stats'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> getTodayStats() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/drivers/today-stats'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  // --- Foro ---
-
-  Future<List<Map<String, dynamic>>> getForumPosts() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/foro'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
-  }
-
-  Future<Map<String, dynamic>> createForumPost(Map<String, dynamic> data) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/foro'),
-      headers: _headers(auth: true),
-      body: jsonEncode(data),
-    );
-    if (res.statusCode == 422) throw Exception('Revise los campos requeridos');
-    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  // --- Encuestas ---
-
-  Future<Map<String, dynamic>> getSurveyResults(dynamic id) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/moderator/encuestas/$id/results'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  Future<void> answerSurvey(dynamic id, dynamic opcionId) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/moderator/encuestas/$id/answer'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'opcionId': opcionId}),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  // --- Notificaciones ---
-
-  Future<List<Map<String, dynamic>>> getNotifications() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/notifications'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
-  }
-
-  Future<void> markNotificationRead(dynamic id) async {
-    final res = await http.put(
-      Uri.parse('$baseUrl/api/notifications/$id/read'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  // --- Chat de viaje ---
-
-  Future<List<Map<String, dynamic>>> getTripMessages(dynamic tripId) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/trips/$tripId/chat'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
-  }
-
-  Future<void> sendTripMessage(dynamic tripId, String text) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/api/trips/$tripId/chat'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'text': text}),
-    );
-    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  // --- Estado del conductor ---
-
-  Future<void> setDriverStatus(bool online) async {
-    final res = await http.put(
-      Uri.parse('$baseUrl/api/drivers/status'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'online': online}),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  Future<void> updateLocation(double lat, double lng) async {
-    final res = await http.put(
-      Uri.parse('$baseUrl/api/drivers/location'),
-      headers: _headers(auth: true),
-      body: jsonEncode({'lat': lat, 'lng': lng}),
-    );
-    if (res.statusCode == 429) return;
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-  }
-
-  // --- Ayuda / Soporte ---
-
-  Future<Map<String, dynamic>> getHelp() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/support/help'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> getEmergencyNumbers() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/support/emergency'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  // --- Deuda / Comisión ---
-
-  Future<Map<String, dynamic>> getDebt() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/payment/debt'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  // --- Config ---
-
-  Future<String> fetchMapboxToken() async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/config/mapbox'),
-      headers: _headers(auth: true),
-    );
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return data['mapboxAccessToken'] as String;
-  }
+  Future<List<Map<String, dynamic>>> getNotifications() => ProfileService.getNotifications();
+  Future<void> markNotificationRead(dynamic id) => ProfileService.markNotificationRead(id);
+  Future<List<Map<String, dynamic>>> getForumPosts() => ProfileService.getForumPosts();
+  Future<Map<String, dynamic>> createForumPost(Map<String, dynamic> data) => ProfileService.createForumPost(data);
+  Future<Map<String, dynamic>> getSurveyResults(dynamic id) => ProfileService.getSurveyResults(id);
+  Future<void> answerSurvey(dynamic id, dynamic opcionId) => ProfileService.answerSurvey(id, opcionId);
+  Future<Map<String, dynamic>> getHelp() => ProfileService.getHelp();
+  Future<Map<String, dynamic>> getEmergencyNumbers() => ProfileService.getEmergencyNumbers();
+  Future<String> fetchMapboxToken() => ProfileService.fetchMapboxToken();
 }

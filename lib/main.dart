@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
+import 'package:provider/provider.dart';
 import 'services/api_client.dart';
 import 'services/map_config.dart';
 import 'services/notification_service.dart';
+import 'services/socket_service_client.dart';
+import 'services/dio_client.dart';
+import 'services/cache_service.dart';
+import 'providers/notification_provider.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/admin/dashboard_screen.dart';
 import 'screens/conductor/home_screen.dart' as conductor;
@@ -53,7 +58,15 @@ Future<void> main() async {
     }
   }
   await ApiClient.instance.init();
+  await CacheService.instance.init();
+  DioClient.instance.init();
+  if (ApiClient.instance.token != null) {
+    NotificationProvider.instance.init();
+  }
   unawaited(NotificationService.instance.init());
+  if (ApiClient.instance.rol == 'cliente') {
+    unawaited(SocketServiceClient.instance.init());
+  }
   _loadConfig();
   runApp(const MainApp());
 }
@@ -72,16 +85,21 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'CargaExpress',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
-        useMaterial3: true,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: NotificationProvider.instance),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'CargaExpress',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
+          useMaterial3: true,
+        ),
+        home: ApiClient.instance.token != null
+            ? _homeScreenByRole()
+            : const AuthScreen(),
       ),
-      home: ApiClient.instance.token != null
-          ? _homeScreenByRole()
-          : const AuthScreen(),
     );
   }
 }

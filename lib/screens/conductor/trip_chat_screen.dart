@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/socket_service_client.dart';
 
 class TripChatScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -11,10 +13,15 @@ class TripChatScreen extends StatefulWidget {
 
 class _TripChatScreenState extends State<TripChatScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
   Map<String, dynamic>? _activeTrip;
   bool _canChat = false;
+  bool _isTyping = false;
+  bool _otherTyping = false;
+  Timer? _typingTimer;
+  StreamSubscription<Map<String, dynamic>>? _messageSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _textDark = Color(0xFF1A1A2E);
@@ -33,6 +40,9 @@ class _TripChatScreenState extends State<TripChatScreen> {
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollCtrl.dispose();
+    _typingTimer?.cancel();
+    _messageSub?.cancel();
     super.dispose();
   }
 
@@ -46,6 +56,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
       final estado = _activeTrip?['estado'] as String?;
       _canChat = estado == 'en_curso';
       if (_canChat) {
+        _setupSocket();
         await _fetchMessages();
       } else {
         if (mounted) setState(() => _loading = false);
@@ -55,11 +66,37 @@ class _TripChatScreenState extends State<TripChatScreen> {
     }
   }
 
+  void _setupSocket() {
+    final tripId = _activeTrip?['id']?.toString();
+    if (tripId == null) return;
+
+    _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
+      if (data['tripId']?.toString() == tripId) {
+        final msgText = data['text'] as String?;
+        final senderId = data['senderId']?.toString();
+        final userId = ApiClient.instance.userId;
+        if (msgText != null && senderId != userId) {
+          setState(() {
+            _messages.add({
+              'text': msgText,
+              'isSent': false,
+              'time': _formatTime(data['timestamp']),
+              'id': data['id'],
+            });
+          });
+          _scrollDown();
+          _sendReadReceipt(data['id']);
+        }
+      }
+    });
+  }
+
   Future<void> _fetchMessages() async {
     if (_activeTrip == null) return;
     try {
       final msgs = await ApiClient.instance.getTripMessages(_activeTrip!['id']);
       if (mounted) setState(() { _messages = msgs; _loading = false; });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollDown());
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -69,16 +106,77 @@ class _TripChatScreenState extends State<TripChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty || _activeTrip == null) return;
     _messageController.clear();
-    setState(() => _messages.add({'text': text, 'isSent': true, 'time': _now()}));
+    _stopTyping();
+
+    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
+    setState(() {
+      _messages.add({'text': text, 'isSent': true, 'time': _now(), 'id': msgId, 'status': 'sending'});
+    });
+    _scrollDown();
+
+    SocketServiceClient.instance.emit('message:send', {
+      'tripId': _activeTrip!['id'],
+      'text': text,
+    });
+
     try {
       await ApiClient.instance.sendTripMessage(_activeTrip!['id'], text);
-      _fetchMessages();
-    } catch (_) {}
+      setState(() {
+        for (final m in _messages) {
+          if (m['id'] == msgId) m['status'] = 'sent';
+        }
+      });
+    } catch (_) {
+      setState(() {
+        for (final m in _messages) {
+          if (m['id'] == msgId) m['status'] = 'failed';
+        }
+      });
+    }
+  }
+
+  void _sendReadReceipt(dynamic msgId) {
+    if (_activeTrip == null || msgId == null) return;
+    SocketServiceClient.instance.emit('message:read', {
+      'tripId': _activeTrip!['id'],
+      'messageId': msgId,
+    });
+  }
+
+  void _onTyping() {
+    if (_activeTrip == null) return;
+    if (!_isTyping) {
+      _isTyping = true;
+      SocketServiceClient.instance.emit('typing:start', {'tripId': _activeTrip!['id']});
+    }
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), _stopTyping);
+  }
+
+  void _stopTyping() {
+    if (!_isTyping) return;
+    _isTyping = false;
+    _typingTimer?.cancel();
+    SocketServiceClient.instance.emit('typing:stop', {'tripId': _activeTrip!['id']});
+  }
+
+  void _scrollDown() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      }
+    });
   }
 
   String _now() {
     final n = DateTime.now();
     return '${n.hour.toString().padLeft(2, '0')}:${n.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatTime(dynamic ts) {
+    final dt = DateTime.tryParse(ts?.toString() ?? '');
+    if (dt == null) return _now();
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -92,25 +190,50 @@ class _TripChatScreenState extends State<TripChatScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : !_canChat
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey.shade300),
-                            const SizedBox(height: 12),
-                            const Text('Chat no disponible', style: TextStyle(fontSize: 16, color: Colors.black45)),
-                            const SizedBox(height: 6),
-                            const Text('El chat está disponible solo durante viajes en curso', style: TextStyle(fontSize: 13, color: Colors.black38)),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        itemCount: _messages.length,
-                        itemBuilder: (_, i) => _buildMessage(_messages[i]),
-                      ),
+                    ? _buildChatUnavailable()
+                    : _messages.isEmpty
+                        ? _buildEmptyChat()
+                        : ListView.builder(
+                            controller: _scrollCtrl,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            itemCount: _messages.length + (_otherTyping ? 1 : 0),
+                            itemBuilder: (_, i) {
+                              if (i == _messages.length) return _buildTypingIndicator();
+                              return _buildMessage(_messages[i]);
+                            },
+                          ),
           ),
           if (_canChat) _buildInputBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatUnavailable() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 12),
+          const Text('Chat no disponible', style: TextStyle(fontSize: 16, color: Colors.black45)),
+          const SizedBox(height: 6),
+          const Text('El chat está disponible solo durante viajes en curso', style: TextStyle(fontSize: 13, color: Colors.black38)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyChat() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.chat_outlined, size: 48, color: Colors.grey.shade300),
+          const SizedBox(height: 12),
+          const Text('No hay mensajes aún', style: TextStyle(fontSize: 15, color: Colors.black45)),
+          const SizedBox(height: 4),
+          Text('Envía un mensaje para comunicarte', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
         ],
       ),
     );
@@ -150,6 +273,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
 
   Widget _buildMessage(Map<String, dynamic> msg) {
     final bool isSent = msg['isSent'] == true;
+    final status = msg['status'] as String?;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -190,12 +314,20 @@ class _TripChatScreenState extends State<TripChatScreen> {
               ),
               const SizedBox(height: 4),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(msg['time'] as String? ?? '', style: TextStyle(fontSize: 10, color: _textGrey)),
-                  if (isSent) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.done_all, size: 14, color: Color(0xFF1A3C6E)),
-                  ],
+                  const SizedBox(width: 4),
+                  if (isSent)
+                    Icon(
+                      status == 'failed' ? Icons.error_outline :
+                      status == 'sending' ? Icons.access_time :
+                      Icons.done_all,
+                      size: 14,
+                      color: status == 'failed' ? Colors.red :
+                             status == 'sending' ? _textGrey :
+                             const Color(0xFF1A3C6E),
+                    ),
                 ],
               ),
             ],
@@ -206,17 +338,53 @@ class _TripChatScreenState extends State<TripChatScreen> {
     );
   }
 
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: _primaryDark.withOpacity(0.2),
+            child: Text(
+              _initials(_activeTrip?['cliente']?['nombre'] as String? ?? '?'),
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _bubbleReceived,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _dot(0), const SizedBox(width: 4), _dot(1), const SizedBox(width: 4), _dot(2),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dot(int i) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 600 + i * 200),
+      width: 8, height: 8,
+      decoration: BoxDecoration(color: _textGrey, shape: BoxShape.circle),
+    );
+  }
+
   Widget _buildInputBar() {
     return Container(
       color: _white,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Row(
         children: [
-          Icon(Icons.attach_file_outlined, color: _textGrey, size: 24),
-          const SizedBox(width: 8),
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
               decoration: BoxDecoration(color: _bgLight, borderRadius: BorderRadius.circular(24)),
               child: TextField(
                 controller: _messageController,
@@ -227,6 +395,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
                   border: InputBorder.none,
                 ),
                 style: const TextStyle(fontSize: 14),
+                onChanged: (_) => _onTyping(),
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
@@ -235,8 +404,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
           GestureDetector(
             onTap: _sendMessage,
             child: Container(
-              width: 42,
-              height: 42,
+              width: 42, height: 42,
               decoration: const BoxDecoration(color: Color(0xFF1A3C6E), shape: BoxShape.circle),
               child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),

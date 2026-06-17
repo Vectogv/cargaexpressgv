@@ -16,7 +16,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
   bool _notifSound = true;
   bool _notifVibrate = true;
   bool _notifTrips = true;
-  bool _shareLocation = true;
 
   @override
   Widget build(BuildContext context) {
@@ -42,10 +41,6 @@ class _AjustesScreenState extends State<AjustesScreen> {
           const SizedBox(height: 16),
           _buildSection('Idioma', [
             _buildInfoItem('Idioma de la app', 'Espa\u00f1ol'),
-          ]),
-          const SizedBox(height: 16),
-          _buildSection('Privacidad', [
-            _buildSwitchItem('Compartir ubicaci\u00f3n en vivo', _shareLocation, (v) => setState(() => _shareLocation = v)),
           ]),
           const SizedBox(height: 16),
           _buildSection('Soporte', [

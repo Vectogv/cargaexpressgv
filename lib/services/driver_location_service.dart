@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'api_client.dart';
+import 'background_location_service.dart';
 
 class DriverLocationService {
   static final DriverLocationService instance = DriverLocationService._();
@@ -38,6 +39,9 @@ class DriverLocationService {
     await _sendInitialLocation();
     await _fetchNearbyTrips();
     _startTripPolling();
+
+    await BackgroundLocationService.instance.initialize();
+    await BackgroundLocationService.instance.start();
   }
 
   void _startPositionStream() {
