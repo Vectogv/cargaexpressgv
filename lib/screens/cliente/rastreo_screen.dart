@@ -637,8 +637,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   Widget _buildOfferCard(Map<String, dynamic> offer) {
     final conductor = offer['conductor'] as Map<String, dynamic>?;
-    final monto = offer['monto'] as num? ?? 0;
-    final presupuesto = _trip?['precioEstimado'] as num? ?? 0;
+    final monto = num.tryParse(offer['monto']?.toString() ?? '') ?? 0;
+    final presupuesto = num.tryParse(_trip?['precioEstimado']?.toString() ?? '') ?? 0;
     final diff = presupuesto > 0 ? ((monto - presupuesto) / presupuesto * 100).round() : 0;
 
     return Container(
