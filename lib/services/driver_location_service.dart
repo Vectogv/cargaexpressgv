@@ -41,8 +41,10 @@ class DriverLocationService {
     await _fetchNearbyTrips();
     _startTripPolling();
 
-    await BackgroundLocationService.instance.initialize();
-    await BackgroundLocationService.instance.start();
+    if (!kIsWeb) {
+      await BackgroundLocationService.instance.initialize();
+      await BackgroundLocationService.instance.start();
+    }
   }
 
   void _startPositionStream() {

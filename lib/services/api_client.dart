@@ -175,7 +175,7 @@ class ApiClient {
 
   // --- Offers ---
 
-  Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto) => OfferService.makeOffer(tripId, monto);
+  Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto, {String? placa}) => OfferService.makeOffer(tripId, monto, placa: placa);
   Future<List<Map<String, dynamic>>> getOffers(dynamic tripId) => OfferService.getOffers(tripId);
   Future<void> acceptOffer(dynamic tripId, dynamic offerId) => OfferService.acceptOffer(tripId, offerId);
 

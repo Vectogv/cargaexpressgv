@@ -14,6 +14,23 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   final _montoCtrl = TextEditingController();
   bool _loading = false;
   bool _offerSent = false;
+  String? _placa;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final profile = await ApiClient.instance.getProfile();
+      final conductor = profile['conductor'] as Map<String, dynamic>?;
+      if (conductor != null && mounted) {
+        _placa = conductor['placa'] as String?;
+      }
+    } catch (_) {}
+  }
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -42,7 +59,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     }
     setState(() => _loading = true);
     try {
-      await ApiClient.instance.makeOffer(_tripId, monto);
+      await ApiClient.instance.makeOffer(_tripId, monto, placa: _placa);
       setState(() => _offerSent = true);
       _snack('Oferta enviada exitosamente');
     } catch (e) {
