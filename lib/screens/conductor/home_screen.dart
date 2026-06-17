@@ -660,11 +660,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTripCard(Map<String, dynamic> t) {
     final origen = t['origen'] as Map<String, dynamic>?;
     final destino = t['destino'] as Map<String, dynamic>?;
-    final precio = t['precioEstimado'] as num?;
-    final distancia = t['distancia'] as num?;
+    final precio = _toNum(t['precioEstimado']);
+    final distancia = _toNum(t['distancia']);
     final carga = t['carga'] as String? ?? 'No especificada';
     final descripcion = t['descripcion'] as String? ?? '';
-    final tiempo = t['tiempoEstimado'] as num?;
+    final tiempo = _toNum(t['tiempoEstimado']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -789,5 +789,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final parts = name.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name[0].toUpperCase();
+  }
+
+  num? _toNum(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v;
+    return num.tryParse(v.toString());
   }
 }

@@ -28,15 +28,21 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     super.dispose();
   }
 
+  dynamic get _tripId => widget.trip['_id'] ?? widget.trip['id'];
+
   Future<void> _makeOffer() async {
     final monto = int.tryParse(_montoCtrl.text.trim());
     if (monto == null || monto <= 0) {
       _snack('Ingresa un monto v\u00e1lido');
       return;
     }
+    if (_tripId == null) {
+      _snack('Error: ID del viaje no disponible');
+      return;
+    }
     setState(() => _loading = true);
     try {
-      await ApiClient.instance.makeOffer(widget.trip['id'], monto);
+      await ApiClient.instance.makeOffer(_tripId, monto);
       setState(() => _offerSent = true);
       _snack('Oferta enviada exitosamente');
     } catch (e) {
@@ -58,6 +64,9 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     final cliente = t['cliente'] as Map<String, dynamic>?;
     final carga = t['carga'] as String? ?? 'No especificada';
     final descripcion = t['descripcion'] as String? ?? '';
+    final precioEstimado = _toNum(t['precioEstimado']);
+    final distancia = _toNum(t['distancia']);
+    final tiempoEstimado = _toNum(t['tiempoEstimado']);
 
     return Scaffold(
       backgroundColor: _bgLight,
@@ -163,10 +172,10 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         children: [
           const Text('Informaci\u00f3n del viaje', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
           const SizedBox(height: 12),
-          _infoRow('Presupuesto del cliente', '\$${(t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}'),
-          _infoRow('Distancia', '${(t['distancia'] as num?)?.toStringAsFixed(1) ?? '?'} km'),
-          if (t['tiempoEstimado'] != null)
-            _infoRow('Tiempo estimado', '${t['tiempoEstimado']} min'),
+          _infoRow('Presupuesto del cliente', '\$${(precioEstimado?.toStringAsFixed(0) ?? '0')}'),
+          _infoRow('Distancia', '${(distancia?.toStringAsFixed(1) ?? '?')} km'),
+          if (tiempoEstimado != null)
+            _infoRow('Tiempo estimado', '${tiempoEstimado} min'),
           _infoRow('Publicado', _formatDate(t['createdAt'] as String?)),
         ],
       ),
@@ -272,7 +281,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           Row(children: [
             Icon(Icons.info_outline, size: 14, color: _textGrey),
             const SizedBox(width: 6),
-            Text('Presupuesto del cliente: \$${(t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}', style: TextStyle(fontSize: 12, color: _textGrey)),
+            Text('Presupuesto del cliente: \$${(precioEstimado?.toStringAsFixed(0) ?? '0')}', style: TextStyle(fontSize: 12, color: _textGrey)),
           ]),
           const SizedBox(height: 16),
           SizedBox(
@@ -306,5 +315,11 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     final dt = DateTime.tryParse(iso);
     if (dt == null) return '';
     return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  num? _toNum(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v;
+    return num.tryParse(v.toString());
   }
 }
