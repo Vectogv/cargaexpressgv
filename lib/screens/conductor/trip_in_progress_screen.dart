@@ -63,7 +63,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     try {
       final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
       if (mounted) setState(() { _currentLat = pos.latitude; _currentLng = pos.longitude; });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('trip_in_progress._initLocation error: $e');
+    }
   }
 
   void _onSocketEvent(Map<String, dynamic> event) {

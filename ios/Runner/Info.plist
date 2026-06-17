@@ -47,6 +47,10 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Para mostrarte viajes cercanos y rastrear tu ubicación en tiempo real</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Para enviar tu ubicación incluso en segundo plano durante un viaje activo</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

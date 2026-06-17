@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'api_client.dart';
@@ -48,8 +49,7 @@ class DriverLocationService {
     _positionSub?.cancel();
     final locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 50,
-      timeLimit: const Duration(seconds: 30),
+      distanceFilter: 10,
     );
     _positionSub = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position pos) async {
@@ -57,9 +57,11 @@ class DriverLocationService {
         _lastLng = pos.longitude;
         try {
           await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('DriverLocationService.updateLocation error: $e');
+        }
       },
-      onError: (_) {},
+      onError: (e) => debugPrint('DriverLocationService.positionStream error: $e'),
     );
   }
 
@@ -71,7 +73,9 @@ class DriverLocationService {
       _lastLat = pos.latitude;
       _lastLng = pos.longitude;
       await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('DriverLocationService._sendInitialLocation error: $e');
+    }
   }
 
   void _startTripPolling() {
