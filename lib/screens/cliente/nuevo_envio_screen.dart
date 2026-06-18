@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
+import '../../services/logger_service.dart';
 import 'rastreo_screen.dart';
 
 class NuevoEnvioScreen extends StatefulWidget {
@@ -80,7 +81,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         return data['display_name'] as String? ?? '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}';
       }
-    } catch (_) {}
+    } catch (e) {
+      LoggerService.instance.warning('nuevo_envio._reverseGeocode error', e);
+    }
     return '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}';
   }
 

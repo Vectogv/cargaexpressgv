@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/socket_service_client.dart';
 import '../../services/driver_location_service.dart';
 import '../user/auth_screen.dart';
 import 'trip_in_progress_screen.dart';
@@ -42,6 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
+  StreamSubscription<int>? _chatUnreadSub;
+  int _chatUnread = 0;
+  int _notifUnread = 0;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -54,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _chatUnread = SocketServiceClient.instance.chatUnreadCount;
+    _notifUnread = NotificationService.instance.unreadCount;
     _fetchData();
 
     _socketSub = NotificationService.instance.onNotification.listen((event) {
@@ -78,10 +85,15 @@ class _HomeScreenState extends State<HomeScreen> {
           _fetchActiveTrip();
         }
       }
+      if (mounted) setState(() => _notifUnread = NotificationService.instance.unreadCount);
     });
 
     _tripSub = DriverLocationService.instance.onTripsUpdated.listen((trips) {
       if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
+    });
+
+    _chatUnreadSub = SocketServiceClient.instance.onChatUnreadChange.listen((count) {
+      if (mounted) setState(() => _chatUnread = count);
     });
   }
 
@@ -89,16 +101,27 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _tripSub?.cancel();
     _socketSub?.cancel();
+    _chatUnreadSub?.cancel();
     super.dispose();
   }
 
   Future<void> _fetchData() async {
     await _fetchProfileFirst();
+    final cachedTrip = CacheService.instance.getCachedActiveTrip();
+    if (cachedTrip != null) {
+      final estado = cachedTrip['estado'] as String?;
+      if (estado == 'aceptado' || estado == 'en_curso') {
+        if (mounted) setState(() => _activeTrip = cachedTrip);
+        _redirectToActiveTrip();
+        return;
+      }
+    }
     await Future.wait([
       _fetchStats(),
       _fetchActiveTrip(),
     ]);
     if (_activeTrip != null) {
+      CacheService.instance.cacheActiveTrip(_activeTrip!);
       _redirectToActiveTrip();
       return;
     }
@@ -119,11 +142,15 @@ class _HomeScreenState extends State<HomeScreen> {
       if (trip != null) {
         final estado = trip['estado'] as String?;
         if (estado == 'aceptado' || estado == 'en_curso') {
+          CacheService.instance.cacheActiveTrip(trip);
           if (mounted) setState(() => _activeTrip = trip);
           return;
         }
       }
-    } catch (_) {}
+      CacheService.instance.clearActiveTrip();
+    } catch (_) {
+      CacheService.instance.clearActiveTrip();
+    }
     if (mounted) setState(() => _activeTrip = null);
   }
 
@@ -253,11 +280,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigate(int index) {
+    if (index == 5) {
+      SocketServiceClient.instance.resetChatUnread();
+    }
     final routes = <int, Widget>{
       1: const TripInProgressScreen(),
       2: const OffersScreen(),
       4: const EarningsScreen(),
-      5: TripChatScreen(trip: null),
+      5: TripChatScreen(trip: _activeTrip),
       6: const NotificationsScreen(),
       7: const ForumScreen(),
       8: const SurveysScreen(),
@@ -378,6 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildDrawerItem(Icons.person_outline, 'Perfil', 9),
                 _buildDrawerItem(Icons.description_outlined, 'Documentaci\u00f3n', 10),
                 _buildDrawerItem(Icons.route_outlined, 'Historial de viajes', 11),
+                _buildDrawerItem(Icons.chat_bubble_outline, 'Mensajes', 5),
                 _buildDrawerItem(Icons.notifications_none, 'Notificaciones', 6),
                 _buildDrawerItem(Icons.settings_outlined, 'Ajustes', 13),
                 _buildDrawerItem(Icons.headset_mic_outlined, 'Soporte', 12),
@@ -493,18 +524,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          Stack(
-            children: [
-              IconButton(
-                icon: Icon(Icons.notifications_outlined, color: _textDark, size: 24),
-                onPressed: () => _navigate(6),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
+          if (_activeTrip != null)
+            _badgeIcon(Icons.chat_bubble_outline, _chatUnread, () {
+              SocketServiceClient.instance.resetChatUnread();
+              _navigate(5);
+            }),
+          const SizedBox(width: 4),
+          _badgeIcon(Icons.notifications_outlined, _notifUnread, () => _navigate(6)),
         ],
       ),
+    );
+  }
+
+  Widget _badgeIcon(IconData icon, int count, VoidCallback? onTap) {
+    return Stack(
+      children: [
+        IconButton(
+          icon: Icon(icon, color: _textDark, size: 24),
+          onPressed: onTap ?? () {},
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        if (count > 0)
+          Positioned(
+            right: 2, top: 2,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+              child: Text(
+                count > 9 ? '9+' : '$count',
+                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

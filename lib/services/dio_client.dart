@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'api_client.dart';
 import 'interceptors/auth_interceptor.dart';
+import 'logger_service.dart';
+import 'network_monitor_service.dart';
 
 class DioClient {
   static final DioClient instance = DioClient._();
@@ -17,6 +19,7 @@ class DioClient {
     ));
 
     dio.interceptors.add(AuthInterceptor());
+    dio.interceptors.add(RetryInterceptor());
     dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true, logPrint: (_) {}));
   }
 
@@ -46,5 +49,52 @@ class DioClient {
     });
     final res = await dio.post(path, data: form);
     return res.data as Map<String, dynamic>;
+  }
+}
+
+class RetryInterceptor extends Interceptor {
+  static const int _maxRetries = 3;
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
+    if (_shouldRetry(err)) {
+      final options = err.requestOptions;
+      final extra = options.extra;
+      int retryCount = extra['retry_count'] ?? 0;
+
+      if (retryCount < _maxRetries) {
+        await NetworkMonitorService.instance.waitForConnection();
+        retryCount++;
+        extra['retry_count'] = retryCount;
+        final delay = Duration(seconds: retryCount * 2);
+
+        LoggerService.instance.warning(
+          'RetryInterceptor: retrying ${options.path} (attempt $retryCount/$_maxRetries) after ${delay.inSeconds}s',
+        );
+
+        await Future.delayed(delay);
+        try {
+          final response = await Dio().fetch(options);
+          handler.resolve(response);
+          return;
+        } catch (e) {
+          LoggerService.instance.error('RetryInterceptor: retry $retryCount failed for ${options.path}', e);
+        }
+      }
+    }
+    handler.next(err);
+  }
+
+  bool _shouldRetry(DioException err) {
+    if (err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.receiveTimeout ||
+        err.type == DioExceptionType.connectionError) {
+      return true;
+    }
+    if (err.response != null) {
+      final code = err.response!.statusCode;
+      return code == 429 || code == 503 || code == 502;
+    }
+    return false;
   }
 }

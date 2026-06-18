@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/cache_service.dart';
 import '../../services/socket_service_client.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -16,7 +17,14 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
+  bool _otherTyping = false;
+  bool _isTyping = false;
+  Timer? _typingTimer;
+  Timer? _pollTimer;
   StreamSubscription<Map<String, dynamic>>? _messageSub;
+  StreamSubscription<Map<String, dynamic>>? _typingStartSub;
+  StreamSubscription<Map<String, dynamic>>? _typingStopSub;
+  StreamSubscription<Map<String, dynamic>>? _messageReadSub;
   StreamSubscription<bool>? _connectionSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
@@ -37,14 +45,29 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollCtrl.dispose();
+    _typingTimer?.cancel();
+    _pollTimer?.cancel();
     _messageSub?.cancel();
+    _typingStartSub?.cancel();
+    _typingStopSub?.cancel();
+    _messageReadSub?.cancel();
     _connectionSub?.cancel();
     super.dispose();
   }
 
   Future<void> _setup() async {
     _setupSocket();
+    final tripId = widget.trip['id']?.toString();
+    if (tripId != null) {
+      final cached = CacheService.instance.getCachedMessages(tripId);
+      if (cached != null && mounted) {
+        setState(() { _messages = cached; _loading = false; });
+      }
+    }
     await _fetchMessages();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) _fetchMessages();
+    });
   }
 
   void _setupSocket() {
@@ -52,23 +75,51 @@ class _ChatScreenState extends State<ChatScreen> {
     if (tripId == null) return;
 
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
-      if (data['tripId']?.toString() == tripId) {
-        final msgId = data['_id']?.toString() ?? data['id']?.toString();
-        if (msgId != null && _messages.any((m) => m['_id']?.toString() == msgId || m['id']?.toString() == msgId)) return;
-        final msgText = data['text'] as String? ?? data['mensaje'] as String?;
-        final senderId = data['senderId']?.toString();
-        final userId = ApiClient.instance.userId;
-        if (msgText != null && senderId != userId) {
-          setState(() {
-            _messages.add({
-              '_id': msgId,
-              'text': msgText,
-              'isSent': false,
-              'time': _formatTime(data['timestamp'] ?? data['createdAt']),
-            });
+      if (data['tripId']?.toString() != tripId) return;
+      final msgId = data['_id']?.toString() ?? data['id']?.toString();
+      if (msgId != null && _messages.any((m) => (m['_id']?.toString() ?? m['id']?.toString()) == msgId)) return;
+      final msgText = data['text'] as String? ?? data['mensaje'] as String?;
+      final senderId = data['senderId']?.toString();
+      final userId = ApiClient.instance.userId;
+      if (msgText != null && senderId != userId) {
+        setState(() {
+          _messages.add({
+            '_id': msgId,
+            'text': msgText,
+            'isSent': false,
+            'time': _formatTime(data['timestamp'] ?? data['createdAt']),
           });
-          _scrollDown();
-        }
+        });
+        _saveCache();
+        _scrollDown();
+        _sendReadReceipt(msgId);
+      }
+    });
+
+    _typingStartSub = SocketServiceClient.instance.onTypingStart.listen((data) {
+      if (data['tripId']?.toString() == tripId && mounted) {
+        setState(() => _otherTyping = true);
+      }
+    });
+
+    _typingStopSub = SocketServiceClient.instance.onTypingStop.listen((data) {
+      if (data['tripId']?.toString() == tripId && mounted) {
+        setState(() => _otherTyping = false);
+      }
+    });
+
+    _messageReadSub = SocketServiceClient.instance.onMessageRead.listen((data) {
+      if (data['tripId']?.toString() != tripId) return;
+      final readMsgId = data['messageId']?.toString();
+      if (readMsgId == null) return;
+      if (mounted) {
+        setState(() {
+          for (final m in _messages) {
+            if ((m['_id']?.toString() ?? m['id']?.toString()) == readMsgId && m['isSent'] == true) {
+              m['status'] = 'read';
+            }
+          }
+        });
       }
     });
 
@@ -80,17 +131,51 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _fetchMessages() async {
     try {
       final msgs = await ApiClient.instance.getTripMessages(widget.trip['id']);
-      if (mounted) setState(() { _messages = msgs; _loading = false; });
+      final tripId = widget.trip['id']?.toString();
+      if (tripId != null) CacheService.instance.cacheMessages(tripId, msgs);
+      if (mounted) {
+        setState(() { _messages = msgs; _loading = false; });
+        for (final msg in msgs) {
+          if (msg['isSent'] != true) {
+            _sendReadReceipt(msg['_id'] ?? msg['id']);
+          }
+        }
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollDown());
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  void _sendReadReceipt(dynamic msgId) {
+    if (msgId == null) return;
+    SocketServiceClient.instance.emit('message:read', {
+      'tripId': widget.trip['id'],
+      'messageId': msgId,
+    });
+  }
+
+  void _onTyping() {
+    if (!_isTyping) {
+      _isTyping = true;
+      SocketServiceClient.instance.emit('typing:start', {'tripId': widget.trip['id']});
+    }
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), _stopTyping);
+  }
+
+  void _stopTyping() {
+    if (!_isTyping) return;
+    _isTyping = false;
+    _typingTimer?.cancel();
+    SocketServiceClient.instance.emit('typing:stop', {'tripId': widget.trip['id']});
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
     _messageController.clear();
+    _stopTyping();
 
     final msgId = DateTime.now().millisecondsSinceEpoch.toString();
     setState(() {
@@ -112,6 +197,7 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         });
       }
+      _saveCache();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -120,6 +206,13 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         });
       }
+    }
+  }
+
+  void _saveCache() {
+    final tripId = widget.trip['id']?.toString();
+    if (tripId != null) {
+      CacheService.instance.cacheMessages(tripId, _messages);
     }
   }
 
@@ -163,7 +256,7 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(conductor?['nombre'] as String? ?? 'Conductor', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-            Text('En curso', style: TextStyle(fontSize: 11, color: Colors.green.shade600)),
+            Text(_otherTyping ? 'Escribiendo...' : 'En curso', style: TextStyle(fontSize: 11, color: _otherTyping ? Colors.orange.shade600 : Colors.green.shade600)),
           ]),
         ]),
       ),
@@ -179,7 +272,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           children: [
                             Icon(Icons.chat_outlined, size: 48, color: Colors.grey.shade300),
                             const SizedBox(height: 12),
-                            const Text('No hay mensajes aún', style: TextStyle(fontSize: 15, color: Colors.black45)),
+                            const Text('No hay mensajes a\u00fan', style: TextStyle(fontSize: 15, color: Colors.black45)),
                             const SizedBox(height: 4),
                             Text('Conversa con tu conductor', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
                           ],
@@ -188,8 +281,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     : ListView.builder(
                         controller: _scrollCtrl,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        itemCount: _messages.length,
-                        itemBuilder: (_, i) => _buildMessage(_messages[i]),
+                        itemCount: _messages.length + (_otherTyping ? 1 : 0),
+                        itemBuilder: (_, i) {
+                          if (i == _messages.length) return _buildTypingIndicator();
+                          return _buildMessage(_messages[i]);
+                        },
                       ),
           ),
           _buildInputBar(),
@@ -246,11 +342,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     Icon(
                       status == 'failed' ? Icons.error_outline :
                       status == 'sending' ? Icons.access_time :
+                      status == 'read' ? Icons.done_all :
                       Icons.done_all,
                       size: 14,
                       color: status == 'failed' ? Colors.red :
                              status == 'sending' ? _textGrey :
-                             const Color(0xFF1A3C6E),
+                             status == 'read' ? const Color(0xFF1A3C6E) :
+                             const Color(0xFF1A3C6E).withValues(alpha: 0.5),
                     ),
                 ],
               ),
@@ -259,6 +357,41 @@ class _ChatScreenState extends State<ChatScreen> {
           if (isSent) const SizedBox(width: 4),
         ],
       ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: _primaryDark.withOpacity(0.2),
+            child: Icon(Icons.person, size: 14, color: _primaryDark),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _bubbleReceived,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _dot(0), const SizedBox(width: 4), _dot(1), const SizedBox(width: 4), _dot(2),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dot(int i) {
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 600 + i * 200),
+      width: 8, height: 8,
+      decoration: BoxDecoration(color: _textGrey, shape: BoxShape.circle),
     );
   }
 
@@ -281,6 +414,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   border: InputBorder.none,
                 ),
                 style: const TextStyle(fontSize: 14),
+                onChanged: (_) => _onTyping(),
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),

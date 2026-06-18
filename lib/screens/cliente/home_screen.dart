@@ -2,11 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/socket_service_client.dart';
 import '../user/auth_screen.dart';
 import 'nuevo_envio_screen.dart';
 import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
+import 'chat_screen.dart';
 import 'perfil_screen.dart';
 import 'pagos_screen.dart';
 import 'ajustes_screen.dart';
@@ -27,38 +30,80 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
   Map<String, dynamic>? _activeTrip;
   bool _loading = true;
+  int _chatUnread = 0;
+  int _notifUnread = 0;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
+  StreamSubscription<Map<String, dynamic>>? _notifSub;
+  StreamSubscription<int>? _chatUnreadSub;
 
   @override
   void initState() {
     super.initState();
+    _chatUnread = SocketServiceClient.instance.chatUnreadCount;
+    _notifUnread = NotificationService.instance.unreadCount;
+    final cached = CacheService.instance.getCachedActiveTrip();
+    if (cached != null && _isTripActive(cached['estado'] as String?)) {
+      _activeTrip = cached;
+      _redirectToTracking();
+      return;
+    }
     _loadActiveTrip();
+
     _socketSub = NotificationService.instance.onNotification.listen((event) {
       final tipo = event['__event'] as String?;
       if (tipo == 'trip:status' || tipo == 'trip:cancelled') {
         _loadActiveTrip();
       }
       if (tipo == 'trip:cancelled' && mounted) {
+        CacheService.instance.clearDriverPosition();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('El viaje ha sido cancelado por el conductor')),
         );
       }
+      if (mounted) setState(() => _notifUnread = NotificationService.instance.unreadCount);
+    });
+
+    _chatUnreadSub = SocketServiceClient.instance.onChatUnreadChange.listen((count) {
+      if (mounted) setState(() => _chatUnread = count);
     });
   }
 
   @override
   void dispose() {
     _socketSub?.cancel();
+    _notifSub?.cancel();
+    _chatUnreadSub?.cancel();
     super.dispose();
   }
 
   Future<void> _loadActiveTrip() async {
     try {
       final trip = await ApiClient.instance.getActiveTrip();
-      if (mounted) setState(() { _activeTrip = trip; _loading = false; });
+      if (trip != null) {
+        CacheService.instance.cacheActiveTrip(trip);
+        if (mounted) {
+          setState(() { _activeTrip = trip; _loading = false; });
+          _redirectToTracking();
+        }
+      } else {
+        CacheService.instance.clearActiveTrip();
+        if (mounted) setState(() { _activeTrip = null; _loading = false; });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  bool _isTripActive(String? estado) {
+    return estado == 'buscando_conductor' || estado == 'aceptado' || estado == 'en_curso';
+  }
+
+  void _redirectToTracking() {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const RastreoScreen()),
+    );
   }
 
   String _estadoLabel(String? estado) {
@@ -122,8 +167,41 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             ],
           ),
           const Spacer(),
+          if (_activeTrip != null) ...[
+            _badgeIcon(Icons.chat_bubble_outline, _chatUnread, () {
+              SocketServiceClient.instance.resetChatUnread();
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(trip: _activeTrip!)));
+            }),
+            const SizedBox(width: 4),
+          ],
+          _badgeIcon(Icons.notifications_outlined, _notifUnread, null),
         ],
       ),
+    );
+  }
+
+  Widget _badgeIcon(IconData icon, int count, VoidCallback? onTap) {
+    return Stack(
+      children: [
+        IconButton(
+          icon: Icon(icon, color: const Color(0xFF1A1A2E), size: 22),
+          onPressed: onTap ?? () {},
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        if (count > 0)
+          Positioned(
+            right: 2, top: 2,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+              child: Text(
+                count > 9 ? '9+' : '$count',
+                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -314,6 +392,10 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             ),
             _buildDrawerItem(Icons.person_outline, 'Perfil', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen()))),
             _buildDrawerItem(Icons.route_outlined, 'Mis viajes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
+            _buildDrawerItem(Icons.chat_bubble_outline, 'Mensajes', _activeTrip != null ? () {
+              SocketServiceClient.instance.resetChatUnread();
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(trip: _activeTrip!)));
+            } : null),
             _buildDrawerItem(Icons.payments_outlined, 'Pagos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PagosScreen()))),
             _buildDrawerItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen()))),
             const Spacer(),

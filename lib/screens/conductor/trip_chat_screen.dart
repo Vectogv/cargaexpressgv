@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/cache_service.dart';
 import '../../services/socket_service_client.dart';
 
 class TripChatScreen extends StatefulWidget {
@@ -21,7 +22,11 @@ class _TripChatScreenState extends State<TripChatScreen> {
   bool _isTyping = false;
   bool _otherTyping = false;
   Timer? _typingTimer;
+  Timer? _pollTimer;
   StreamSubscription<Map<String, dynamic>>? _messageSub;
+  StreamSubscription<Map<String, dynamic>>? _typingStartSub;
+  StreamSubscription<Map<String, dynamic>>? _typingStopSub;
+  StreamSubscription<Map<String, dynamic>>? _messageReadSub;
   StreamSubscription<bool>? _connectionSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
@@ -43,7 +48,11 @@ class _TripChatScreenState extends State<TripChatScreen> {
     _messageController.dispose();
     _scrollCtrl.dispose();
     _typingTimer?.cancel();
+    _pollTimer?.cancel();
     _messageSub?.cancel();
+    _typingStartSub?.cancel();
+    _typingStopSub?.cancel();
+    _messageReadSub?.cancel();
     _connectionSub?.cancel();
     super.dispose();
   }
@@ -59,7 +68,17 @@ class _TripChatScreenState extends State<TripChatScreen> {
       _canChat = estado == 'aceptado' || estado == 'en_curso' || estado == 'completado';
       if (_canChat) {
         _setupSocket();
+        final tripId = _activeTrip!['id']?.toString();
+        if (tripId != null) {
+          final cached = CacheService.instance.getCachedMessages(tripId);
+          if (cached != null && mounted) {
+            setState(() { _messages = cached; _loading = false; });
+          }
+        }
         await _fetchMessages();
+        _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+          if (mounted) _fetchMessages();
+        });
       } else {
         if (mounted) setState(() => _loading = false);
       }
@@ -74,6 +93,8 @@ class _TripChatScreenState extends State<TripChatScreen> {
 
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
       if (data['tripId']?.toString() == tripId) {
+        final msgId = data['_id']?.toString() ?? data['id']?.toString();
+        if (msgId != null && _messages.any((m) => (m['id']?.toString()) == msgId)) return;
         final msgText = data['text'] as String? ?? data['mensaje'] as String?;
         final senderId = data['senderId']?.toString();
         final userId = ApiClient.instance.userId;
@@ -83,12 +104,40 @@ class _TripChatScreenState extends State<TripChatScreen> {
               'text': msgText,
               'isSent': false,
               'time': _formatTime(data['timestamp']),
-              'id': data['id'],
+              'id': msgId,
             });
           });
+          _saveCache();
           _scrollDown();
-          _sendReadReceipt(data['id']);
+          _sendReadReceipt(msgId);
         }
+      }
+    });
+
+    _typingStartSub = SocketServiceClient.instance.onTypingStart.listen((data) {
+      if (data['tripId']?.toString() == tripId && mounted) {
+        setState(() => _otherTyping = true);
+      }
+    });
+
+    _typingStopSub = SocketServiceClient.instance.onTypingStop.listen((data) {
+      if (data['tripId']?.toString() == tripId && mounted) {
+        setState(() => _otherTyping = false);
+      }
+    });
+
+    _messageReadSub = SocketServiceClient.instance.onMessageRead.listen((data) {
+      if (data['tripId']?.toString() != tripId) return;
+      final readMsgId = data['messageId']?.toString();
+      if (readMsgId == null) return;
+      if (mounted) {
+        setState(() {
+          for (final m in _messages) {
+            if (m['id']?.toString() == readMsgId && m['isSent'] == true) {
+              m['status'] = 'read';
+            }
+          }
+        });
       }
     });
 
@@ -101,6 +150,8 @@ class _TripChatScreenState extends State<TripChatScreen> {
     if (_activeTrip == null) return;
     try {
       final msgs = await ApiClient.instance.getTripMessages(_activeTrip!['id']);
+      final tripId = _activeTrip!['id']?.toString();
+      if (tripId != null) CacheService.instance.cacheMessages(tripId, msgs);
       if (mounted) setState(() { _messages = msgs; _loading = false; });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollDown());
     } catch (_) {
@@ -132,12 +183,20 @@ class _TripChatScreenState extends State<TripChatScreen> {
           if (m['id'] == msgId) m['status'] = 'sent';
         }
       });
+      _saveCache();
     } catch (_) {
       setState(() {
         for (final m in _messages) {
           if (m['id'] == msgId) m['status'] = 'failed';
         }
       });
+    }
+  }
+
+  void _saveCache() {
+    final tripId = _activeTrip?['id']?.toString();
+    if (tripId != null) {
+      CacheService.instance.cacheMessages(tripId, _messages);
     }
   }
 
@@ -328,11 +387,13 @@ class _TripChatScreenState extends State<TripChatScreen> {
                     Icon(
                       status == 'failed' ? Icons.error_outline :
                       status == 'sending' ? Icons.access_time :
+                      status == 'read' ? Icons.done_all :
                       Icons.done_all,
                       size: 14,
                       color: status == 'failed' ? Colors.red :
                              status == 'sending' ? _textGrey :
-                             const Color(0xFF1A3C6E),
+                             status == 'read' ? const Color(0xFF1A3C6E) :
+                             const Color(0xFF1A3C6E).withValues(alpha: 0.5),
                     ),
                 ],
               ),

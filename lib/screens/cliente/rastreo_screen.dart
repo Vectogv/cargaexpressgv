@@ -8,7 +8,12 @@ import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/proximity_service.dart';
 import '../../services/socket_service_client.dart';
+import '../../services/app_lifecycle_service.dart';
+import '../../services/cache_service.dart';
+import '../../services/fraud_detection_service.dart';
+import '../../services/logger_service.dart';
 import 'chat_screen.dart';
+import '../shared/dispute_screen.dart';
 
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
@@ -17,7 +22,7 @@ class RastreoScreen extends StatefulWidget {
   State<RastreoScreen> createState() => _RastreoScreenState();
 }
 
-class _RastreoScreenState extends State<RastreoScreen> {
+class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
   Map<String, dynamic>? _trip;
   List<Map<String, dynamic>> _offers = [];
   bool _loading = true;
@@ -32,20 +37,66 @@ class _RastreoScreenState extends State<RastreoScreen> {
   StreamSubscription<Map<String, dynamic>>? _driverLocSub;
   double? _driverLat;
   double? _driverLng;
+  double? _driverDisplayLat;
+  double? _driverDisplayLng;
+  double? _driverSpeed;
+  double? _driverHeading;
+  List<LatLng> _driverTrail = [];
   double? _clientLat;
   double? _clientLng;
+  double _clientAccuracy = 0;
   final MapController _mapController = MapController();
   Timer? _autoFitTimer;
+  StreamSubscription<bool>? _lifecycleSub;
+  StreamSubscription<Position>? _clientPositionSub;
+  Timer? _clientRetryTimer;
+  int _clientGpsErrors = 0;
+  late AnimationController _driverAnimCtrl;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AppLifecycleService.instance.init();
+    _driverAnimCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2));
+    _driverAnimCtrl.addListener(_onDriverAnimTick);
+
+    final cachedTrip = CacheService.instance.getCachedActiveTrip();
+    if (cachedTrip != null) {
+      _trip = cachedTrip;
+      _loading = false;
+    }
+
+    final cachedPos = CacheService.instance.getCachedDriverPosition();
+    if (cachedPos != null) {
+      _driverLat = (cachedPos['lat'] as num).toDouble();
+      _driverLng = (cachedPos['lng'] as num).toDouble();
+      _driverDisplayLat = _driverLat;
+      _driverDisplayLng = _driverLng;
+    }
+
     _initClientLocation();
+    _startClientPositionStream();
     _load();
+
+    _lifecycleSub = AppLifecycleService.instance.onBackgroundChanged.listen((isBackground) {
+      if (!isBackground && mounted) {
+        LoggerService.instance.info('Rastreo: app resumed, refreshing trip');
+        _refreshAfterBackground();
+        if (_clientPositionSub == null) {
+          _startClientPositionStream();
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _driverAnimCtrl.dispose();
+    _lifecycleSub?.cancel();
+    _clientPositionSub?.cancel();
+    _clientRetryTimer?.cancel();
     _offerSub?.cancel();
     _tripStatusSub?.cancel();
     _tripCompletedSub?.cancel();
@@ -58,11 +109,97 @@ class _RastreoScreenState extends State<RastreoScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && _trip != null) {
+      LoggerService.instance.info('Rastreo: caching trip state on background');
+      CacheService.instance.cacheActiveTrip(_trip!);
+    }
+  }
+
+  Future<void> _refreshAfterBackground() async {
+    try {
+      final fresh = await ApiClient.instance.getActiveTrip();
+      if (fresh != null && mounted) {
+        setState(() {
+          _trip = fresh;
+          _loading = false;
+        });
+        CacheService.instance.cacheActiveTrip(fresh);
+        _proximityService.startMonitoring(fresh, _showProximityAlert);
+        if (_clientPositionSub == null) {
+          _startClientPositionStream();
+        }
+      } else if (mounted) {
+        setState(() => _loading = false);
+      }
+    } catch (e) {
+      LoggerService.instance.error('Rastreo: error refreshing after background', e);
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _initClientLocation() async {
     try {
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
-      if (mounted) setState(() { _clientLat = pos.latitude; _clientLng = pos.longitude; });
-    } catch (_) {}
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        ),
+      );
+      if (mounted) setState(() {
+        _clientLat = pos.latitude;
+        _clientLng = pos.longitude;
+        _clientAccuracy = pos.accuracy;
+      });
+    } catch (e) {
+      LoggerService.instance.warning('Rastreo: initial GPS failed, will use stream', e);
+    }
+  }
+
+  void _startClientPositionStream() {
+    _clientPositionSub?.cancel();
+    _clientRetryTimer?.cancel();
+    _clientGpsErrors = 0;
+
+    try {
+      final settings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+        timeLimit: const Duration(seconds: 30),
+      );
+
+      _clientPositionSub = Geolocator.getPositionStream(
+        locationSettings: settings,
+      ).listen(
+        (Position pos) {
+          if (!mounted) return;
+          _clientGpsErrors = 0;
+          setState(() {
+            _clientLat = pos.latitude;
+            _clientLng = pos.longitude;
+            _clientAccuracy = pos.accuracy;
+          });
+          _fitMapBounds();
+        },
+        onError: (e) {
+          LoggerService.instance.error('Rastreo: GPS stream error', e);
+          _clientGpsErrors++;
+          if (_clientGpsErrors > 5 && mounted) {
+            _clientPositionSub?.cancel();
+            _clientRetryTimer = Timer(const Duration(seconds: 15), () {
+              if (mounted) _startClientPositionStream();
+            });
+          }
+        },
+        cancelOnError: false,
+      );
+    } catch (e) {
+      LoggerService.instance.error('Rastreo: GPS stream init error', e);
+      _clientRetryTimer = Timer(const Duration(seconds: 15), () {
+        if (mounted) _startClientPositionStream();
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -74,6 +211,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
         _proximityService.startMonitoring(trip, _showProximityAlert);
         if (trip['estado'] == 'buscando_conductor') {
           _fetchOffers(trip['id']);
+        }
+        if (trip['estado'] == 'completado' && mounted) {
+          _showFinalizeConfirmation({
+            'tripId': trip['id'],
+            'foto': trip['fotoEntrega'],
+          });
         }
       }
     } catch (_) {
@@ -124,15 +267,21 @@ class _RastreoScreenState extends State<RastreoScreen> {
       final lat = double.tryParse(data['latitude']?.toString() ?? data['lat']?.toString() ?? '');
       final lng = double.tryParse(data['longitude']?.toString() ?? data['lng']?.toString() ?? '');
       if (lat != null && lng != null && mounted) {
+        CacheService.instance.cacheDriverPosition(lat, lng);
         setState(() {
           _driverLat = lat;
           _driverLng = lng;
+          _driverSpeed = double.tryParse(data['speed']?.toString() ?? '');
+          _driverHeading = double.tryParse(data['heading']?.toString() ?? '');
+          _driverTrail.add(LatLng(lat, lng));
+          if (_driverTrail.length > 50) _driverTrail.removeAt(0);
         });
+        _animateDriverTo(lat, lng);
         _fitMapBounds();
       }
     });
 
-    _autoFitTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _autoFitTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) _fitMapBounds();
     });
   }
@@ -264,6 +413,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
     if (confirmado != true || motivoSeleccionado == null) return;
 
+    FraudDetectionService.instance.checkCancellation(ApiClient.instance.userId ?? '');
+
     try {
       final desc = motivoCtrl.text.trim();
       final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
@@ -293,37 +444,116 @@ class _RastreoScreenState extends State<RastreoScreen> {
     );
   }
 
+  String? _pendingFinalizeData;
+
   void _showFinalizeConfirmation(Map<String, dynamic> data) {
     if (!mounted) return;
+    _pendingFinalizeData = null;
+    String? rejectionReason;
+    final fotoUrl = data['foto'] as String?;
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar entrega'),
-        content: const Text('\u00bfConfirma que la carga fue entregada correctamente?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              SocketServiceClient.instance.emit('trip:finalize_response', {
-                'tripId': data['tripId'],
-                'accepted': false,
-              });
-              Navigator.pop(ctx);
-            },
-            child: const Text('No, rechazar', style: TextStyle(color: Colors.red)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              SocketServiceClient.instance.emit('trip:finalize_response', {
-                'tripId': data['tripId'],
-                'accepted': true,
-              });
-              Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50), foregroundColor: Colors.white),
-            child: const Text('S\u00ed, confirmar entrega'),
-          ),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final destino = _trip?['destino'] as Map<String, dynamic>?;
+          final dir = destino?['direccion'] as String? ?? 'Destino';
+
+          return AlertDialog(
+            title: const Text('Confirmar entrega'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.check_circle, color: const Color(0xFF4CAF50), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Entrega en:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            Text(dir, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                          ],
+                        ),
+                      ),
+                    ]),
+                  ),
+                  if (fotoUrl != null && fotoUrl.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      height: 160,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                        image: DecorationImage(
+                          image: NetworkImage(fotoUrl),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  const Text(
+                    '\u00bfConfirma que recibi\u00f3 correctamente la carga?',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  if (rejectionReason != null || true) ...[
+                    const Text('Motivo de rechazo (si aplica):', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                    const SizedBox(height: 6),
+                    ...['Producto da\u00f1ado', 'Producto incorrecto', 'Conductor no se present\u00f3', 'Otro'].map(
+                      (m) => RadioListTile<String>(
+                        title: Text(m, style: const TextStyle(fontSize: 13)),
+                        value: m,
+                        groupValue: rejectionReason,
+                        onChanged: (v) => setDialogState(() => rejectionReason = v),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  final motivo = rejectionReason ?? 'Sin motivo especificado';
+                  SocketServiceClient.instance.emit('trip:finalize_response', {
+                    'tripId': data['tripId'],
+                    'accepted': false,
+                    'motivo': motivo,
+                  });
+                  Navigator.pop(ctx);
+                  _snack('Rechazo registrado. Se notificar\u00e1 al administrador.');
+                },
+                child: const Text('No, rechazar', style: TextStyle(color: Colors.red)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  SocketServiceClient.instance.emit('trip:finalize_response', {
+                    'tripId': data['tripId'],
+                    'accepted': true,
+                  });
+                  Navigator.pop(ctx);
+                  _snack('Entrega confirmada. \u00a1Gracias!');
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50), foregroundColor: Colors.white),
+                child: const Text('S\u00ed, confirmar entrega'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -352,7 +582,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
     if (_driverLat != null && _driverLng != null) {
       points.add(LatLng(_driverLat!, _driverLng!));
     }
-    if (points.length < 2) return;
+    if (points.length < 2) {
+      if (points.length == 1) {
+        _mapController.move(points.first, 14);
+      }
+      return;
+    }
     try {
       final bounds = LatLngBounds.fromPoints(points);
       _mapController.fitCamera(
@@ -383,28 +618,40 @@ class _RastreoScreenState extends State<RastreoScreen> {
     ];
 
     if (_clientLat != null && _clientLng != null) {
+      final showAccurate = _clientAccuracy > 0 && _clientAccuracy < 100;
       markers.add(Marker(
         point: LatLng(_clientLat!, _clientLng!),
-        width: 36, height: 36,
+        width: showAccurate ? 36 : 44,
+        height: showAccurate ? 36 : 44,
         child: Container(
-          decoration: BoxDecoration(color: const Color(0xFF1A3C6E), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2.5)),
-          child: const Icon(Icons.person_pin, color: Colors.white, size: 20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A3C6E),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: _clientAccuracy > 50 ? 3.0 : 2.5),
+          ),
+          child: Icon(
+            _clientAccuracy > 100 ? Icons.gps_off : Icons.person_pin,
+            color: Colors.white, size: showAccurate ? 20 : 24,
+          ),
         ),
       ));
     }
 
-    if (_driverLat != null && _driverLng != null) {
+    if (_driverDisplayLat != null && _driverDisplayLng != null) {
       markers.add(Marker(
-        point: LatLng(_driverLat!, _driverLng!),
+        point: LatLng(_driverDisplayLat!, _driverDisplayLng!),
         width: 48, height: 48,
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF1565C0),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withValues(alpha: 0.4), blurRadius: 8)],
+        child: Transform.rotate(
+          angle: (_driverHeading ?? 0) * pi / 180,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withValues(alpha: 0.4), blurRadius: 8)],
+            ),
+            child: const Icon(Icons.local_shipping, color: Colors.white, size: 26),
           ),
-          child: const Icon(Icons.local_shipping, color: Colors.white, size: 26),
         ),
       ));
     }
@@ -426,8 +673,16 @@ class _RastreoScreenState extends State<RastreoScreen> {
               TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app', errorImage: const AssetImage('')),
               PolylineLayer(
                 polylines: [
+                  if (_driverTrail.length > 1)
+                    Polyline(
+                      points: List.from(_driverTrail),
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.25),
+                      strokeWidth: 4,
+                    ),
                   Polyline(
-                    points: [LatLng(oLat, oLng), LatLng(dLat, dLng)],
+                    points: _driverLat != null && _driverLng != null
+                        ? [LatLng(_driverLat!, _driverLng!), LatLng(dLat, dLng)]
+                        : [LatLng(oLat, oLng), LatLng(dLat, dLng)],
                     color: const Color(0xFF1565C0).withValues(alpha: 0.5),
                     strokeWidth: 3,
                   ),
@@ -440,6 +695,23 @@ class _RastreoScreenState extends State<RastreoScreen> {
             Positioned(
               left: 8, top: 8,
               child: _buildDriverDistanceCard(oLat, oLng),
+            ),
+          if (_clientLat != null && _clientLng != null)
+            Positioned(
+              right: 8, bottom: 8,
+              child: Material(
+                elevation: 2,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: _centerOnClient,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.my_location, size: 20, color: Color(0xFF1A3C6E)),
+                  ),
+                ),
+              ),
             ),
           if (_mapError)
             Positioned(
@@ -463,12 +735,40 @@ class _RastreoScreenState extends State<RastreoScreen> {
     );
   }
 
+  void _onDriverAnimTick() {
+    if (!mounted) return;
+    final fromLat = _driverLat ?? _driverDisplayLat;
+    final fromLng = _driverLng ?? _driverDisplayLng;
+    if (fromLat == null || fromLng == null || _driverLat == null || _driverLng == null) return;
+    final t = _driverAnimCtrl.value;
+    _driverDisplayLat = fromLat + (_driverLat! - fromLat) * t;
+    _driverDisplayLng = fromLng + (_driverLng! - fromLng) * t;
+    setState(() {});
+  }
+
+  void _animateDriverTo(double lat, double lng) {
+    if (_driverDisplayLat == null && _driverDisplayLng == null) {
+      _driverDisplayLat = lat;
+      _driverDisplayLng = lng;
+      return;
+    }
+    _driverAnimCtrl
+      ..reset()
+      ..forward();
+  }
+
+  void _centerOnClient() {
+    if (_clientLat == null || _clientLng == null) return;
+    _mapController.move(LatLng(_clientLat!, _clientLng!), 15);
+  }
+
   Widget _buildDriverDistanceCard(double oLat, double oLng) {
     final estado = _trip?['estado'] as String?;
     final destino = _trip?['destino'] as Map<String, dynamic>?;
     final dLat = double.tryParse(destino?['lat']?.toString() ?? '');
     final dLng = double.tryParse(destino?['lng']?.toString() ?? '');
-    final velocidadKmph = 30;
+    final spdKmph = (_driverSpeed ?? 0) * 3.6;
+    final velocidadKmph = spdKmph > 5 ? spdKmph : 30;
 
     double distKm;
     String label;
@@ -494,7 +794,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
           const SizedBox(width: 6),
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Text('${distKm.toStringAsFixed(1)} km $label', style: const TextStyle(fontSize: 10, color: Color(0xFF757575))),
-            Text('$min min', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+            Text('~$min min', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+            if (spdKmph > 5)
+              Text('${spdKmph.toStringAsFixed(0)} km/h', style: const TextStyle(fontSize: 9, color: Color(0xFF1565C0))),
           ]),
         ]),
       ),
@@ -692,6 +994,22 @@ class _RastreoScreenState extends State<RastreoScreen> {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
+                ),
+              ),
+            ),
+          if (estado == 'aceptado' || estado == 'en_curso')
+            const SizedBox(height: 8),
+          if (estado == 'aceptado' || estado == 'en_curso')
+            SizedBox(
+              width: double.infinity, height: 44,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: _trip!, role: 'cliente'))),
+                icon: const Icon(Icons.gavel_outlined, size: 18),
+                label: const Text('Reportar problema', style: TextStyle(fontWeight: FontWeight.w500)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade600,
+                  side: BorderSide(color: Colors.red.shade300),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),

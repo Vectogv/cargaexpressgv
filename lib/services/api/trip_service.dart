@@ -72,6 +72,11 @@ class TripService {
     return data['url'] as String? ?? '';
   }
 
+  static Future<String> disputePhoto(dynamic tripId, Uint8List bytes, String filename) async {
+    final data = await HttpClient.uploadFile('/api/trips/$tripId/dispute-photo', bytes: bytes, filename: filename, fieldName: 'foto', auth: true);
+    return data['url'] as String? ?? '';
+  }
+
   static String _extractError(dynamic data) {
     if (data is Map) {
       if (data['message'] != null) return data['message'] as String;

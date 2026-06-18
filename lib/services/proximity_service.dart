@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'api_client.dart';
+import 'logger_service.dart';
 
 class ProximityService {
   Timer? _timer;
@@ -19,6 +20,7 @@ class ProximityService {
     _timer = Timer.periodic(const Duration(seconds: 20), (_) {
       _refreshAndCheck(trip, onAlert);
     });
+    LoggerService.instance.info('ProximityService started monitoring');
   }
 
   Future<void> _refreshAndCheck(Map<String, dynamic> trip, void Function(String message) onAlert) async {
@@ -27,42 +29,48 @@ class ProximityService {
       if (updated != null) {
         _checkProximity(updated, onAlert);
       }
-    } catch (_) {}
+    } catch (e) {
+      LoggerService.instance.debug('ProximityService._refreshAndCheck error: $e');
+    }
   }
 
   void _checkProximity(Map<String, dynamic> trip, void Function(String message) onAlert) {
-    final conductor = trip['conductor'] as Map<String, dynamic>?;
-    if (conductor == null) return;
+    try {
+      final conductor = trip['conductor'] as Map<String, dynamic>?;
+      if (conductor == null) return;
 
-    final driverLat = _parseDouble(conductor['lat']);
-    final driverLng = _parseDouble(conductor['lng']);
-    if (driverLat == null || driverLng == null) return;
+      final driverLat = _parseDouble(conductor['lat']);
+      final driverLng = _parseDouble(conductor['lng']);
+      if (driverLat == null || driverLng == null) return;
 
-    final origen = trip['origen'] as Map<String, dynamic>?;
-    final destino = trip['destino'] as Map<String, dynamic>?;
+      final origen = trip['origen'] as Map<String, dynamic>?;
+      final destino = trip['destino'] as Map<String, dynamic>?;
 
-    if (!_nearOriginNotified && origen != null) {
-      final oLat = _parseDouble(origen['lat']);
-      final oLng = _parseDouble(origen['lng']);
-      if (oLat != null && oLng != null) {
-        final dist = _calculateDistance(driverLat, driverLng, oLat, oLng);
-        if (dist <= proximityRadius) {
-          _nearOriginNotified = true;
-          onAlert('El conductor designado est\u00e1 cerca de tu ubicaci\u00f3n.');
+      if (!_nearOriginNotified && origen != null) {
+        final oLat = _parseDouble(origen['lat']);
+        final oLng = _parseDouble(origen['lng']);
+        if (oLat != null && oLng != null) {
+          final dist = _calculateDistance(driverLat, driverLng, oLat, oLng);
+          if (dist <= proximityRadius) {
+            _nearOriginNotified = true;
+            onAlert('El conductor designado est\u00e1 cerca de tu ubicaci\u00f3n.');
+          }
         }
       }
-    }
 
-    if (!_nearDestinyNotified && destino != null) {
-      final dLat = _parseDouble(destino['lat']);
-      final dLng = _parseDouble(destino['lng']);
-      if (dLat != null && dLng != null) {
-        final dist = _calculateDistance(driverLat, driverLng, dLat, dLng);
-        if (dist <= proximityRadius) {
-          _nearDestinyNotified = true;
-          onAlert('El conductor se encuentra cerca del destino de tu carga.');
+      if (!_nearDestinyNotified && destino != null) {
+        final dLat = _parseDouble(destino['lat']);
+        final dLng = _parseDouble(destino['lng']);
+        if (dLat != null && dLng != null) {
+          final dist = _calculateDistance(driverLat, driverLng, dLat, dLng);
+          if (dist <= proximityRadius) {
+            _nearDestinyNotified = true;
+            onAlert('El conductor se encuentra cerca del destino de tu carga.');
+          }
         }
       }
+    } catch (e) {
+      LoggerService.instance.error('ProximityService._checkProximity error', e);
     }
   }
 
@@ -92,6 +100,7 @@ class ProximityService {
     _monitoring = false;
     _nearOriginNotified = false;
     _nearDestinyNotified = false;
+    LoggerService.instance.info('ProximityService stopped monitoring');
   }
 
   bool get isMonitoring => _monitoring;

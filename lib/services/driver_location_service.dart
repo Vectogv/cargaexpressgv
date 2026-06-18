@@ -4,6 +4,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'api_client.dart';
 import 'background_location_service.dart';
+import 'fraud_detection_service.dart';
+import 'logger_service.dart';
+import 'network_monitor_service.dart';
 
 class DriverLocationService {
   static final DriverLocationService instance = DriverLocationService._();
@@ -15,6 +18,8 @@ class DriverLocationService {
   double? _lastLng;
   bool _running = false;
   bool _online = false;
+  int _locationErrorCount = 0;
+  Timer? _retryPositionTimer;
 
   List<Map<String, dynamic>> _nearbyTrips = [];
   final _tripStreamController = StreamController<List<Map<String, dynamic>>>.broadcast();
@@ -33,6 +38,7 @@ class DriverLocationService {
     final granted = await _requestLocationPermission();
     if (!granted) {
       _running = false;
+      LoggerService.instance.warning('DriverLocationService: location permission denied');
       return;
     }
 
@@ -42,29 +48,54 @@ class DriverLocationService {
     _startTripPolling();
 
     if (!kIsWeb) {
-      await BackgroundLocationService.instance.initialize();
-      await BackgroundLocationService.instance.start();
+      try {
+        await BackgroundLocationService.instance.initialize();
+        await BackgroundLocationService.instance.start();
+      } catch (e) {
+        LoggerService.instance.error('DriverLocationService: background location start error', e);
+      }
     }
   }
 
   void _startPositionStream() {
     _positionSub?.cancel();
+    _retryPositionTimer?.cancel();
+    _locationErrorCount = 0;
+
     final locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 10,
     );
-    _positionSub = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-      (Position pos) async {
-        _lastLat = pos.latitude;
-        _lastLng = pos.longitude;
-        try {
-          await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
-        } catch (e) {
-          debugPrint('DriverLocationService.updateLocation error: $e');
-        }
-      },
-      onError: (e) => debugPrint('DriverLocationService.positionStream error: $e'),
-    );
+    try {
+      _positionSub = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+        (Position pos) async {
+          FraudDetectionService.instance.checkGpsPosition(pos);
+          _lastLat = pos.latitude;
+          _lastLng = pos.longitude;
+          _locationErrorCount = 0;
+          try {
+            if (NetworkMonitorService.instance.isOnline) {
+              await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+            }
+          } catch (e) {
+            LoggerService.instance.error('DriverLocationService.updateLocation error', e);
+          }
+        },
+        onError: (e) {
+          LoggerService.instance.error('DriverLocationService.positionStream error', e);
+          _locationErrorCount++;
+          if (_locationErrorCount > 5) {
+            LoggerService.instance.warning('DriverLocationService: too many position errors, restarting stream');
+            _positionSub?.cancel();
+            _retryPositionTimer = Timer(const Duration(seconds: 10), _startPositionStream);
+          }
+        },
+        cancelOnError: false,
+      );
+    } catch (e) {
+      LoggerService.instance.error('DriverLocationService: error creating position stream', e);
+      _retryPositionTimer = Timer(const Duration(seconds: 15), _startPositionStream);
+    }
   }
 
   Future<void> _sendInitialLocation() async {
@@ -74,9 +105,11 @@ class DriverLocationService {
       );
       _lastLat = pos.latitude;
       _lastLng = pos.longitude;
-      await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+      if (NetworkMonitorService.instance.isOnline) {
+        await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+      }
     } catch (e) {
-      debugPrint('DriverLocationService._sendInitialLocation error: $e');
+      LoggerService.instance.error('DriverLocationService._sendInitialLocation error', e);
     }
   }
 
@@ -87,6 +120,7 @@ class DriverLocationService {
 
   Future<void> _fetchNearbyTrips() async {
     if (!_online || _lastLat == null || _lastLng == null) return;
+    if (!NetworkMonitorService.instance.isOnline) return;
     try {
       final trips = await ApiClient.instance.getNearbyTrips(_lastLat!, _lastLng!, radio: 20);
       if (!_online) return;
@@ -94,7 +128,9 @@ class DriverLocationService {
       if (!_tripStreamController.isClosed) {
         _tripStreamController.add(List.from(trips));
       }
-    } catch (_) {}
+    } catch (e) {
+      LoggerService.instance.debug('DriverLocationService._fetchNearbyTrips error: $e');
+    }
   }
 
   void stop() {
@@ -104,6 +140,8 @@ class DriverLocationService {
     _positionSub = null;
     _tripPollTimer?.cancel();
     _tripPollTimer = null;
+    _retryPositionTimer?.cancel();
+    _retryPositionTimer = null;
     _nearbyTrips = [];
   }
 
@@ -113,6 +151,8 @@ class DriverLocationService {
     _tripPollTimer = null;
     _positionSub?.cancel();
     _positionSub = null;
+    _retryPositionTimer?.cancel();
+    _retryPositionTimer = null;
   }
 
   void resume() {
@@ -129,15 +169,20 @@ class DriverLocationService {
   }
 
   Future<bool> _requestLocationPermission() async {
-    var status = await Permission.location.status;
-    if (status.isGranted) return true;
-    status = await Permission.location.request();
-    if (status.isGranted) return true;
+    try {
+      var status = await Permission.location.status;
+      if (status.isGranted) return true;
+      status = await Permission.location.request();
+      if (status.isGranted) return true;
 
-    if (await Permission.locationAlways.request().isGranted) return true;
-    if (await Permission.location.isGranted) return true;
+      if (await Permission.locationAlways.request().isGranted) return true;
+      if (await Permission.location.isGranted) return true;
 
-    return false;
+      return false;
+    } catch (e) {
+      LoggerService.instance.error('DriverLocationService permission error', e);
+      return false;
+    }
   }
 
   void removeTrip(dynamic tripId) {

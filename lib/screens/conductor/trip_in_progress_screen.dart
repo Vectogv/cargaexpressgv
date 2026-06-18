@@ -1,15 +1,25 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
+import '../../services/logger_service.dart';
+import '../../services/network_monitor_service.dart';
+import '../../services/app_lifecycle_service.dart';
+import '../../services/cache_service.dart';
+import '../../services/background_location_service.dart';
+import '../../services/fraud_detection_service.dart';
+import '../../services/api/trip_service.dart';
 import 'trip_chat_screen.dart';
+import '../shared/dispute_screen.dart';
 
 class TripInProgressScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -19,17 +29,24 @@ class TripInProgressScreen extends StatefulWidget {
   State<TripInProgressScreen> createState() => _TripInProgressScreenState();
 }
 
-class _TripInProgressScreenState extends State<TripInProgressScreen> {
+class _TripInProgressScreenState extends State<TripInProgressScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _trip;
   bool _loading = true;
   bool _actionLoading = false;
   Timer? _locationTimer;
   StreamSubscription<Map<String, dynamic>>? _gpsSubscription;
+  StreamSubscription<Position>? _positionStreamSub;
+  Timer? _posRetryTimer;
+  int _posErrors = 0;
   double? _currentLat;
   double? _currentLng;
+  double? _currentSpeed;
   int _elapsedSeconds = 0;
+  String? _deliveryPhotoUrl;
   Timer? _elapsedTimer;
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
+  StreamSubscription<bool>? _lifecycleSub;
+  final MapController _mapController = MapController();
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -43,20 +60,45 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AppLifecycleService.instance.init();
+
     _gpsSubscription = NotificationService.instance.onNotification.listen(_onSocketEvent);
     _finalizeResponseSub = SocketServiceClient.instance.onFinalizeResponse.listen(_onFinalizeResponse);
+
+    final cachedTrip = CacheService.instance.getCachedActiveTrip();
+    if (cachedTrip != null) {
+      _trip = cachedTrip;
+      _loading = false;
+    }
+
     _initLocation();
     if (widget.trip != null) {
       _trip = widget.trip;
       _loading = false;
       _startGpsTimer();
+      _cacheTripState();
+    } else if (_trip != null) {
+      _loading = false;
+      _startGpsTimer();
     } else {
       _fetchActiveTrip();
     }
+
+    _lifecycleSub = AppLifecycleService.instance.onBackgroundChanged.listen((isBackground) {
+      if (!isBackground && mounted) {
+        LoggerService.instance.info('TripInProgress: app resumed, restoring state');
+        _restoreAfterBackground();
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _lifecycleSub?.cancel();
+    _positionStreamSub?.cancel();
+    _posRetryTimer?.cancel();
     _stopGpsTimer();
     _elapsedTimer?.cancel();
     _gpsSubscription?.cancel();
@@ -64,12 +106,165 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      LoggerService.instance.info('TripInProgress: app backgrounded, caching trip state');
+      _cacheTripState();
+      BackgroundLocationService.instance.updateNotification(
+        estado: _trip?['estado'] as String?,
+        destino: _getDestinoDireccion(),
+      );
+    }
+  }
+
+  String? _getDestinoDireccion() {
+    final destino = _trip?['destino'] as Map<String, dynamic>?;
+    return destino?['direccion'] as String?;
+  }
+
+  void _cacheTripState() {
+    if (_trip != null) {
+      CacheService.instance.cacheActiveTrip(_trip!);
+    }
+  }
+
+  Future<void> _restoreAfterBackground() async {
+    try {
+      final fresh = await ApiClient.instance.getActiveTrip();
+      if (fresh != null && mounted) {
+        setState(() {
+          _trip = fresh;
+          _elapsedSeconds = _calcularElapsed(fresh);
+        });
+        _cacheTripState();
+        _restartTimersIfNeeded();
+      }
+    } catch (e) {
+      LoggerService.instance.error('TripInProgress: error restoring after background', e);
+    }
+  }
+
+  int _calcularElapsed(Map<String, dynamic> trip) {
+    final inicio = trip['inicio'] as String?;
+    if (inicio == null) return _elapsedSeconds;
+    try {
+      final inicioDt = DateTime.parse(inicio);
+      return DateTime.now().difference(inicioDt).inSeconds;
+    } catch (_) {
+      return _elapsedSeconds;
+    }
+  }
+
+  void _restartTimersIfNeeded() {
+    if (_locationTimer == null || !_locationTimer!.isActive) {
+      _startGpsTimer();
+    }
+  }
+
+  void _fitMapBounds() {
+    final origen = _trip?['origen'] as Map<String, dynamic>?;
+    final destino = _trip?['destino'] as Map<String, dynamic>?;
+    final points = <LatLng>[];
+    if (_currentLat != null && _currentLng != null) {
+      points.add(LatLng(_currentLat!, _currentLng!));
+    }
+    if (origen != null) {
+      final oLat = double.tryParse(origen['lat']?.toString() ?? '');
+      final oLng = double.tryParse(origen['lng']?.toString() ?? '');
+      if (oLat != null && oLng != null) points.add(LatLng(oLat, oLng));
+    }
+    if (destino != null) {
+      final dLat = double.tryParse(destino['lat']?.toString() ?? '');
+      final dLng = double.tryParse(destino['lng']?.toString() ?? '');
+      if (dLat != null && dLng != null) points.add(LatLng(dLat, dLng));
+    }
+    if (points.length < 2) {
+      if (points.length == 1) {
+        _mapController.move(points.first, 14);
+      }
+      return;
+    }
+    try {
+      final bounds = LatLngBounds.fromPoints(points);
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(60),
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> _initLocation() async {
     try {
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
-      if (mounted) setState(() { _currentLat = pos.latitude; _currentLng = pos.longitude; });
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        ),
+      );
+      if (mounted) setState(() {
+        _currentLat = pos.latitude;
+        _currentLng = pos.longitude;
+      });
     } catch (e) {
-      debugPrint('trip_in_progress._initLocation error: $e');
+      LoggerService.instance.error('trip_in_progress._initLocation error', e);
+    }
+    _startPositionStream();
+  }
+
+  void _startPositionStream() {
+    _positionStreamSub?.cancel();
+    _posRetryTimer?.cancel();
+    _posErrors = 0;
+
+    try {
+      final settings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+        timeLimit: const Duration(seconds: 30),
+      );
+
+      _positionStreamSub = Geolocator.getPositionStream(
+        locationSettings: settings,
+      ).listen(
+        (Position pos) {
+          if (!mounted) return;
+          _posErrors = 0;
+          CacheService.instance.cacheDriverPosition(pos.latitude, pos.longitude);
+          setState(() {
+            _currentLat = pos.latitude;
+            _currentLng = pos.longitude;
+            _currentSpeed = pos.speed;
+          });
+          if (_trip != null) {
+            SocketServiceClient.instance.emit('driver:location', {
+              'tripId': _trip!['id'],
+              'latitude': pos.latitude,
+              'longitude': pos.longitude,
+              'speed': pos.speed,
+              'heading': pos.heading ?? 0,
+            });
+          }
+        },
+        onError: (e) {
+          LoggerService.instance.error('trip_in_progress: GPS stream error', e);
+          _posErrors++;
+          if (_posErrors > 5 && mounted) {
+            _positionStreamSub?.cancel();
+            _posRetryTimer = Timer(const Duration(seconds: 15), () {
+              if (mounted) _startPositionStream();
+            });
+          }
+        },
+        cancelOnError: false,
+      );
+    } catch (e) {
+      LoggerService.instance.error('trip_in_progress: GPS stream init error', e);
+      _posRetryTimer = Timer(const Duration(seconds: 15), () {
+        if (mounted) _startPositionStream();
+      });
     }
   }
 
@@ -93,12 +288,28 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
       if (accepted) {
         _finalizeTrip();
       } else {
-        _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se notificar\u00e1 al administrador.');
+        final motivo = data['motivo'] as String? ?? 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega';
+        _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se abrir\u00e1 una disputa.');
         ApiClient.instance.disputeTrip(
           _trip!['id'],
-          motivo: 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega',
+          motivo: 'Rechazo de entrega',
+          descripcion: motivo,
         );
       }
+    }
+  }
+
+  Future<String?> _takeDeliveryPhoto() async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+      if (file == null) return null;
+      final bytes = await file.readAsBytes();
+      final url = await TripService.deliveryPhoto(_trip!['id'], bytes, 'delivery_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      return url;
+    } catch (e) {
+      LoggerService.instance.error('Error taking delivery photo', e);
+      return null;
     }
   }
 
@@ -106,25 +317,90 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     if (_trip == null) return;
     setState(() => _actionLoading = true);
 
-    SocketServiceClient.instance.emit('trip:finalize_request', {
-      'tripId': _trip!['id'],
-      'trip': _trip,
-    });
-
-    if (!mounted) return;
-    await showDialog(
+    final confirm = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Esperando confirmaci\u00f3n'),
-        content: const Text('Solicitando confirmaci\u00f3n al cliente...'),
+        title: const Text('Finalizar entrega'),
+        content: const Text('\u00bfDesea tomar una foto como evidencia de la entrega?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Sin foto'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Tomar foto'),
           ),
         ],
       ),
+    );
+
+    if (confirm == true) {
+      _deliveryPhotoUrl = await _takeDeliveryPhoto();
+    }
+
+    if (!mounted) return;
+
+    SocketServiceClient.instance.emit('trip:finalize_request', {
+      'tripId': _trip!['id'],
+      'trip': _trip,
+      if (_deliveryPhotoUrl != null) 'foto': _deliveryPhotoUrl,
+    });
+
+    int timeoutSec = 30;
+    if (!mounted) { setState(() => _actionLoading = false); return; }
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            Timer? countdownTimer;
+            countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+              timeoutSec--;
+              if (timeoutSec <= 0) {
+                timer.cancel();
+                Navigator.pop(ctx);
+                if (mounted) {
+                  _snack('El cliente no respondi\u00f3. Finalizando viaje.');
+                  _finalizeTrip();
+                }
+              } else {
+                setDialogState(() {});
+              }
+            });
+            return AlertDialog(
+              title: const Text('Esperando confirmaci\u00f3n'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Solicitando confirmaci\u00f3n al cliente...'),
+                  const SizedBox(height: 16),
+                  Text('Tiempo restante: $timeoutSec s',
+                    style: TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.w700,
+                      color: timeoutSec < 10 ? Colors.red : _primaryDark,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    countdownTimer?.cancel();
+                    Navigator.pop(ctx);
+                    if (mounted) {
+                      _snack('Finalizaci\u00f3n cancelada.');
+                    }
+                  },
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     setState(() => _actionLoading = false);
   }
@@ -133,8 +409,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     try {
       final trip = await ApiClient.instance.getActiveTrip();
       if (mounted) setState(() { _trip = trip; _loading = false; });
-      _startGpsTimer();
-    } catch (_) {
+      if (trip != null) {
+        _startGpsTimer();
+      } else {
+        LoggerService.instance.warning('trip_in_progress: no active trip found');
+      }
+    } catch (e) {
+      LoggerService.instance.error('trip_in_progress._fetchActiveTrip error', e);
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -183,13 +464,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
 
   Future<void> _sendLocation() async {
     try {
+      if (!NetworkMonitorService.instance.isOnline) return;
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
       if (mounted) setState(() { _currentLat = pos.latitude; _currentLng = pos.longitude; });
       await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
     } catch (e) {
-      if (e.toString().contains('429') || e.toString().contains('RateLimited')) return;
+      final msg = e.toString();
+      if (msg.contains('429') || msg.contains('RateLimited')) return;
+      LoggerService.instance.error('trip_in_progress._sendLocation error', e);
     }
   }
 
@@ -363,9 +647,23 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
         Expanded(
           flex: 3,
           child: FlutterMap(
-            options: MapOptions(initialCenter: LatLng(centerLat, centerLng), initialZoom: 13),
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: LatLng(centerLat, centerLng),
+              initialZoom: 13,
+              onMapReady: _fitMapBounds,
+            ),
             children: [
               TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app', errorImage: const AssetImage('')),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: [LatLng(oLat, oLng), LatLng(dLat, dLng)],
+                    color: _primaryBlue.withValues(alpha: 0.5),
+                    strokeWidth: 3,
+                  ),
+                ],
+              ),
               MarkerLayer(markers: markers),
             ],
           ),
@@ -424,7 +722,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
   Widget _buildTripInfoBar(double oLat, double oLng, double dLat, double dLng) {
     final distOrigen = _haversine(_currentLat!, _currentLng!, oLat, oLng);
     final distDestino = _haversine(_currentLat!, _currentLng!, dLat, dLng);
-    final velocidad = 30.0;
+    final spdKmph = (_currentSpeed ?? 0) * 3.6;
+    final velocidad = spdKmph > 5 ? spdKmph : 30.0;
     final minDestino = distDestino > 0 ? (distDestino / velocidad * 60).round() : 0;
 
     return Container(
@@ -436,7 +735,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
           const SizedBox(height: 4),
           Row(children: [
             Text('Destino: ', style: TextStyle(fontSize: 12, color: _textGrey)),
-            Text('$minDestino min', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _primaryDark)),
+            Text('~$minDestino min', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _primaryDark)),
+            if (spdKmph > 5) ...[
+              const SizedBox(width: 6),
+              Text('${spdKmph.toStringAsFixed(0)} km/h', style: TextStyle(fontSize: 11, color: _primaryBlue)),
+            ],
           ]),
         ]),
         const Spacer(),
@@ -537,6 +840,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
         }),
         _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
         _navItem(Icons.info_outline, 'Detalle', () => _showClientDetail(t)),
+        _navItem(Icons.gavel_outlined, 'Reportar', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t, role: 'conductor')));
+        }),
         if (estado == 'aceptado')
           _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
         if (estado == 'en_curso')
@@ -700,6 +1006,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     );
 
     if (confirmado != true || motivoSeleccionado == null) return;
+
+    FraudDetectionService.instance.checkCancellation(ApiClient.instance.userId ?? '');
 
     try {
       final desc = motivoCtrl.text.trim();
