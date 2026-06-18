@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/notification_service.dart';
+import 'trip_chat_screen.dart';
 
 class TripInProgressScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -267,17 +268,25 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     final centerLng = _currentLng ?? oLng;
 
     final markers = <Marker>[
-      Marker(point: LatLng(oLat, oLng), width: 36, height: 36, child: const Icon(Icons.trip_origin, color: Colors.green, size: 36)),
+      Marker(point: LatLng(oLat, oLng), width: 48, height: 48, child: Container(
+        decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.4), blurRadius: 8)]),
+        child: const Icon(Icons.person, color: Colors.white, size: 26),
+      )),
       Marker(point: LatLng(dLat, dLng), width: 36, height: 36, child: const Icon(Icons.location_on, color: Colors.red, size: 36)),
     ];
 
     if (_currentLat != null && _currentLng != null) {
       markers.add(Marker(
         point: LatLng(_currentLat!, _currentLng!),
-        width: 40, height: 40,
+        width: 48, height: 48,
         child: Container(
-          decoration: BoxDecoration(color: _primaryBlue, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3), boxShadow: [BoxShadow(color: _primaryBlue.withOpacity(0.4), blurRadius: 8)]),
-          child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
+          decoration: BoxDecoration(
+            color: _primaryBlue,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [BoxShadow(color: _primaryBlue.withValues(alpha: 0.4), blurRadius: 8)],
+          ),
+          child: const Icon(Icons.local_shipping, color: Colors.white, size: 26),
         ),
       ));
     }
@@ -444,9 +453,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
       decoration: const BoxDecoration(color: _white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))]),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         _navItem(Icons.chat_bubble_outline, 'Chat', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => _ChatNavScreen(trip: t)));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t)));
         }),
-        _navItem(Icons.phone_outlined, 'Llamar', () {}),
+        _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
         _navItem(Icons.info_outline, 'Detalle', () {}),
         if (estado == 'aceptado')
           _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
@@ -464,6 +473,32 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
         const SizedBox(height: 4),
         Text(label, style: TextStyle(fontSize: 10, color: _textGrey)),
       ]),
+    );
+  }
+
+  void _showClientPhone(Map<String, dynamic> t) {
+    final cliente = t['cliente'] as Map<String, dynamic>?;
+    final nombre = cliente?['nombre'] as String? ?? 'Cliente';
+    final telefono = cliente?['telefono'] as String?;
+    if (telefono == null || telefono.isEmpty) {
+      _snack('No hay n\u00famero de tel\u00e9fono disponible');
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Contactar a $nombre'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.phone, size: 48, color: _primaryBlue),
+          const SizedBox(height: 12),
+          Text(telefono, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text('$nombre - Cliente', style: const TextStyle(color: _textGrey)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        ],
+      ),
     );
   }
 
@@ -529,7 +564,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     if (confirmado != true || motivoSeleccionado == null) return;
 
     try {
-      await ApiClient.instance.cancelTrip(t['id'], motivo: motivoSeleccionado);
+      final desc = motivoCtrl.text.trim();
+      await ApiClient.instance.cancelTrip(t['id'], motivo: desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado);
       if (mounted) {
         _snack('Viaje cancelado. Se ha notificado al cliente.');
         Navigator.pop(context);
@@ -601,7 +637,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     if (confirmado != true || motivoSeleccionado == null) return;
 
     try {
-      await ApiClient.instance.requestCancellation(t['id'], motivo: motivoSeleccionado);
+      final desc = motivoCtrl.text.trim();
+      final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
+      await ApiClient.instance.requestCancellation(t['id'], motivo: motivo);
       if (mounted) {
         _snack('Solicitud de cancelaci\u00f3n enviada. Se notificar\u00e1 al cliente y a soporte.');
         Navigator.pop(context);
@@ -627,32 +665,5 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     final parts = name.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name[0].toUpperCase();
-  }
-}
-
-class _ChatNavScreen extends StatelessWidget {
-  final Map<String, dynamic> trip;
-  const _ChatNavScreen({required this.trip});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1A1A2E),
-        elevation: 0,
-        title: const Text('Chat'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 12),
-            const Text('Abrir chat del viaje', style: TextStyle(color: Colors.black54)),
-          ],
-        ),
-      ),
-    );
   }
 }

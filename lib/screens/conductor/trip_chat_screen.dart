@@ -21,6 +21,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
   bool _isTyping = false;
   bool _otherTyping = false;
   Timer? _typingTimer;
+  Timer? _pollTimer;
   StreamSubscription<Map<String, dynamic>>? _messageSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
@@ -42,6 +43,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
     _messageController.dispose();
     _scrollCtrl.dispose();
     _typingTimer?.cancel();
+    _pollTimer?.cancel();
     _messageSub?.cancel();
     super.dispose();
   }
@@ -54,10 +56,11 @@ class _TripChatScreenState extends State<TripChatScreen> {
         _activeTrip = await ApiClient.instance.getActiveTrip();
       }
       final estado = _activeTrip?['estado'] as String?;
-      _canChat = estado == 'en_curso';
+      _canChat = estado == 'aceptado' || estado == 'en_curso' || estado == 'completado';
       if (_canChat) {
         _setupSocket();
         await _fetchMessages();
+        _startPolling();
       } else {
         if (mounted) setState(() => _loading = false);
       }
@@ -72,7 +75,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
 
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
       if (data['tripId']?.toString() == tripId) {
-        final msgText = data['text'] as String?;
+        final msgText = data['text'] as String? ?? data['mensaje'] as String?;
         final senderId = data['senderId']?.toString();
         final userId = ApiClient.instance.userId;
         if (msgText != null && senderId != userId) {
@@ -100,6 +103,20 @@ class _TripChatScreenState extends State<TripChatScreen> {
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!mounted || _activeTrip == null) return;
+      try {
+        final msgs = await ApiClient.instance.getTripMessages(_activeTrip!['id']);
+        if (msgs.length != _messages.length && mounted) {
+          setState(() => _messages = msgs);
+          _scrollDown();
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -308,7 +325,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
                 ),
                 child: Text(
-                  msg['text'] as String? ?? '',
+                  msg['text'] as String? ?? msg['mensaje'] as String? ?? '',
                   style: TextStyle(color: isSent ? _white : _textDark, fontSize: 14, height: 1.4),
                 ),
               ),

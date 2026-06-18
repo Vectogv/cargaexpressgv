@@ -7,6 +7,6 @@ class ChatService {
   }
 
   static Future<void> sendTripMessage(dynamic tripId, String text) async {
-    await HttpClient.post('/api/trips/$tripId/chat', body: {'text': text}, auth: true);
+    await HttpClient.post('/api/trips/$tripId/chat', body: {'mensaje': text}, auth: true);
   }
 }

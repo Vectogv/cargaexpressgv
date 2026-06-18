@@ -14,7 +14,11 @@ class OfferService {
     return list.cast<Map<String, dynamic>>();
   }
 
-  static Future<void> acceptOffer(dynamic tripId, dynamic offerId) async {
-    await HttpClient.post('/api/trips/$tripId/offers/$offerId/accept', auth: true);
+  static Future<Map<String, dynamic>> acceptOffer(dynamic tripId, dynamic offerId) async {
+    return HttpClient.post('/api/trips/$tripId/offers/$offerId/accept', auth: true);
+  }
+
+  static Future<Map<String, dynamic>> rejectOffer(dynamic tripId, dynamic offerId) async {
+    return HttpClient.post('/api/trips/$tripId/offers/$offerId/reject', auth: true);
   }
 }

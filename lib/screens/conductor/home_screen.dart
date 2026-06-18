@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loadingTrips = true;
   bool _online = true;
   bool _statusLoading = false;
+  Map<String, dynamic>? _activeTrip;
 
   Map<String, dynamic>? _earnings;
   Map<String, dynamic>? _stats;
@@ -58,14 +59,24 @@ class _HomeScreenState extends State<HomeScreen> {
     _socketSub = NotificationService.instance.onNotification.listen((event) {
       final tipo = event['__event'] as String?;
       if (tipo == 'trip:nearby') {
-        _showNewTripBanner(event);
-        _fetchNearbyTrips();
+        if (_activeTrip == null) {
+          _showNewTripBanner(event);
+          _fetchNearbyTrips();
+        }
       } else if (tipo == 'trip:accepted') {
         final tripId = event['tripId'] ?? event['id'];
         if (tripId != null) {
           DriverLocationService.instance.removeTrip(tripId);
         }
-        _fetchNearbyTrips();
+        _fetchActiveTrip();
+      } else if (tipo == 'trip:status') {
+        final estado = event['estado'] as String?;
+        if (estado == 'completado' || estado == 'cancelado') {
+          if (mounted) setState(() => _activeTrip = null);
+          _fetchNearbyTrips();
+        } else {
+          _fetchActiveTrip();
+        }
       }
     });
 
@@ -85,11 +96,35 @@ class _HomeScreenState extends State<HomeScreen> {
     await _fetchProfileFirst();
     await Future.wait([
       _fetchStats(),
+      _fetchActiveTrip(),
     ]);
+    if (_activeTrip != null) {
+      _redirectToActiveTrip();
+      return;
+    }
     if (_online && _verificacionEstado == 'aprobado') {
       await DriverLocationService.instance.start();
     }
     await _fetchNearbyTrips();
+  }
+
+  void _redirectToActiveTrip() {
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip)));
+  }
+
+  Future<void> _fetchActiveTrip() async {
+    try {
+      final trip = await ApiClient.instance.getActiveTrip();
+      if (trip != null) {
+        final estado = trip['estado'] as String?;
+        if (estado == 'aceptado' || estado == 'en_curso') {
+          if (mounted) setState(() => _activeTrip = trip);
+          return;
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _activeTrip = null);
   }
 
   Future<void> _fetchProfileFirst() async {
@@ -473,7 +508,93 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildActiveTripCard() {
+    final t = _activeTrip!;
+    final origen = t['origen'] as Map<String, dynamic>?;
+    final destino = t['destino'] as Map<String, dynamic>?;
+    final cliente = t['cliente'] as Map<String, dynamic>?;
+    final nombre = cliente?['nombre'] as String? ?? 'Cliente';
+    final estado = t['estado'] as String? ?? '';
+    final estadoLabel = estado == 'aceptado' ? 'Aceptado' : 'En curso';
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF1A3C6E), Color(0xFF1565C0)]),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 6))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: _accentGreen.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.trip_origin, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(estadoLabel, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                  const Spacer(),
+                  Text('ID: ${t['id']}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                ]),
+                const SizedBox(height: 20),
+                Row(children: [
+                  const Icon(Icons.person, color: Colors.white70, size: 18),
+                  const SizedBox(width: 8),
+                  Text(nombre, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 16),
+                _buildRouteRow(Icons.circle_outlined, 'Salida', origen?['direccion'] as String? ?? ''),
+                const SizedBox(height: 10),
+                _buildRouteRow(Icons.location_on_outlined, 'Llegada', destino?['direccion'] as String? ?? ''),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity, height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: t))),
+                    icon: const Icon(Icons.map_rounded, size: 22),
+                    label: const Text('Ver viaje en el mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: _primaryDark,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteRow(IconData icon, String label, String address) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, size: 16, color: Colors.white60),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          Text(address, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+        ]),
+      ),
+    ]);
+  }
+
   Widget _buildHomeContent() {
+    if (_activeTrip != null) {
+      return _buildActiveTripCard();
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(

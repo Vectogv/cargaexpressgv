@@ -13,8 +13,11 @@ class SocketServiceClient {
   final _tripStatusCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverLocationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _newOfferCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _offerAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _offerRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _messageCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _notificationCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCompletedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionCtrl = StreamController<bool>.broadcast();
@@ -22,8 +25,11 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onTripStatus => _tripStatusCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverLocation => _driverLocationCtrl.stream;
   Stream<Map<String, dynamic>> get onNewOffer => _newOfferCtrl.stream;
+  Stream<Map<String, dynamic>> get onOfferAccepted => _offerAcceptedCtrl.stream;
+  Stream<Map<String, dynamic>> get onOfferRejected => _offerRejectedCtrl.stream;
   Stream<Map<String, dynamic>> get onMessage => _messageCtrl.stream;
   Stream<Map<String, dynamic>> get onNotification => _notificationCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripAccepted => _tripAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCompleted => _tripCompletedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCancelled => _tripCancelledCtrl.stream;
   Stream<bool> get onConnection => _connectionCtrl.stream;
@@ -79,6 +85,18 @@ class SocketServiceClient {
       }
     });
 
+    _socket!.on('offer:accepted', (data) {
+      if (data is Map) {
+        _offerAcceptedCtrl.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('offer:rejected', (data) {
+      if (data is Map) {
+        _offerRejectedCtrl.add(Map<String, dynamic>.from(data));
+      }
+    });
+
     _socket!.on('message:new', (data) {
       if (data is Map) {
         _messageCtrl.add(Map<String, dynamic>.from(data));
@@ -97,6 +115,12 @@ class SocketServiceClient {
 
     _socket!.on('notification:delete', (data) {
       if (data is Map) _notificationCtrl.add(Map<String, dynamic>.from(data));
+    });
+
+    _socket!.on('trip:accepted', (data) {
+      if (data is Map) {
+        _tripAcceptedCtrl.add(Map<String, dynamic>.from(data));
+      }
     });
 
     _socket!.on('trip:completed', (data) {
@@ -127,8 +151,11 @@ class SocketServiceClient {
     _tripStatusCtrl.close();
     _driverLocationCtrl.close();
     _newOfferCtrl.close();
+    _offerAcceptedCtrl.close();
+    _offerRejectedCtrl.close();
     _messageCtrl.close();
     _notificationCtrl.close();
+    _tripAcceptedCtrl.close();
     _tripCompletedCtrl.close();
     _tripCancelledCtrl.close();
     _connectionCtrl.close();

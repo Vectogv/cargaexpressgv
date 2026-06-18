@@ -16,6 +16,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
+  Timer? _pollTimer;
   StreamSubscription<Map<String, dynamic>>? _messageSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
@@ -36,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollCtrl.dispose();
+    _pollTimer?.cancel();
     _messageSub?.cancel();
     super.dispose();
   }
@@ -43,6 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _setup() async {
     _setupSocket();
     await _fetchMessages();
+    _startPolling();
   }
 
   void _setupSocket() {
@@ -51,7 +54,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
       if (data['tripId']?.toString() == tripId) {
-        final msgText = data['text'] as String?;
+        final msgText = data['text'] as String? ?? data['mensaje'] as String?;
         final senderId = data['senderId']?.toString();
         final userId = ApiClient.instance.userId;
         if (msgText != null && senderId != userId) {
@@ -76,6 +79,20 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!mounted) return;
+      try {
+        final msgs = await ApiClient.instance.getTripMessages(widget.trip['id']);
+        if (msgs.length != _messages.length && mounted) {
+          setState(() => _messages = msgs);
+          _scrollDown();
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -206,7 +223,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
                 ),
                 child: Text(
-                  msg['text'] as String? ?? '',
+                  msg['text'] as String? ?? msg['mensaje'] as String? ?? '',
                   style: TextStyle(color: isSent ? _white : _textDark, fontSize: 14, height: 1.4),
                 ),
               ),

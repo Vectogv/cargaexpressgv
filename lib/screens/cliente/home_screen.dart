@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/notification_service.dart';
 import '../user/auth_screen.dart';
 import 'nuevo_envio_screen.dart';
 import 'mis_envios_screen.dart';
@@ -24,11 +27,24 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
   Map<String, dynamic>? _activeTrip;
   bool _loading = true;
+  StreamSubscription<Map<String, dynamic>>? _socketSub;
 
   @override
   void initState() {
     super.initState();
     _loadActiveTrip();
+    _socketSub = NotificationService.instance.onNotification.listen((event) {
+      final tipo = event['__event'] as String?;
+      if (tipo == 'trip:status' || tipo == 'trip:cancelled') {
+        _loadActiveTrip();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _socketSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadActiveTrip() async {

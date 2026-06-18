@@ -99,8 +99,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
     });
 
     _driverLocSub = SocketServiceClient.instance.onDriverLocation.listen((data) {
-      final lat = double.tryParse(data['latitude']?.toString() ?? '');
-      final lng = double.tryParse(data['longitude']?.toString() ?? '');
+      final lat = double.tryParse(data['latitude']?.toString() ?? data['lat']?.toString() ?? '');
+      final lng = double.tryParse(data['longitude']?.toString() ?? data['lng']?.toString() ?? '');
       if (lat != null && lng != null && mounted) {
         setState(() {
           _driverLat = lat;
@@ -130,6 +130,24 @@ class _RastreoScreenState extends State<RastreoScreen> {
   Future<void> _aceptarOferta(dynamic offerId) async {
     try {
       await ApiClient.instance.acceptOffer(_trip!['id'], offerId);
+      final updated = await ApiClient.instance.getActiveTrip();
+      if (mounted) {
+        setState(() {
+          if (updated != null) _trip = updated;
+          _offers = [];
+        });
+      }
+    } catch (e) {
+      if (mounted) _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+    }
+  }
+
+  Future<void> _rechazarOferta(dynamic offerId) async {
+    try {
+      await ApiClient.instance.rejectOffer(_trip!['id'], offerId);
+      if (mounted) {
+        setState(() => _offers.removeWhere((o) => o['id'] == offerId));
+      }
     } catch (e) {
       if (mounted) _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     }
@@ -197,9 +215,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
     if (confirmado != true || motivoSeleccionado == null) return;
 
     try {
-      await ApiClient.instance.cancelTrip(_trip!['id'], motivo: motivoSeleccionado);
+      final desc = motivoCtrl.text.trim();
+      final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
+      await ApiClient.instance.requestCancellation(_trip!['id'], motivo: motivo);
       if (mounted) {
-        _snack('Viaje cancelado. Se ha notificado al conductor.');
+        _snack('Solicitud enviada. El administrador revisar\u00e1 la cancelaci\u00f3n.');
         _proximityService.stopMonitoring();
         Navigator.pop(context);
       }
@@ -239,17 +259,25 @@ class _RastreoScreenState extends State<RastreoScreen> {
     }
 
     final markers = <Marker>[
-      Marker(point: LatLng(oLat, oLng), width: 36, height: 36, child: const Icon(Icons.trip_origin, color: Colors.green, size: 36)),
+      Marker(point: LatLng(oLat, oLng), width: 42, height: 42, child: Container(
+        decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
+        child: const Icon(Icons.person, color: Colors.white, size: 22),
+      )),
       Marker(point: LatLng(dLat, dLng), width: 36, height: 36, child: const Icon(Icons.location_on, color: Colors.red, size: 36)),
     ];
 
     if (_driverLat != null && _driverLng != null) {
       markers.add(Marker(
         point: LatLng(_driverLat!, _driverLng!),
-        width: 40, height: 40,
+        width: 48, height: 48,
         child: Container(
-          decoration: BoxDecoration(color: const Color(0xFF1565C0), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-          child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1565C0),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withValues(alpha: 0.4), blurRadius: 8)],
+          ),
+          child: const Icon(Icons.local_shipping, color: Colors.white, size: 26),
         ),
       ));
     }
@@ -446,9 +474,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
                 label: const Text('Cancelar viaje', style: TextStyle(color: Colors.red)),
               ),
             ),
-          if (estado == 'en_curso')
+          if (estado == 'aceptado' || estado == 'en_curso')
             const SizedBox(height: 8),
-          if (estado == 'en_curso')
+          if (estado == 'aceptado' || estado == 'en_curso')
             SizedBox(
               width: double.infinity, height: 48,
               child: ElevatedButton.icon(
@@ -696,9 +724,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
             Row(children: [
               Expanded(
                 child: SizedBox(height: 48, child: OutlinedButton(
-                  onPressed: () {
-                    setState(() => _offers.removeWhere((o) => o['id'] == offer['id']));
-                  },
+                  onPressed: () => _rechazarOferta(offer['id']),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,
                     side: BorderSide(color: Colors.red.shade200),
