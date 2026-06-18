@@ -16,8 +16,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
-  Timer? _pollTimer;
   StreamSubscription<Map<String, dynamic>>? _messageSub;
+  StreamSubscription<bool>? _connectionSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _textDark = Color(0xFF1A1A2E);
@@ -37,15 +37,14 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollCtrl.dispose();
-    _pollTimer?.cancel();
     _messageSub?.cancel();
+    _connectionSub?.cancel();
     super.dispose();
   }
 
   Future<void> _setup() async {
     _setupSocket();
     await _fetchMessages();
-    _startPolling();
   }
 
   void _setupSocket() {
@@ -54,20 +53,27 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
       if (data['tripId']?.toString() == tripId) {
+        final msgId = data['_id']?.toString() ?? data['id']?.toString();
+        if (msgId != null && _messages.any((m) => m['_id']?.toString() == msgId || m['id']?.toString() == msgId)) return;
         final msgText = data['text'] as String? ?? data['mensaje'] as String?;
         final senderId = data['senderId']?.toString();
         final userId = ApiClient.instance.userId;
         if (msgText != null && senderId != userId) {
           setState(() {
             _messages.add({
+              '_id': msgId,
               'text': msgText,
               'isSent': false,
-              'time': _formatTime(data['timestamp']),
+              'time': _formatTime(data['timestamp'] ?? data['createdAt']),
             });
           });
           _scrollDown();
         }
       }
+    });
+
+    _connectionSub = SocketServiceClient.instance.onConnection.listen((connected) {
+      if (connected && mounted) _fetchMessages();
     });
   }
 
@@ -81,27 +87,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (!mounted) return;
-      try {
-        final msgs = await ApiClient.instance.getTripMessages(widget.trip['id']);
-        if (msgs.length != _messages.length && mounted) {
-          setState(() => _messages = msgs);
-          _scrollDown();
-        }
-      } catch (_) {}
-    });
-  }
-
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
     _messageController.clear();
 
+    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
     setState(() {
-      _messages.add({'text': text, 'isSent': true, 'time': _now()});
+      _messages.add({'_id': msgId, 'text': text, 'isSent': true, 'time': _now(), 'status': 'sending'});
     });
     _scrollDown();
 
@@ -112,7 +105,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       await ApiClient.instance.sendTripMessage(widget.trip['id'], text);
-    } catch (_) {}
+      if (mounted) {
+        setState(() {
+          for (final m in _messages) {
+            if (m['_id'] == msgId) m['status'] = 'sent';
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          for (final m in _messages) {
+            if (m['_id'] == msgId) m['status'] = 'failed';
+          }
+        });
+      }
+    }
   }
 
   void _scrollDown() {
@@ -192,6 +200,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessage(Map<String, dynamic> msg) {
     final bool isSent = msg['isSent'] == true;
+    final status = msg['status'] as String?;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -232,10 +241,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(msg['time'] as String? ?? '', style: TextStyle(fontSize: 10, color: _textGrey)),
-                  if (isSent) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.done_all, size: 14, color: Color(0xFF1A3C6E)),
-                  ],
+                  const SizedBox(width: 4),
+                  if (isSent)
+                    Icon(
+                      status == 'failed' ? Icons.error_outline :
+                      status == 'sending' ? Icons.access_time :
+                      Icons.done_all,
+                      size: 14,
+                      color: status == 'failed' ? Colors.red :
+                             status == 'sending' ? _textGrey :
+                             const Color(0xFF1A3C6E),
+                    ),
                 ],
               ),
             ],

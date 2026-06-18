@@ -20,6 +20,8 @@ class SocketServiceClient {
   final _tripAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCompletedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _finalizeRequestCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _finalizeResponseCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionCtrl = StreamController<bool>.broadcast();
 
   Stream<Map<String, dynamic>> get onTripStatus => _tripStatusCtrl.stream;
@@ -32,6 +34,8 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onTripAccepted => _tripAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCompleted => _tripCompletedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCancelled => _tripCancelledCtrl.stream;
+  Stream<Map<String, dynamic>> get onFinalizeRequest => _finalizeRequestCtrl.stream;
+  Stream<Map<String, dynamic>> get onFinalizeResponse => _finalizeResponseCtrl.stream;
   Stream<bool> get onConnection => _connectionCtrl.stream;
 
   bool get isConnected => _connected;
@@ -134,6 +138,18 @@ class SocketServiceClient {
         _tripCancelledCtrl.add(Map<String, dynamic>.from(data));
       }
     });
+
+    _socket!.on('trip:finalize_request', (data) {
+      if (data is Map) {
+        _finalizeRequestCtrl.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('trip:finalize_response', (data) {
+      if (data is Map) {
+        _finalizeResponseCtrl.add(Map<String, dynamic>.from(data));
+      }
+    });
   }
 
   void emit(String event, Map<String, dynamic> data) {
@@ -158,6 +174,8 @@ class SocketServiceClient {
     _tripAcceptedCtrl.close();
     _tripCompletedCtrl.close();
     _tripCancelledCtrl.close();
+    _finalizeRequestCtrl.close();
+    _finalizeResponseCtrl.close();
     _connectionCtrl.close();
   }
 }

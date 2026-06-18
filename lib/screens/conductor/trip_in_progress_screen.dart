@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/notification_service.dart';
+import '../../services/socket_service_client.dart';
 import 'trip_chat_screen.dart';
 
 class TripInProgressScreen extends StatefulWidget {
@@ -28,6 +29,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
   double? _currentLng;
   int _elapsedSeconds = 0;
   Timer? _elapsedTimer;
+  StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -42,6 +44,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
   void initState() {
     super.initState();
     _gpsSubscription = NotificationService.instance.onNotification.listen(_onSocketEvent);
+    _finalizeResponseSub = SocketServiceClient.instance.onFinalizeResponse.listen(_onFinalizeResponse);
     _initLocation();
     if (widget.trip != null) {
       _trip = widget.trip;
@@ -57,6 +60,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     _stopGpsTimer();
     _elapsedTimer?.cancel();
     _gpsSubscription?.cancel();
+    _finalizeResponseSub?.cancel();
     super.dispose();
   }
 
@@ -73,7 +77,56 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     final tipo = event['__event'] as String?;
     if (tipo == 'driver:stop_gps') {
       _stopGpsTimer();
+    } else if (tipo == 'trip:cancelled') {
+      if (mounted) {
+        _snack('El viaje ha sido cancelado');
+        _stopGpsTimer();
+        Navigator.pop(context);
+      }
     }
+  }
+
+  void _onFinalizeResponse(Map<String, dynamic> data) {
+    final accepted = data['accepted'] == true;
+    if (mounted) {
+      Navigator.pop(context);
+      if (accepted) {
+        _finalizeTrip();
+      } else {
+        _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se notificar\u00e1 al administrador.');
+        ApiClient.instance.disputeTrip(
+          _trip!['id'],
+          motivo: 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega',
+        );
+      }
+    }
+  }
+
+  Future<void> _requestFinalization() async {
+    if (_trip == null) return;
+    setState(() => _actionLoading = true);
+
+    SocketServiceClient.instance.emit('trip:finalize_request', {
+      'tripId': _trip!['id'],
+      'trip': _trip,
+    });
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Esperando confirmaci\u00f3n'),
+        content: const Text('Solicitando confirmaci\u00f3n al cliente...'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+    setState(() => _actionLoading = false);
   }
 
   Future<void> _fetchActiveTrip() async {
@@ -156,22 +209,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     }
   }
 
-  Future<void> _completeTrip() async {
-    if (_trip == null) return;
-    setState(() => _actionLoading = true);
-    try {
-      await ApiClient.instance.completeTrip(_trip!['id']);
-      _trip!['estado'] = 'completado';
-      if (mounted) setState(() {});
-      _snack('Entrega completada');
-      _stopGpsTimer();
-    } catch (e) {
-      _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
-    } finally {
-      if (mounted) setState(() => _actionLoading = false);
-    }
-  }
-
   Future<void> _finalizeTrip() async {
     if (_trip == null) return;
     setState(() => _actionLoading = true);
@@ -200,6 +237,22 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  bool get _isTripActive {
+    final e = _trip?['estado'] as String?;
+    return e == 'aceptado' || e == 'en_curso' || e == 'completado';
+  }
+
+  bool get _isNearDestination {
+    if (_currentLat == null || _currentLng == null) return false;
+    final destino = _trip?['destino'] as Map<String, dynamic>?;
+    if (destino == null) return false;
+    final dLat = double.tryParse(destino['lat']?.toString() ?? '');
+    final dLng = double.tryParse(destino['lng']?.toString() ?? '');
+    if (dLat == null || dLng == null) return false;
+    final dist = _haversine(_currentLat!, _currentLng!, dLat, dLng) * 1000;
+    return dist <= 150;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -224,14 +277,22 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
     final destino = t['destino'] as Map<String, dynamic>?;
     final estado = t['estado'] as String? ?? '';
 
-    return Scaffold(
-      backgroundColor: _bgLight,
-      body: Column(
-        children: [
-          _buildHeader(context, estado),
-          Expanded(child: _buildMapWithContent(t, origen, destino, estado)),
-          _buildBottomNav(t, estado),
-        ],
+    return PopScope(
+      canPop: !_isTripActive,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && mounted) {
+          _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: _bgLight,
+        body: Column(
+          children: [
+            _buildHeader(context, estado),
+            Expanded(child: _buildMapWithContent(t, origen, destino, estado)),
+            _buildBottomNav(t, estado),
+          ],
+        ),
       ),
     );
   }
@@ -243,7 +304,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              if (_isTripActive) {
+                _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
+              } else {
+                Navigator.pop(context);
+              }
+            },
             child: Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
           ),
           const SizedBox(width: 12),
@@ -319,6 +386,19 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
                 _routeRow(Icons.trip_origin, 'Origen', origen?['direccion'] as String? ?? '', Colors.green),
                 const SizedBox(height: 6),
                 _routeRow(Icons.location_on, 'Destino', destino?['direccion'] as String? ?? '', Colors.red),
+                if (estado == 'en_curso' && _isNearDestination) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(color: _accentGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: _accentGreen.withOpacity(0.3))),
+                    child: Row(children: [
+                      Icon(Icons.check_circle, size: 18, color: _accentGreen),
+                      const SizedBox(width: 8),
+                      const Expanded(child: Text('Has llegado al destino', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                    ]),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   _infoChip('Carga', t['carga'] as String? ?? 'N/A'),
@@ -329,8 +409,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
                 const SizedBox(height: 12),
                 if (estado == 'aceptado')
                   _actionButton('Iniciar viaje', _startTrip, _primaryDark)
-                else if (estado == 'en_curso')
-                  _actionButton('Completar entrega', _completeTrip, _accentGreen)
+                else if (estado == 'en_curso' && _isNearDestination)
+                  _actionButton('Finalizar viaje', _requestFinalization, _accentGreen)
                 else if (estado == 'completado')
                   _actionButton('Finalizar viaje', _finalizeTrip, _primaryBlue),
               ]),
@@ -456,7 +536,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
           Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t)));
         }),
         _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
-        _navItem(Icons.info_outline, 'Detalle', () {}),
+        _navItem(Icons.info_outline, 'Detalle', () => _showClientDetail(t)),
         if (estado == 'aceptado')
           _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
         if (estado == 'en_curso')
@@ -495,6 +575,64 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> {
           const SizedBox(height: 8),
           Text('$nombre - Cliente', style: const TextStyle(color: _textGrey)),
         ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
+  void _showClientDetail(Map<String, dynamic> t) {
+    final cliente = t['cliente'] as Map<String, dynamic>?;
+    if (cliente == null) {
+      _snack('No hay informaci\u00f3n del cliente disponible');
+      return;
+    }
+    final nombre = cliente['nombre'] as String? ?? 'Sin nombre';
+    final telefono = cliente['telefono'] as String?;
+    final calificacion = cliente['calificacion'];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Informaci\u00f3n del cliente'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 32,
+              backgroundColor: _primaryDark,
+              child: Text(
+                _initials(nombre),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 22),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(nombre, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: _textDark)),
+            if (telefono != null && telefono.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.phone, size: 16, color: _primaryBlue),
+                const SizedBox(width: 6),
+                Text(telefono, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              ]),
+            ],
+            if (calificacion != null) ...[
+              const SizedBox(height: 8),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                ...List.generate(5, (i) {
+                  final val = calificacion is num ? calificacion.toInt() : 0;
+                  return Icon(
+                    i < val ? Icons.star_rounded : Icons.star_border_rounded,
+                    color: const Color(0xFFFF8F00),
+                    size: 24,
+                  );
+                }),
+                const SizedBox(width: 4),
+                Text(calificacion.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
+              ]),
+            ],
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
         ],

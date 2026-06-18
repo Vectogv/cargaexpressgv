@@ -21,8 +21,8 @@ class _TripChatScreenState extends State<TripChatScreen> {
   bool _isTyping = false;
   bool _otherTyping = false;
   Timer? _typingTimer;
-  Timer? _pollTimer;
   StreamSubscription<Map<String, dynamic>>? _messageSub;
+  StreamSubscription<bool>? _connectionSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _textDark = Color(0xFF1A1A2E);
@@ -43,8 +43,8 @@ class _TripChatScreenState extends State<TripChatScreen> {
     _messageController.dispose();
     _scrollCtrl.dispose();
     _typingTimer?.cancel();
-    _pollTimer?.cancel();
     _messageSub?.cancel();
+    _connectionSub?.cancel();
     super.dispose();
   }
 
@@ -60,7 +60,6 @@ class _TripChatScreenState extends State<TripChatScreen> {
       if (_canChat) {
         _setupSocket();
         await _fetchMessages();
-        _startPolling();
       } else {
         if (mounted) setState(() => _loading = false);
       }
@@ -92,6 +91,10 @@ class _TripChatScreenState extends State<TripChatScreen> {
         }
       }
     });
+
+    _connectionSub = SocketServiceClient.instance.onConnection.listen((connected) {
+      if (connected && mounted) _fetchMessages();
+    });
   }
 
   Future<void> _fetchMessages() async {
@@ -103,20 +106,6 @@ class _TripChatScreenState extends State<TripChatScreen> {
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (!mounted || _activeTrip == null) return;
-      try {
-        final msgs = await ApiClient.instance.getTripMessages(_activeTrip!['id']);
-        if (msgs.length != _messages.length && mounted) {
-          setState(() => _messages = msgs);
-          _scrollDown();
-        }
-      } catch (_) {}
-    });
   }
 
   Future<void> _sendMessage() async {

@@ -11,6 +11,7 @@ class NotificationProvider extends ChangeNotifier {
 
   List<NotificationItemModel> _items = [];
   StreamSubscription<Map<String, dynamic>>? _sub;
+  StreamSubscription<Map<String, dynamic>>? _cancelSub;
 
   List<NotificationItemModel> get items => List.unmodifiable(_items);
   int get unreadCount => _items.where((n) => n.read != true).length;
@@ -19,6 +20,23 @@ class NotificationProvider extends ChangeNotifier {
     _loadCached();
     _sub = SocketServiceClient.instance.onNotification.listen((data) {
       final item = NotificationItemModel.fromJson(data);
+      _items.insert(0, item);
+      _saveCache();
+      notifyListeners();
+    });
+    _cancelSub = SocketServiceClient.instance.onTripCancelled.listen((data) {
+      final tripId = data['tripId'] ?? data['id'];
+      final item = NotificationItemModel(
+        id: 'cancel_${tripId}_${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Viaje cancelado',
+        body: data['motivo'] != null
+            ? 'El conductor cancel\u00f3 el viaje: ${data['motivo']}'
+            : 'El conductor ha cancelado el viaje',
+        type: 'viaje_cancelado',
+        read: false,
+        data: data,
+        createdAt: DateTime.now().toIso8601String(),
+      );
       _items.insert(0, item);
       _saveCache();
       notifyListeners();
@@ -67,6 +85,7 @@ class NotificationProvider extends ChangeNotifier {
   @override
   void dispose() {
     _sub?.cancel();
+    _cancelSub?.cancel();
     super.dispose();
   }
 }

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/proximity_service.dart';
@@ -27,13 +28,19 @@ class _RastreoScreenState extends State<RastreoScreen> {
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripCompletedSub;
   StreamSubscription<Map<String, dynamic>>? _tripCancelledSub;
+  StreamSubscription<Map<String, dynamic>>? _finalizeRequestSub;
   StreamSubscription<Map<String, dynamic>>? _driverLocSub;
   double? _driverLat;
   double? _driverLng;
+  double? _clientLat;
+  double? _clientLng;
+  final MapController _mapController = MapController();
+  Timer? _autoFitTimer;
 
   @override
   void initState() {
     super.initState();
+    _initClientLocation();
     _load();
   }
 
@@ -43,10 +50,19 @@ class _RastreoScreenState extends State<RastreoScreen> {
     _tripStatusSub?.cancel();
     _tripCompletedSub?.cancel();
     _tripCancelledSub?.cancel();
+    _finalizeRequestSub?.cancel();
     _driverLocSub?.cancel();
+    _autoFitTimer?.cancel();
     _refreshTimer?.cancel();
     _proximityService.stopMonitoring();
     super.dispose();
+  }
+
+  Future<void> _initClientLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+      if (mounted) setState(() { _clientLat = pos.latitude; _clientLng = pos.longitude; });
+    } catch (_) {}
   }
 
   Future<void> _load() async {
@@ -98,6 +114,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
       }
     });
 
+    _finalizeRequestSub = SocketServiceClient.instance.onFinalizeRequest.listen((data) {
+      if (data['tripId']?.toString() == tripId.toString()) {
+        _showFinalizeConfirmation(data);
+      }
+    });
+
     _driverLocSub = SocketServiceClient.instance.onDriverLocation.listen((data) {
       final lat = double.tryParse(data['latitude']?.toString() ?? data['lat']?.toString() ?? '');
       final lng = double.tryParse(data['longitude']?.toString() ?? data['lng']?.toString() ?? '');
@@ -106,7 +128,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
           _driverLat = lat;
           _driverLng = lng;
         });
+        _fitMapBounds();
       }
+    });
+
+    _autoFitTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) _fitMapBounds();
     });
   }
 
@@ -153,9 +180,21 @@ class _RastreoScreenState extends State<RastreoScreen> {
     }
   }
 
+  double? _distanceDriverToOrigin() {
+    if (_driverLat == null || _driverLng == null) return null;
+    final origen = _trip?['origen'] as Map<String, dynamic>?;
+    if (origen == null) return null;
+    final oLat = double.tryParse(origen['lat']?.toString() ?? '');
+    final oLng = double.tryParse(origen['lng']?.toString() ?? '');
+    if (oLat == null || oLng == null) return null;
+    return _haversine(_driverLat!, _driverLng!, oLat, oLng);
+  }
+
   Future<void> _cancelar() async {
     final motivoCtrl = TextEditingController();
     String? motivoSeleccionado;
+    final distKm = _distanceDriverToOrigin();
+    final conductorNear = distKm != null && distKm < 1.0;
 
     final confirmado = await showDialog<bool>(
       context: context,
@@ -166,17 +205,28 @@ class _RastreoScreenState extends State<RastreoScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
-                child: Row(children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text('Esta acci\u00f3n ser\u00e1 revisada por el equipo de soporte.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
-                ]),
-              ),
+              if (conductorNear)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red.shade300)),
+                  child: Row(children: [
+                    Icon(Icons.warning_rounded, color: Colors.red.shade700, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text('El conductor ya se encuentra cerca del punto de recogida (${(distKm * 1000).toStringAsFixed(0)} m).', style: TextStyle(fontSize: 13, color: Colors.red.shade900, fontWeight: FontWeight.w500))),
+                  ]),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                  child: Row(children: [
+                    Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text('El conductor ser\u00e1 notificado de la cancelaci\u00f3n.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
+                  ]),
+                ),
               const SizedBox(height: 16),
-              const Text('Motivo de cancelaci\u00f3n:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const Text('Motivo de cancelaci\u00f3n (obligatorio):', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
               const SizedBox(height: 8),
               ...['Problema con el conductor', 'Cambio de planes', 'Tiempo de espera muy largo', 'Otro'].map((m) => RadioListTile<String>(
                 title: Text(m, style: const TextStyle(fontSize: 14)),
@@ -217,9 +267,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
     try {
       final desc = motivoCtrl.text.trim();
       final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
-      await ApiClient.instance.requestCancellation(_trip!['id'], motivo: motivo);
+      await ApiClient.instance.cancelTrip(_trip!['id'], motivo: motivo);
       if (mounted) {
-        _snack('Solicitud enviada. El administrador revisar\u00e1 la cancelaci\u00f3n.');
+        _snack('Viaje cancelado. Se ha notificado al conductor.');
         _proximityService.stopMonitoring();
         Navigator.pop(context);
       }
@@ -243,8 +293,75 @@ class _RastreoScreenState extends State<RastreoScreen> {
     );
   }
 
+  void _showFinalizeConfirmation(Map<String, dynamic> data) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar entrega'),
+        content: const Text('\u00bfConfirma que la carga fue entregada correctamente?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              SocketServiceClient.instance.emit('trip:finalize_response', {
+                'tripId': data['tripId'],
+                'accepted': false,
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('No, rechazar', style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              SocketServiceClient.instance.emit('trip:finalize_response', {
+                'tripId': data['tripId'],
+                'accepted': true,
+              });
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50), foregroundColor: Colors.white),
+            child: const Text('S\u00ed, confirmar entrega'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _fitMapBounds() {
+    final origen = _trip?['origen'] as Map<String, dynamic>?;
+    final destino = _trip?['destino'] as Map<String, dynamic>?;
+    final points = <LatLng>[];
+    if (_clientLat != null && _clientLng != null) {
+      points.add(LatLng(_clientLat!, _clientLng!));
+    }
+    if (origen != null) {
+      final oLat = double.tryParse(origen['lat']?.toString() ?? '');
+      final oLng = double.tryParse(origen['lng']?.toString() ?? '');
+      if (oLat != null && oLng != null) points.add(LatLng(oLat, oLng));
+    }
+    if (destino != null) {
+      final dLat = double.tryParse(destino['lat']?.toString() ?? '');
+      final dLng = double.tryParse(destino['lng']?.toString() ?? '');
+      if (dLat != null && dLng != null) points.add(LatLng(dLat, dLng));
+    }
+    if (_driverLat != null && _driverLng != null) {
+      points.add(LatLng(_driverLat!, _driverLng!));
+    }
+    if (points.length < 2) return;
+    try {
+      final bounds = LatLngBounds.fromPoints(points);
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(60),
+        ),
+      );
+    } catch (_) {}
   }
 
   Widget _buildMap(Map<String, dynamic> origen, Map<String, dynamic> destino) {
@@ -252,7 +369,6 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final oLng = double.tryParse(origen['lng']?.toString() ?? '') ?? 0;
     final dLat = double.tryParse(destino['lat']?.toString() ?? '') ?? 0;
     final dLng = double.tryParse(destino['lng']?.toString() ?? '') ?? 0;
-    final center = LatLng((oLat + dLat) / 2, (oLng + dLng) / 2);
 
     if (_mapError) {
       return _buildMapError();
@@ -265,6 +381,17 @@ class _RastreoScreenState extends State<RastreoScreen> {
       )),
       Marker(point: LatLng(dLat, dLng), width: 36, height: 36, child: const Icon(Icons.location_on, color: Colors.red, size: 36)),
     ];
+
+    if (_clientLat != null && _clientLng != null) {
+      markers.add(Marker(
+        point: LatLng(_clientLat!, _clientLng!),
+        width: 36, height: 36,
+        child: Container(
+          decoration: BoxDecoration(color: const Color(0xFF1A3C6E), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2.5)),
+          child: const Icon(Icons.person_pin, color: Colors.white, size: 20),
+        ),
+      ));
+    }
 
     if (_driverLat != null && _driverLng != null) {
       markers.add(Marker(
@@ -283,15 +410,29 @@ class _RastreoScreenState extends State<RastreoScreen> {
     }
 
     return Container(
-      height: 200,
+      height: 280,
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE0E0E0))),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
           FlutterMap(
-            options: MapOptions(initialCenter: center, initialZoom: 12),
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: LatLng((oLat + dLat) / 2, (oLng + dLng) / 2),
+              initialZoom: 12,
+              onMapReady: () => _fitMapBounds(),
+            ),
             children: [
               TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app', errorImage: const AssetImage('')),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: [LatLng(oLat, oLng), LatLng(dLat, dLng)],
+                    color: const Color(0xFF1565C0).withValues(alpha: 0.5),
+                    strokeWidth: 3,
+                  ),
+                ],
+              ),
               MarkerLayer(markers: markers),
             ],
           ),
@@ -300,31 +441,48 @@ class _RastreoScreenState extends State<RastreoScreen> {
               left: 8, top: 8,
               child: _buildDriverDistanceCard(oLat, oLng),
             ),
-          Positioned(
-            right: 8, top: 8,
-            child: Material(
-              elevation: 2,
-              borderRadius: BorderRadius.circular(8),
-              child: InkWell(
-                onTap: () => setState(() => _mapError = false),
+          if (_mapError)
+            Positioned(
+              right: 8, top: 8,
+              child: Material(
+                elevation: 2,
                 borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                  child: const Icon(Icons.refresh, size: 18, color: Color(0xFF1A3C6E)),
+                child: InkWell(
+                  onTap: () => setState(() => _mapError = false),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.refresh, size: 18, color: Color(0xFF1A3C6E)),
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildDriverDistanceCard(double oLat, double oLng) {
-    final distKm = _haversine(_driverLat!, _driverLng!, oLat, oLng);
+    final estado = _trip?['estado'] as String?;
+    final destino = _trip?['destino'] as Map<String, dynamic>?;
+    final dLat = double.tryParse(destino?['lat']?.toString() ?? '');
+    final dLng = double.tryParse(destino?['lng']?.toString() ?? '');
     final velocidadKmph = 30;
+
+    double distKm;
+    String label;
+    if (estado == 'aceptado') {
+      distKm = _haversine(_driverLat!, _driverLng!, oLat, oLng);
+      label = 'al punto de recogida';
+    } else {
+      distKm = (dLat != null && dLng != null)
+          ? _haversine(_driverLat!, _driverLng!, dLat, dLng)
+          : _haversine(_driverLat!, _driverLng!, oLat, oLng);
+      label = 'al destino';
+    }
     final min = distKm > 0 ? (distKm / velocidadKmph * 60).round() : 0;
+
     return Material(
       elevation: 3,
       borderRadius: BorderRadius.circular(10),
@@ -334,9 +492,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.local_shipping, size: 14, color: const Color(0xFF1565C0)),
           const SizedBox(width: 6),
-          Text('${distKm.toStringAsFixed(1)} km', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-          const Text(' \u00b7 ', style: TextStyle(fontSize: 11, color: Colors.black26)),
-          Text('$min min', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF4CAF50))),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text('${distKm.toStringAsFixed(1)} km $label', style: const TextStyle(fontSize: 10, color: Color(0xFF757575))),
+            Text('$min min', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+          ]),
         ]),
       ),
     );
@@ -395,10 +554,36 @@ class _RastreoScreenState extends State<RastreoScreen> {
   String _estadoLabel(String? estado) {
     switch (estado) {
       case 'buscando_conductor': return 'Buscando conductor';
-      case 'aceptado': return 'Conductor asignado';
-      case 'en_curso': return 'En camino a destino';
+      case 'aceptado':
+        if (_driverLat != null) {
+          final origen = _trip?['origen'] as Map<String, dynamic>?;
+          if (origen != null) {
+            final oLat = double.tryParse(origen['lat']?.toString() ?? '');
+            final oLng = double.tryParse(origen['lng']?.toString() ?? '');
+            if (oLat != null && oLng != null) {
+              final dist = _haversine(_driverLat!, _driverLng!, oLat, oLng) * 1000;
+              if (dist <= 1000) return 'Conductor cerca del punto de recogida';
+            }
+          }
+          return 'Conductor en camino';
+        }
+        return 'Conductor asignado';
+      case 'en_curso': {
+        if (_driverLat != null) {
+          final destino = _trip?['destino'] as Map<String, dynamic>?;
+          if (destino != null) {
+            final dLat = double.tryParse(destino['lat']?.toString() ?? '');
+            final dLng = double.tryParse(destino['lng']?.toString() ?? '');
+            if (dLat != null && dLng != null) {
+              final dist = _haversine(_driverLat!, _driverLng!, dLat, dLng) * 1000;
+              if (dist <= 500) return 'Llegando al destino';
+            }
+          }
+        }
+        return 'En camino a destino';
+      }
       case 'completado': return 'Entrega completada';
-      case 'finalizado': return 'Finalizado';
+      case 'finalizado': return 'Viaje finalizado';
       case 'cancelado': return 'Cancelado';
       default: return estado ?? '';
     }
@@ -416,24 +601,43 @@ class _RastreoScreenState extends State<RastreoScreen> {
     }
   }
 
+  bool get _isTripActive {
+    final e = _trip?['estado'] as String?;
+    return e == 'buscando_conductor' || e == 'aceptado' || e == 'en_curso';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1A1A2E)),
-          onPressed: () => Navigator.pop(context),
+    return PopScope(
+      canPop: !_isTripActive,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && mounted) {
+          _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1A1A2E)),
+            onPressed: () {
+              if (_isTripActive) {
+                _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          title: const Text('Rastrear viaje', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
         ),
-        title: const Text('Rastrear viaje', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _trip == null
+                ? const Center(child: Text('No tienes un viaje activo', style: TextStyle(fontSize: 15, color: Colors.black45)))
+                : _buildContent(),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _trip == null
-              ? const Center(child: Text('No tienes un viaje activo', style: TextStyle(fontSize: 15, color: Colors.black45)))
-              : _buildContent(),
     );
   }
 

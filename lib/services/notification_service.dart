@@ -148,6 +148,7 @@ class NotificationService {
     final driverEvents = [
       'trip:accepted',
       'trip:nearby',
+      'trip:cancelled',
       'driver:stop_gps',
     ];
 

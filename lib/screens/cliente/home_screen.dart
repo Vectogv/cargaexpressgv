@@ -38,6 +38,11 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       if (tipo == 'trip:status' || tipo == 'trip:cancelled') {
         _loadActiveTrip();
       }
+      if (tipo == 'trip:cancelled' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El viaje ha sido cancelado por el conductor')),
+        );
+      }
     });
   }
 
