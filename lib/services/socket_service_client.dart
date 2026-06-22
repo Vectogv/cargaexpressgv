@@ -118,10 +118,30 @@ class SocketServiceClient {
         'reconnection': false,
       });
 
-      _socket!.on('connect', (_) {
+      void safeOn(String event, void Function(dynamic) handler) {
+        _socket!.on(event, (data) {
+          try {
+            handler(data);
+          } catch (e, s) {
+            LoggerService.instance.error('Socket event "$event" handler error', e, s);
+          }
+        });
+      }
+
+      bool safeAdd<T>(StreamController<T> ctrl, T data) {
+        if (!ctrl.isClosed) {
+          try {
+            ctrl.add(data);
+            return true;
+          } catch (_) {}
+        }
+        return false;
+      }
+
+      safeOn('connect', (_) {
         _connected = true;
         _reconnectAttempts = 0;
-        _connectionCtrl.add(true);
+        safeAdd(_connectionCtrl, true);
         LoggerService.instance.info('SocketServiceClient connected');
         if (userId != null) {
           _socket!.emit('join:client', {'userId': userId});
@@ -131,47 +151,47 @@ class SocketServiceClient {
         }
       });
 
-      _socket!.on('disconnect', (_) {
+      safeOn('disconnect', (_) {
         _connected = false;
-        _connectionCtrl.add(false);
+        safeAdd(_connectionCtrl, false);
         LoggerService.instance.warning('SocketServiceClient disconnected');
         _scheduleReconnect();
       });
 
-      _socket!.on('connect_error', (error) {
+      safeOn('connect_error', (error) {
         LoggerService.instance.error('SocketServiceClient connect_error', error);
         _connected = false;
-        _connectionCtrl.add(false);
+        safeAdd(_connectionCtrl, false);
         _scheduleReconnect();
       });
 
-      _socket!.on('reconnect_attempt', (_) {
+      safeOn('reconnect_attempt', (_) {
         LoggerService.instance.debug('SocketServiceClient reconnect_attempt');
       });
 
-      _socket!.on('trip:status', (data) {
-        if (data is Map) _tripStatusCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('trip:status', (data) {
+        if (data is Map) safeAdd(_tripStatusCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('driver:location', (data) {
-        if (data is Map) _driverLocationCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('driver:location', (data) {
+        if (data is Map) safeAdd(_driverLocationCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('new:offer', (data) {
-        if (data is Map) _newOfferCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('new:offer', (data) {
+        if (data is Map) safeAdd(_newOfferCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('offer:accepted', (data) {
-        if (data is Map) _offerAcceptedCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('offer:accepted', (data) {
+        if (data is Map) safeAdd(_offerAcceptedCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('offer:rejected', (data) {
-        if (data is Map) _offerRejectedCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('offer:rejected', (data) {
+        if (data is Map) safeAdd(_offerRejectedCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('message:new', (data) {
+      safeOn('message:new', (data) {
         if (data is Map) {
-          _messageCtrl.add(Map<String, dynamic>.from(data));
+          safeAdd(_messageCtrl, Map<String, dynamic>.from(data));
           final senderId = (data as Map)['senderId']?.toString();
           if (senderId != null && senderId != ApiClient.instance.userId) {
             _incrementChatUnread();
@@ -179,72 +199,72 @@ class SocketServiceClient {
         }
       });
 
-      _socket!.on('notification:new', (data) {
-        if (data is Map) _notificationCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('notification:new', (data) {
+        if (data is Map) safeAdd(_notificationCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('notification:read', (data) {
-        if (data is Map) _notificationCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('notification:read', (data) {
+        if (data is Map) safeAdd(_notificationCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('notification:delete', (data) {
-        if (data is Map) _notificationCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('notification:delete', (data) {
+        if (data is Map) safeAdd(_notificationCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('trip:accepted', (data) {
-        if (data is Map) _tripAcceptedCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('trip:accepted', (data) {
+        if (data is Map) safeAdd(_tripAcceptedCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('trip:completed', (data) {
-        if (data is Map) _tripCompletedCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('trip:completed', (data) {
+        if (data is Map) safeAdd(_tripCompletedCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('trip:cancelled', (data) {
-        if (data is Map) _tripCancelledCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('trip:cancelled', (data) {
+        if (data is Map) safeAdd(_tripCancelledCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('trip:finalize_request', (data) {
-        if (data is Map) _finalizeRequestCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('trip:finalize_request', (data) {
+        if (data is Map) safeAdd(_finalizeRequestCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('trip:finalize_response', (data) {
-        if (data is Map) _finalizeResponseCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('trip:finalize_response', (data) {
+        if (data is Map) safeAdd(_finalizeResponseCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('typing:start', (data) {
-        if (data is Map) _typingStartCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('typing:start', (data) {
+        if (data is Map) safeAdd(_typingStartCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('typing:stop', (data) {
-        if (data is Map) _typingStopCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('typing:stop', (data) {
+        if (data is Map) safeAdd(_typingStopCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('message:read', (data) {
-        if (data is Map) _messageReadCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('message:read', (data) {
+        if (data is Map) safeAdd(_messageReadCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('admin:stats', (data) {
-        if (data is Map) _adminStatsCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('admin:stats', (data) {
+        if (data is Map) safeAdd(_adminStatsCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('admin:driver:location', (data) {
-        if (data is Map) _adminDriverLocationCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('admin:driver:location', (data) {
+        if (data is Map) safeAdd(_adminDriverLocationCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('admin:client:location', (data) {
-        if (data is Map) _adminClientLocationCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('admin:client:location', (data) {
+        if (data is Map) safeAdd(_adminClientLocationCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('admin:dispute:new', (data) {
-        if (data is Map) _adminDisputeCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('admin:dispute:new', (data) {
+        if (data is Map) safeAdd(_adminDisputeCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('admin:cancellation', (data) {
-        if (data is Map) _adminCancellationCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('admin:cancellation', (data) {
+        if (data is Map) safeAdd(_adminCancellationCtrl, Map<String, dynamic>.from(data));
       });
 
-      _socket!.on('admin:emergency', (data) {
-        if (data is Map) _adminEmergencyCtrl.add(Map<String, dynamic>.from(data));
+      safeOn('admin:emergency', (data) {
+        if (data is Map) safeAdd(_adminEmergencyCtrl, Map<String, dynamic>.from(data));
       });
     } catch (e) {
       LoggerService.instance.error('SocketServiceClient._connect error', e);

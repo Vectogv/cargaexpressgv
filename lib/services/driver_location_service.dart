@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -7,6 +8,7 @@ import 'background_location_service.dart';
 import 'fraud_detection_service.dart';
 import 'logger_service.dart';
 import 'network_monitor_service.dart';
+import 'error_handler_service.dart';
 
 class DriverLocationService {
   static final DriverLocationService instance = DriverLocationService._();
@@ -19,6 +21,7 @@ class DriverLocationService {
   bool _running = false;
   bool _online = false;
   int _locationErrorCount = 0;
+  int _locationRetryAttempt = 0;
   Timer? _retryPositionTimer;
 
   List<Map<String, dynamic>> _nearbyTrips = [];
@@ -61,6 +64,7 @@ class DriverLocationService {
     _positionSub?.cancel();
     _retryPositionTimer?.cancel();
     _locationErrorCount = 0;
+    _locationRetryAttempt = 0;
 
     final locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -69,32 +73,52 @@ class DriverLocationService {
     try {
       _positionSub = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
         (Position pos) async {
+          _locationErrorCount = 0;
+          _locationRetryAttempt = 0;
           FraudDetectionService.instance.checkGpsPosition(pos);
           _lastLat = pos.latitude;
           _lastLng = pos.longitude;
-          _locationErrorCount = 0;
           try {
             if (NetworkMonitorService.instance.isOnline) {
               await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
             }
           } catch (e) {
-            LoggerService.instance.error('DriverLocationService.updateLocation error', e);
+            ErrorHandlerService.instance.handleError(
+              e,
+              null,
+              category: ErrorCategory.network,
+              message: 'Error al enviar ubicaci\u00f3n',
+            );
           }
         },
         onError: (e) {
-          LoggerService.instance.error('DriverLocationService.positionStream error', e);
           _locationErrorCount++;
+          _locationRetryAttempt++;
+          ErrorHandlerService.instance.handleError(
+            e,
+            null,
+            category: ErrorCategory.gps,
+            message: 'Error del GPS (intento $_locationRetryAttempt)',
+          );
           if (_locationErrorCount > 5) {
             LoggerService.instance.warning('DriverLocationService: too many position errors, restarting stream');
             _positionSub?.cancel();
-            _retryPositionTimer = Timer(const Duration(seconds: 10), _startPositionStream);
+            final delay = Duration(seconds: min(pow(2, _locationRetryAttempt).toInt(), 30));
+            _retryPositionTimer = Timer(delay, _startPositionStream);
           }
         },
         cancelOnError: false,
       );
     } catch (e) {
-      LoggerService.instance.error('DriverLocationService: error creating position stream', e);
-      _retryPositionTimer = Timer(const Duration(seconds: 15), _startPositionStream);
+      _locationRetryAttempt++;
+      ErrorHandlerService.instance.handleError(
+        e,
+        null,
+        category: ErrorCategory.gps,
+        message: 'Error al crear stream de ubicaci\u00f3n',
+      );
+      final delay = Duration(seconds: min(pow(2, _locationRetryAttempt).toInt(), 30));
+      _retryPositionTimer = Timer(delay, _startPositionStream);
     }
   }
 
@@ -142,6 +166,8 @@ class DriverLocationService {
     _tripPollTimer = null;
     _retryPositionTimer?.cancel();
     _retryPositionTimer = null;
+    _locationRetryAttempt = 0;
+    _locationErrorCount = 0;
     _nearbyTrips = [];
   }
 
@@ -153,6 +179,8 @@ class DriverLocationService {
     _positionSub = null;
     _retryPositionTimer?.cancel();
     _retryPositionTimer = null;
+    _locationRetryAttempt = 0;
+    _locationErrorCount = 0;
   }
 
   void resume() {

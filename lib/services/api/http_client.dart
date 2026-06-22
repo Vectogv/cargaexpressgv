@@ -6,7 +6,7 @@ import '../network_monitor_service.dart';
 import '../performance_monitor.dart';
 
 class HttpClient {
-  static const String baseUrl = 'https://zippy-trust-production.up.railway.app';
+  static const String baseUrl = 'http://localhost:3333';
 
   static Map<String, String> _headers({bool auth = false}) {
     final headers = <String, String>{'Content-Type': 'application/json'};
@@ -94,11 +94,13 @@ class HttpClient {
     try {
       data = jsonDecode(res.body);
     } catch (e) {
-      LoggerService.instance.error('HttpClient: invalid JSON response', e);
+      LoggerService.instance.error('HttpClient: invalid JSON response ${res.statusCode}', e);
       throw Exception('Error de conexi\u00f3n. Intenta de nuevo.');
     }
     if (res.statusCode != 200 && res.statusCode != 201) {
-      throw Exception(_extractError(data));
+      final error = _extractError(data);
+      LoggerService.instance.error('HttpClient: ${res.statusCode} ${res.request?.url.path ?? ''} - $error');
+      throw Exception(error);
     }
     return data as Map<String, dynamic>;
   }
@@ -108,10 +110,10 @@ class HttpClient {
       if (data['message'] != null) return data['message'] as String;
       final errors = data['errors'];
       if (errors is List && errors.isNotEmpty) {
-        return (errors[0] as Map<String, dynamic>)['message'] as String? ?? 'Error desconocido';
+        return (errors[0] as Map<String, dynamic>)['message'] as String? ?? 'Error del servidor';
       }
       if (data['error'] != null) return data['error'] as String;
     }
-    return 'Error desconocido';
+    return 'Error del servidor';
   }
 }

@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +17,8 @@ import 'services/analytics_service.dart';
 import 'services/logger_service.dart';
 import 'services/network_monitor_service.dart';
 import 'services/app_lifecycle_service.dart';
+import 'services/error_handler_service.dart';
+import 'services/session_monitor_service.dart';
 import 'providers/notification_provider.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/admin/admin_live_screen.dart';
@@ -55,37 +60,22 @@ Widget _homeScreenByRole() {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    LoggerService.instance.error('Firebase init error', e);
-    try {
-      await Firebase.initializeApp();
-    } catch (_) {}
-  }
+  FlutterError.onError = (details) {
+    LoggerService.instance.error('Flutter framework error: ${details.exception}', details.exception, details.stack);
+    if (!kIsWeb) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details)
+        .catchError((_) {});
+    }
+  };
 
-  try {
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  } catch (e) {
-    LoggerService.instance.error('Firebase background handler error', e);
-  }
-
-  await ApiClient.instance.init();
-  await CacheService.instance.init();
-  DioClient.instance.init();
-  await AnalyticsService.instance.init();
-  await NetworkMonitorService.instance.init();
-  AppLifecycleService.instance.init();
-
-  if (ApiClient.instance.token != null) {
-    NotificationProvider.instance.init();
-  }
-  unawaited(NotificationService.instance.init());
-  unawaited(SocketServiceClient.instance.init());
-  _loadConfig();
-  _recoverSession();
+  ui.PlatformDispatcher.instance.onError = (error, stack) {
+    LoggerService.instance.error('Platform error', error, stack);
+    if (!kIsWeb) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true)
+        .catchError((_) {});
+    }
+    return true;
+  };
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
     LoggerService.instance.error('ErrorWidget: ${details.exception}', details.exception, details.stack);
@@ -117,7 +107,95 @@ Future<void> main() async {
     );
   };
 
-  runApp(const MainApp());
+  ErrorHandlerService.instance.init();
+
+  unawaited(_initServices().then((_) {
+    _loadConfig();
+    _recoverSession();
+    if (ApiClient.instance.token != null) {
+      SessionMonitorService.instance.start();
+    }
+  }));
+
+  runZonedGuarded(() {
+    runApp(const MainApp());
+  }, (error, stack) {
+    LoggerService.instance.error('Unhandled zone error: $error', error, stack);
+    if (!kIsWeb) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true)
+        .catchError((_) {});
+    }
+  });
+}
+
+Future<void> _initServices() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {}
+  }
+
+  try {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    LoggerService.instance.error('Firebase background handler error', e);
+  }
+
+  try {
+    await ApiClient.instance.init();
+  } catch (e) {
+    LoggerService.instance.error('ApiClient init error', e);
+  }
+
+  try {
+    await CacheService.instance.init();
+  } catch (e) {
+    LoggerService.instance.error('CacheService init error', e);
+  }
+
+  try {
+    DioClient.instance.init();
+  } catch (e) {
+    LoggerService.instance.error('DioClient init error', e);
+  }
+
+  try {
+    await AnalyticsService.instance.init();
+  } catch (e) {
+    LoggerService.instance.error('AnalyticsService init error', e);
+  }
+
+  try {
+    await NetworkMonitorService.instance.init();
+  } catch (e) {
+    LoggerService.instance.error('NetworkMonitorService init error', e);
+  }
+
+  try {
+    AppLifecycleService.instance.init();
+  } catch (e) {
+    LoggerService.instance.error('AppLifecycleService init error', e);
+  }
+
+  try {
+    if (ApiClient.instance.token != null) {
+      NotificationProvider.instance.init();
+    }
+  } catch (e) {
+    LoggerService.instance.error('NotificationProvider init error', e);
+  }
+
+  unawaited(NotificationService.instance.init().catchError((e, s) {
+    LoggerService.instance.error('NotificationService init error', e, s);
+  }));
+
+  unawaited(SocketServiceClient.instance.init().catchError((e, s) {
+    LoggerService.instance.error('SocketServiceClient init error', e, s);
+  }));
 }
 
 void _recoverSession() {

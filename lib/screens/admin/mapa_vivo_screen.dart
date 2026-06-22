@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -5,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
+import '../../services/logger_service.dart';
 
 class MapaVivoScreen extends StatefulWidget {
   const MapaVivoScreen({super.key});
@@ -15,7 +17,10 @@ class MapaVivoScreen extends StatefulWidget {
 
 class _MapaVivoScreenState extends State<MapaVivoScreen> {
   bool _loading = true;
+  bool _mapError = false;
   List<Map<String, dynamic>> _trips = [];
+  final MapController _mapController = MapController();
+  Timer? _refreshTimer;
 
   Map<String, String> get _authHeaders => {
     'Content-Type': 'application/json',
@@ -26,9 +31,19 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
   void initState() {
     super.initState();
     _fetchTrips();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _fetchTrips();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchTrips() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final res = await http.get(
@@ -37,64 +52,15 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
       );
       if (res.statusCode == 200) {
         final List data = jsonDecode(res.body);
-        setState(() {
+        if (mounted) setState(() {
           _trips = List<Map<String, dynamic>>.from(data);
           _loading = false;
+          _mapError = false;
         });
-      } else {
-        _useFallback();
       }
     } catch (_) {
-      _useFallback();
+      if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _useFallback() {
-    setState(() {
-      _trips = [
-        {
-          'id': 1,
-          'conductor': 'Carlos Méndez',
-          'estado': 'En Curso',
-          'destino': 'Aeropuerto El Dorado',
-          'lat': 4.7110,
-          'lng': -74.0721,
-        },
-        {
-          'id': 2,
-          'conductor': 'Ana Torres',
-          'estado': 'En Curso',
-          'destino': 'Centro Internacional',
-          'lat': 4.6800,
-          'lng': -74.0480,
-        },
-        {
-          'id': 3,
-          'conductor': 'Luis Rojas',
-          'estado': 'En Curso',
-          'destino': 'Usaquén',
-          'lat': 4.6950,
-          'lng': -74.0300,
-        },
-        {
-          'id': 4,
-          'conductor': 'María Paz',
-          'estado': 'En Curso',
-          'destino': 'Suba',
-          'lat': 4.7400,
-          'lng': -74.0900,
-        },
-        {
-          'id': 5,
-          'conductor': 'Jorge Díaz',
-          'estado': 'En Curso',
-          'destino': 'Kennedy',
-          'lat': 4.6300,
-          'lng': -74.1500,
-        },
-      ];
-      _loading = false;
-    });
   }
 
   List<Map<String, dynamic>> get _activeTrips =>
@@ -118,40 +84,94 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _fetchTrips,
-              child: FlutterMap(
-                options: const MapOptions(
-                  initialCenter: LatLng(4.711, -74.072),
-                  initialZoom: 12,
+          : _mapError
+              ? _buildMapError()
+              : RefreshIndicator(
+                  onRefresh: _fetchTrips,
+                  child: _buildMap(),
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: MapConfig.tileUrl,
-                    userAgentPackageName: 'com.cargaexpress.app',
-                  ),
-                  MarkerLayer(
-                    markers: _activeTrips.map((trip) {
-                      final lat = (trip['lat'] as num).toDouble();
-                      final lng = (trip['lng'] as num).toDouble();
-                      final name = trip['conductor'] as String? ?? '';
-                      final status = trip['estado'] as String? ?? '';
-                      final dest = trip['destino'] as String? ?? '';
-                      return Marker(
-                        point: LatLng(lat, lng),
-                        width: 200,
-                        height: 80,
-                        child: _TripMarker(
-                          name: name,
-                          status: status,
-                          destination: dest,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
+    );
+  }
+
+  Widget _buildMap() {
+    final markers = _activeTrips.map((trip) {
+      try {
+        final lat = (trip['lat'] as num).toDouble();
+        final lng = (trip['lng'] as num).toDouble();
+        final name = trip['conductor'] as String? ?? '';
+        final status = trip['estado'] as String? ?? '';
+        final dest = trip['destino'] as String? ?? '';
+        return Marker(
+          point: LatLng(lat, lng),
+          width: 200,
+          height: 80,
+          child: _TripMarker(
+            name: name,
+            status: status,
+            destination: dest,
+          ),
+        );
+      } catch (e, s) {
+        LoggerService.instance.error('Error building trip marker', e, s);
+        return null;
+      }
+    }).whereType<Marker>().toList();
+
+    if (_activeTrips.isNotEmpty) {
+      try {
+        final first = _activeTrips.first;
+        final lat = (first['lat'] as num).toDouble();
+        final lng = (first['lng'] as num).toDouble();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _mapController.move(LatLng(lat, lng), 12);
+          }
+        });
+      } catch (_) {}
+    }
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: const LatLng(4.711, -74.072),
+        initialZoom: 12,
+        onMapReady: () => setState(() => _mapError = false),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: MapConfig.tileUrl,
+          userAgentPackageName: 'com.cargaexpress.app',
+          errorImage: const AssetImage(''),
+        ),
+        MarkerLayer(markers: markers),
+      ],
+    );
+  }
+
+  Widget _buildMapError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 12),
+          const Text(
+            'No se pudo cargar el mapa',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Verifica tu conexi\u00f3n a internet',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => setState(() => _mapError = false),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
     );
   }
 }

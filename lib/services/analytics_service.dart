@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'logger_service.dart';
@@ -9,8 +10,11 @@ class AnalyticsService {
   static final AnalyticsService instance = AnalyticsService._();
   AnalyticsService._();
 
-  final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
-  final FirebaseCrashlytics crashlytics = FirebaseCrashlytics.instance;
+  FirebaseAnalytics? _analytics;
+  FirebaseAnalytics get analytics => _analytics ??= FirebaseAnalytics.instance;
+
+  FirebaseCrashlytics? _crashlytics;
+  FirebaseCrashlytics get crashlytics => _crashlytics ??= FirebaseCrashlytics.instance;
   bool _initialized = false;
 
   Future<void> init() async {
@@ -19,12 +23,16 @@ class AnalyticsService {
 
     FlutterError.onError = (details) {
       LoggerService.instance.error('Flutter error: ${details.exception}', details.exception, details.stack);
-      crashlytics.recordFlutterFatalError(details);
+      if (!kIsWeb) {
+        crashlytics.recordFlutterFatalError(details).catchError((_) {});
+      }
     };
 
     ui.PlatformDispatcher.instance.onError = (error, stack) {
       LoggerService.instance.error('Platform error', error, stack);
-      crashlytics.recordError(error, stack, fatal: true);
+      if (!kIsWeb) {
+        crashlytics.recordError(error, stack, fatal: true).catchError((_) {});
+      }
       return true;
     };
 
@@ -32,7 +40,9 @@ class AnalyticsService {
       LoggerService.instance.info('AnalyticsService initialized');
     }, (error, stack) {
       LoggerService.instance.error('Unhandled zone error', error, stack);
-      crashlytics.recordError(error, stack, fatal: true);
+      if (!kIsWeb) {
+        crashlytics.recordError(error, stack, fatal: true).catchError((_) {});
+      }
     });
   }
 
@@ -54,10 +64,14 @@ class AnalyticsService {
 
   Future<void> recordError(dynamic error, StackTrace stack) async {
     LoggerService.instance.error('recordError', error, stack);
-    await crashlytics.recordError(error, stack);
+    if (!kIsWeb) {
+      await crashlytics.recordError(error, stack);
+    }
   }
 
   Future<void> setUserId(String userId) async {
-    await crashlytics.setUserIdentifier(userId);
+    if (!kIsWeb) {
+      await crashlytics.setUserIdentifier(userId);
+    }
   }
 }

@@ -47,6 +47,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
   StreamSubscription<bool>? _lifecycleSub;
   final MapController _mapController = MapController();
+  Timer? _tripStateTimer;
+  bool _isCancelling = false;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -86,9 +88,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
 
     _lifecycleSub = AppLifecycleService.instance.onBackgroundChanged.listen((isBackground) {
-      if (!isBackground && mounted) {
-        LoggerService.instance.info('TripInProgress: app resumed, restoring state');
-        _restoreAfterBackground();
+      try {
+        if (!isBackground && mounted) {
+          LoggerService.instance.info('TripInProgress: app resumed, restoring state');
+          _restoreAfterBackground();
+        }
+      } catch (e) {
+        LoggerService.instance.error('TripInProgress: lifecycle error', e);
       }
     });
   }
@@ -103,6 +109,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _elapsedTimer?.cancel();
     _gpsSubscription?.cancel();
     _finalizeResponseSub?.cancel();
+    _tripStateTimer?.cancel();
     super.dispose();
   }
 
@@ -230,22 +237,26 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         locationSettings: settings,
       ).listen(
         (Position pos) {
-          if (!mounted) return;
-          _posErrors = 0;
-          CacheService.instance.cacheDriverPosition(pos.latitude, pos.longitude);
-          setState(() {
-            _currentLat = pos.latitude;
-            _currentLng = pos.longitude;
-            _currentSpeed = pos.speed;
-          });
-          if (_trip != null) {
-            SocketServiceClient.instance.emit('driver:location', {
-              'tripId': _trip!['id'],
-              'latitude': pos.latitude,
-              'longitude': pos.longitude,
-              'speed': pos.speed,
-              'heading': pos.heading ?? 0,
+          try {
+            if (!mounted) return;
+            _posErrors = 0;
+            CacheService.instance.cacheDriverPosition(pos.latitude, pos.longitude);
+            setState(() {
+              _currentLat = pos.latitude;
+              _currentLng = pos.longitude;
+              _currentSpeed = pos.speed;
             });
+            if (_trip != null) {
+              SocketServiceClient.instance.emit('driver:location', {
+                'tripId': _trip!['id'],
+                'latitude': pos.latitude,
+                'longitude': pos.longitude,
+                'speed': pos.speed,
+                'heading': pos.heading ?? 0,
+              });
+            }
+          } catch (e) {
+            LoggerService.instance.error('trip_in_progress: GPS data handler error', e);
           }
         },
         onError: (e) {
@@ -269,33 +280,43 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   void _onSocketEvent(Map<String, dynamic> event) {
-    final tipo = event['__event'] as String?;
-    if (tipo == 'driver:stop_gps') {
-      _stopGpsTimer();
-    } else if (tipo == 'trip:cancelled') {
-      if (mounted) {
-        _snack('El viaje ha sido cancelado');
+    try {
+      final tipo = event['__event'] as String?;
+      if (tipo == 'driver:stop_gps') {
         _stopGpsTimer();
-        Navigator.pop(context);
+      } else if (tipo == 'trip:cancelled') {
+        if (mounted) {
+          _snack('El viaje ha sido cancelado');
+          _stopGpsTimer();
+          Navigator.pop(context);
+        }
       }
+    } catch (e) {
+      LoggerService.instance.error('trip_in_progress: onSocketEvent error', e);
     }
   }
 
   void _onFinalizeResponse(Map<String, dynamic> data) {
-    final accepted = data['accepted'] == true;
-    if (mounted) {
-      Navigator.pop(context);
-      if (accepted) {
-        _finalizeTrip();
-      } else {
-        final motivo = data['motivo'] as String? ?? 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega';
-        _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se abrir\u00e1 una disputa.');
-        ApiClient.instance.disputeTrip(
-          _trip!['id'],
-          motivo: 'Rechazo de entrega',
-          descripcion: motivo,
-        );
+    try {
+      final accepted = data['accepted'] == true;
+      if (mounted) {
+        Navigator.pop(context);
+        if (accepted) {
+          _finalizeTrip();
+        } else {
+          final motivo = data['motivo'] as String? ?? 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega';
+          _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se abrir\u00e1 una disputa.');
+          try {
+            ApiClient.instance.disputeTrip(
+              _trip?['id'],
+              motivo: 'Rechazo de entrega',
+              descripcion: motivo,
+            );
+          } catch (_) {}
+        }
       }
+    } catch (e) {
+      LoggerService.instance.error('trip_in_progress: onFinalizeResponse error', e);
     }
   }
 
@@ -430,6 +451,25 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _sendLocation();
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsedSeconds++);
+    });
+
+    _tripStateTimer?.cancel();
+    _tripStateTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+      if (!mounted) return;
+      if (!SocketServiceClient.instance.isConnected) {
+        LoggerService.instance.info('TripInProgress: polling trip state via API');
+        try {
+          final fresh = await ApiClient.instance.getActiveTrip();
+          if (fresh != null && mounted) {
+            final oldEstado = _trip?['estado'] as String?;
+            final newEstado = fresh['estado'] as String?;
+            if (oldEstado != null && newEstado != null && oldEstado != newEstado) {
+              LoggerService.instance.info('TripInProgress: estado changed $oldEstado -> $newEstado');
+              setState(() { _trip = fresh; });
+            }
+          }
+        } catch (_) {}
+      }
     });
   }
 
@@ -1022,67 +1062,70 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _requestCancellation(Map<String, dynamic> t) async {
+    if (_isCancelling) return;
+    _isCancelling = true;
+
     final motivoCtrl = TextEditingController();
     String? motivoSeleccionado;
 
-    final confirmado = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Solicitar cancelaci\u00f3n'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
-                child: Row(children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text('El viaje est\u00e1 en curso. Se notificar\u00e1 al cliente y a soporte.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              const Text('Motivo de la solicitud:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              const SizedBox(height: 8),
-              ...['Problema con el cliente', 'Emergencia', 'Veh\u00edculo averiado', 'Otro'].map((m) => RadioListTile<String>(
-                title: Text(m, style: const TextStyle(fontSize: 14)),
-                value: m,
-                groupValue: motivoSeleccionado,
-                onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              )),
-              if (motivoSeleccionado != null) ...[
-                const SizedBox(height: 8),
-                TextField(
-                  controller: motivoCtrl,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    hintText: 'Explica con detalle lo que est\u00e1 pasando',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
+    try {
+      final confirmado = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('Solicitar cancelaci\u00f3n'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
+                  child: Row(children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text('El viaje est\u00e1 en curso. Se notificar\u00e1 al cliente y a soporte.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
+                  ]),
                 ),
+                const SizedBox(height: 16),
+                const Text('Motivo de la solicitud:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 8),
+                ...['Problema con el cliente', 'Emergencia', 'Veh\u00edculo averiado', 'Otro'].map((m) => RadioListTile<String>(
+                  title: Text(m, style: const TextStyle(fontSize: 14)),
+                  value: m,
+                  groupValue: motivoSeleccionado,
+                  onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                )),
+                if (motivoSeleccionado != null) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: motivoCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Explica con detalle lo que est\u00e1 pasando',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
               ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
+              ElevatedButton(
+                onPressed: motivoSeleccionado == null ? null : () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade700, foregroundColor: Colors.white),
+                child: const Text('Enviar solicitud'),
+              ),
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
-            ElevatedButton(
-              onPressed: motivoSeleccionado == null ? null : () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade700, foregroundColor: Colors.white),
-              child: const Text('Enviar solicitud'),
-            ),
-          ],
         ),
-      ),
-    );
+      );
 
-    if (confirmado != true || motivoSeleccionado == null) return;
+      if (confirmado != true || motivoSeleccionado == null) return;
 
-    try {
       final desc = motivoCtrl.text.trim();
       final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
       await ApiClient.instance.requestCancellation(t['id'], motivo: motivo);
@@ -1092,6 +1135,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+    } finally {
+      motivoCtrl.dispose();
+      _isCancelling = false;
     }
   }
 

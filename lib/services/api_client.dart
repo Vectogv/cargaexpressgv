@@ -15,7 +15,7 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
   ApiClient._();
 
-  static const String baseUrl = 'https://zippy-trust-production.up.railway.app';
+  static const String baseUrl = 'http://localhost:3333';
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'auth_refresh_token';
   static const String _userIdKey = 'auth_user_id';

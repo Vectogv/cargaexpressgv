@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -48,6 +49,7 @@ class NotificationService {
   }
 
   Future<void> _initFcm() async {
+    if (kIsWeb) return;
     try {
       final messaging = FirebaseMessaging.instance;
 
@@ -206,10 +208,20 @@ class NotificationService {
         }
       }
 
-      for (final event in [...adminEvents, ...driverEvents]) {
+      void safeOn(String event, void Function(dynamic) handler) {
         _socket!.on(event, (data) {
+          try {
+            handler(data);
+          } catch (e, s) {
+            LoggerService.instance.error('NotificationService socket event "$event" error', e, s);
+          }
+        });
+      }
+
+      for (final ev in [...adminEvents, ...driverEvents]) {
+        safeOn(ev, (data) {
           if (data is Map) {
-            handleEvent(Map<String, dynamic>.from(data), event);
+            handleEvent(Map<String, dynamic>.from(data), ev);
           }
         });
       }

@@ -53,9 +53,9 @@ class LoggerService {
   }
 
   void _recordInCrashlytics(dynamic error, StackTrace? stack) {
-    try {
-      FirebaseCrashlytics.instance.recordError(error, stack ?? StackTrace.current);
-    } catch (_) {}
+    if (kIsWeb) return;
+    FirebaseCrashlytics.instance.recordError(error, stack ?? StackTrace.current)
+      .catchError((_) {});
   }
 
   void _checkAutoAlert() {

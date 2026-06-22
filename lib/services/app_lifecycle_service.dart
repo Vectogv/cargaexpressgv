@@ -31,11 +31,11 @@ class AppLifecycleService with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
         _onBackground();
       case AppLifecycleState.resumed:
         _onForeground();
       case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
         break;
     }
