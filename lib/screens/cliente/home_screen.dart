@@ -76,7 +76,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         CacheService.instance.cacheActiveTrip(trip);
         if (mounted) {
           setState(() { _activeTrip = trip; _loading = false; });
-          _redirectToTracking();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _redirectToTracking();
+          });
         }
       } else {
         CacheService.instance.clearActiveTrip();

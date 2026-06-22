@@ -24,7 +24,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   StreamSubscription<Map<String, dynamic>>? _offerRejectedSub;
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
-  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -96,7 +95,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     _offerRejectedSub?.cancel();
     _tripStatusSub?.cancel();
     _tripAcceptedSub?.cancel();
-    _pollTimer?.cancel();
     super.dispose();
   }
 
@@ -118,7 +116,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       setState(() {
         _offerStatus = OfferStatus.sent;
       });
-      _startPolling();
       _snack('Oferta enviada exitosamente');
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
@@ -127,23 +124,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     }
   }
 
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (_offerStatus != OfferStatus.sent) {
-        _pollTimer?.cancel();
-        return;
-      }
-      try {
-        final trip = await ApiClient.instance.getTripDetail(_tripId!);
-        final estado = trip['estado'] as String?;
-        if (estado == 'aceptado' && mounted) {
-          setState(() => _offerStatus = OfferStatus.accepted);
-          _pollTimer?.cancel();
-        }
-      } catch (_) {}
-    });
-  }
+  
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));

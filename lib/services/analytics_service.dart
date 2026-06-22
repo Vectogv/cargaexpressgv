@@ -10,53 +10,62 @@ class AnalyticsService {
   static final AnalyticsService instance = AnalyticsService._();
   AnalyticsService._();
 
+  bool _initialized = false;
+  bool _firebaseAvailable = false;
+
   FirebaseAnalytics? _analytics;
-  FirebaseAnalytics get analytics => _analytics ??= FirebaseAnalytics.instance;
+  FirebaseAnalytics? get analytics => _analytics;
 
   FirebaseCrashlytics? _crashlytics;
-  FirebaseCrashlytics get crashlytics => _crashlytics ??= FirebaseCrashlytics.instance;
-  bool _initialized = false;
+  FirebaseCrashlytics? get crashlytics => _crashlytics;
 
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
 
+    try {
+      _analytics = FirebaseAnalytics.instance;
+      _firebaseAvailable = true;
+      if (!kIsWeb) {
+        _crashlytics = FirebaseCrashlytics.instance;
+      }
+    } catch (_) {
+      _firebaseAvailable = false;
+    }
+
     FlutterError.onError = (details) {
       LoggerService.instance.error('Flutter error: ${details.exception}', details.exception, details.stack);
-      if (!kIsWeb) {
-        crashlytics.recordFlutterFatalError(details).catchError((_) {});
+      if (details.stack != null) {
+        recordError(details.exception, details.stack!);
       }
     };
 
     ui.PlatformDispatcher.instance.onError = (error, stack) {
       LoggerService.instance.error('Platform error', error, stack);
-      if (!kIsWeb) {
-        crashlytics.recordError(error, stack, fatal: true).catchError((_) {});
-      }
+      recordError(error, stack);
       return true;
     };
 
     runZonedGuarded(() {
-      LoggerService.instance.info('AnalyticsService initialized');
+      LoggerService.instance.info('AnalyticsService initialized (web: $kIsWeb, firebase: $_firebaseAvailable)');
     }, (error, stack) {
       LoggerService.instance.error('Unhandled zone error', error, stack);
-      if (!kIsWeb) {
-        crashlytics.recordError(error, stack, fatal: true).catchError((_) {});
-      }
     });
   }
 
   Future<void> logScreen(String screenName) async {
+    if (!_firebaseAvailable) return;
     try {
-      await analytics.logScreenView(screenName: screenName);
+      await _analytics!.logScreenView(screenName: screenName);
     } catch (e) {
       LoggerService.instance.error('logScreen error', e);
     }
   }
 
   Future<void> logEvent(String name, {Map<String, dynamic>? parameters}) async {
+    if (!_firebaseAvailable) return;
     try {
-      await analytics.logEvent(name: name, parameters: parameters?.cast<String, Object>());
+      await _analytics!.logEvent(name: name, parameters: parameters?.cast<String, Object>());
     } catch (e) {
       LoggerService.instance.error('logEvent error', e);
     }
@@ -64,14 +73,16 @@ class AnalyticsService {
 
   Future<void> recordError(dynamic error, StackTrace stack) async {
     LoggerService.instance.error('recordError', error, stack);
-    if (!kIsWeb) {
-      await crashlytics.recordError(error, stack);
-    }
+    if (!_firebaseAvailable) return;
+    try {
+      await _crashlytics!.recordError(error, stack);
+    } catch (_) {}
   }
 
   Future<void> setUserId(String userId) async {
-    if (!kIsWeb) {
-      await crashlytics.setUserIdentifier(userId);
-    }
+    if (!_firebaseAvailable) return;
+    try {
+      await _crashlytics!.setUserIdentifier(userId);
+    } catch (_) {}
   }
 }

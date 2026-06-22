@@ -21,8 +21,8 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCQPBGK0CuoidlFBewtH7Fk2C8Als1kwII',
-    appId: '1:848686850284:web:REEMPLAZAR_CON_APP_ID',
+    apiKey: 'AIzaSyB2LASDVeJUy0samVZP_ghaH7cjrfTqx_I',
+    appId: '1:848686850284:web:9793c6780373594d3d45c9',
     messagingSenderId: '848686850284',
     projectId: 'app-cargaexpress',
     authDomain: 'app-cargaexpress.firebaseapp.com',

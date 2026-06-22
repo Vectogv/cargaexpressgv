@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/proximity_service.dart';
@@ -14,6 +15,9 @@ import '../../services/cache_service.dart';
 import '../../services/logger_service.dart';
 import 'chat_screen.dart';
 import 'home_screen.dart';
+import 'ofertas_recibidas_screen.dart';
+import 'cancel_trip_screen.dart';
+import '../../widgets/driver_nearby_warning_sheet.dart';
 import '../shared/dispute_screen.dart';
 
 class RastreoScreen extends StatefulWidget {
@@ -49,11 +53,13 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   final MapController _mapController = MapController();
   Timer? _autoFitTimer;
   Timer? _tripPollTimer;
+  Timer? _offerPollTimer;
   StreamSubscription<bool>? _lifecycleSub;
   StreamSubscription<Position>? _clientPositionSub;
   Timer? _clientRetryTimer;
   int _clientGpsErrors = 0;
   bool _isCancelling = false;
+  bool _driverNearby = false;
   late AnimationController _driverAnimCtrl;
   late final AnimationController _pulseController;
   late final List<Animation<double>> _pulseAnimations;
@@ -122,6 +128,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     _driverLocSub?.cancel();
     _autoFitTimer?.cancel();
     _tripPollTimer?.cancel();
+    _offerPollTimer?.cancel();
     _refreshTimer?.cancel();
     _proximityService.stopMonitoring();
     super.dispose();
@@ -251,7 +258,8 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   void _setupSocketListeners(dynamic tripId) {
     _offerSub = SocketServiceClient.instance.onNewOffer.listen((data) {
       try {
-        if (data['tripId']?.toString() == tripId.toString()) {
+        final eventTripId = data['tripId'] ?? data['trip_id'] ?? data['id'];
+        if (eventTripId?.toString() == tripId.toString()) {
           _fetchOffers(tripId);
         }
       } catch (e) {
@@ -312,6 +320,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
             _driverHeading = double.tryParse(data['heading']?.toString() ?? '');
             _driverTrail.add(LatLng(lat, lng));
             if (_driverTrail.length > 50) _driverTrail.removeAt(0);
+            _checkDriverProximity();
           });
           _animateDriverTo(lat, lng);
           _fitMapBounds();
@@ -330,6 +339,14 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       if (!SocketServiceClient.instance.isConnected) {
         LoggerService.instance.info('Rastreo: socket disconnected, polling trip status');
         _refreshAfterBackground();
+      }
+    });
+
+    _offerPollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      if (_trip?['estado'] == 'buscando_conductor') {
+        LoggerService.instance.info('Rastreo: polling offers');
+        _fetchOffers(tripId);
       }
     });
   }
@@ -382,68 +399,23 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     _isCancelling = true;
 
     final enCurso = _trip?['estado'] == 'en_curso';
-    final motivoCtrl = TextEditingController();
-    String? motivoSeleccionado;
 
     try {
-      final confirmado = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-            title: const Text('Cancelar viaje'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Motivo de cancelación:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 8),
-                ...[
-                  'Problema con el conductor',
-                  'Cambio de planes',
-                  'Tiempo de espera muy largo',
-                  'Otro',
-                ].map((m) => RadioListTile<String>(
-                  title: Text(m, style: const TextStyle(fontSize: 14)),
-                  value: m,
-                  groupValue: motivoSeleccionado,
-                  onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                )),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: motivoCtrl,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    hintText: 'Describe el problema (opcional)',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
-              ElevatedButton(
-                onPressed: motivoSeleccionado == null ? null : () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
-                child: const Text('Cancelar viaje'),
-              ),
-            ],
-          ),
-        ),
+      final result = await Navigator.push<Map<String, String>>(
+        context,
+        MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: enCurso)),
       );
 
-      if (confirmado != true || motivoSeleccionado == null) {
+      if (result == null || result['reason'] == null) {
         _isCancelling = false;
         return;
       }
 
-      final desc = motivoCtrl.text.trim();
-      final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
+      final motivo = result['comment']!.isNotEmpty
+          ? '${result['reason']}: ${result['comment']}'
+          : result['reason']!;
       final tripId = _trip!['id'];
       final estado = _trip!['estado'] as String;
-      motivoCtrl.dispose();
 
       if (enCurso) {
         await ApiClient.instance.requestCancellation(tripId, motivo: motivo);
@@ -465,12 +437,13 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       if (mounted) {
         _pulseController.stop();
         _proximityService.stopMonitoring();
-        Navigator.pop(context);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.pop(context);
+        });
       }
     } catch (e) {
       if (mounted) _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
-      motivoCtrl.dispose();
       _isCancelling = false;
     }
   }
@@ -554,7 +527,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 16),
-                  if (rejectionReason != null || true) ...[
+                          ...[
                     const Text('Motivo de rechazo (si aplica):', style: TextStyle(fontSize: 12, color: Colors.black54)),
                     const SizedBox(height: 6),
                     ...['Producto da\u00f1ado', 'Producto incorrecto', 'Conductor no se present\u00f3', 'Otro'].map(
@@ -937,25 +910,16 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     }
   }
 
-  Color _estadoColor(String? estado) {
-    switch (estado) {
-      case 'buscando_conductor': return const Color(0xFFFF9800);
-      case 'aceptado': return const Color(0xFF1E88E5);
-      case 'en_curso': return const Color(0xFF1565C0);
-      case 'completado': return const Color(0xFF4CAF50);
-      case 'finalizado': return const Color(0xFF2E7D32);
-      case 'cancelado': return Colors.red;
-      default: return Colors.grey;
-    }
-  }
-
   bool get _isTripActive {
     final e = _trip?['estado'] as String?;
     return e == 'buscando_conductor' || e == 'aceptado' || e == 'en_curso';
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
+    final estado = _trip?['estado'] as String?;
+    final isSearching = estado == 'buscando_conductor';
+
     return PopScope(
       canPop: !_isTripActive,
       onPopInvokedWithResult: (didPop, _) {
@@ -964,22 +928,24 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FA),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1A1A2E)),
-            onPressed: () {
-              if (_isTripActive) {
-                _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
-              } else {
-                Navigator.pop(context);
-              }
-            },
-          ),
-          title: const Text('Rastrear viaje', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-        ),
+        backgroundColor: isSearching ? const Color(0xFFF5F7FA) : Colors.white,
+        appBar: isSearching
+            ? AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1A1A2E)),
+                  onPressed: () {
+                    if (_isTripActive) {
+                      _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+                title: const Text('Rastrear viaje', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+              )
+            : null,
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : _trip == null
@@ -990,24 +956,20 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
                         const Text('No tienes un viaje activo', style: TextStyle(fontSize: 15, color: Colors.black45)),
                         const SizedBox(height: 16),
                         ElevatedButton(
-                          onPressed: () {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (_) => const ClienteHomeScreen()),
-                              (route) => false,
-                            );
-                          },
+                          onPressed: () => Navigator.pop(context),
                           child: const Text('Volver al inicio'),
                         ),
                       ],
                     ),
                   )
-                : _buildContent(),
+                : isSearching
+                    ? _buildSearchContent()
+                    : _buildTrackingLayout(),
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildSearchContent() {
     final estado = _trip!['estado'] as String?;
     final origen = _trip!['origen'] as Map<String, dynamic>?;
     final destino = _trip!['destino'] as Map<String, dynamic>?;
@@ -1017,66 +979,18 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (origen != null && destino != null && estado != 'buscando_conductor') _buildMap(origen, destino),
-          const SizedBox(height: 16),
-          if (estado == 'buscando_conductor')
-            _buildRadarSearch()
-          else
-            _buildStatusCard(estado),
+          _buildRadarSearch(),
           const SizedBox(height: 16),
           _buildRouteCard(origen, destino),
           const SizedBox(height: 16),
-          if (estado == 'buscando_conductor') _buildOffersSection(),
-          if (estado == 'aceptado' || estado == 'en_curso') _buildDriverCard(),
-          if (estado == 'buscando_conductor')
-            Center(
-              child: TextButton.icon(
-                onPressed: _cancelar,
-                icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
-                label: const Text('Cancelar viaje', style: TextStyle(color: Colors.red)),
-              ),
+          _buildOffersSection(),
+          Center(
+            child: TextButton.icon(
+              onPressed: _cancelar,
+              icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
+              label: const Text('Cancelar viaje', style: TextStyle(color: Colors.red)),
             ),
-          if (estado == 'aceptado' || estado == 'en_curso')
-            Center(
-              child: TextButton.icon(
-                onPressed: _cancelar,
-                icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
-                label: const Text('Cancelar viaje', style: TextStyle(color: Colors.red)),
-              ),
-            ),
-          if (estado == 'aceptado' || estado == 'en_curso')
-            const SizedBox(height: 8),
-          if (estado == 'aceptado' || estado == 'en_curso')
-            SizedBox(
-              width: double.infinity, height: 48,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(trip: _trip!))),
-                icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                label: const Text('Chat con el conductor', style: TextStyle(fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1565C0),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          if (estado == 'aceptado' || estado == 'en_curso')
-            const SizedBox(height: 8),
-          if (estado == 'aceptado' || estado == 'en_curso')
-            SizedBox(
-              width: double.infinity, height: 44,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: _trip!, role: 'cliente'))),
-                icon: const Icon(Icons.gavel_outlined, size: 18),
-                label: const Text('Reportar problema', style: TextStyle(fontWeight: FontWeight.w500)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red.shade600,
-                  side: BorderSide(color: Colors.red.shade300),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
+          ),
         ],
       ),
     );
@@ -1174,32 +1088,6 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildStatusCard(String? estado) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _estadoColor(estado).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _estadoColor(estado).withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.circle, color: _estadoColor(estado), size: 14),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _estadoLabel(estado),
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _estadoColor(estado)),
-            ),
-          ),
-          if (estado == 'buscando_conductor')
-            const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildRouteCard(Map<String, dynamic>? origen, Map<String, dynamic>? destino) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1241,185 +1129,264 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
         child: Text('Esperando ofertas de conductores...', style: TextStyle(color: Colors.black45)),
       ));
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Ofertas recibidas', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 10),
-        ..._offers.map((offer) => _buildOfferCard(offer)),
-      ],
-    );
-  }
-
-  Widget _buildOfferRoute() {
-    final origen = _trip!['origen'] as Map<String, dynamic>?;
-    final destino = _trip!['destino'] as Map<String, dynamic>?;
-    final oDir = origen?['direccion'] as String? ?? '';
-    final dDir = destino?['direccion'] as String? ?? '';
-    if (oDir.isEmpty && dDir.isEmpty) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Column(
-            children: const [
-              Icon(Icons.circle, size: 10, color: Color(0xFF4CAF50)),
-              SizedBox(height: 2),
-              Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF9E9E9E)),
-              SizedBox(height: 2),
-              Icon(Icons.circle, size: 10, color: Color(0xFFF44336)),
-            ],
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(oDir, style: const TextStyle(fontSize: 12, color: Color(0xFF424242)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Text(dDir, style: const TextStyle(fontSize: 12, color: Color(0xFF424242)), maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OfertasRecibidasScreen(
+              ofertas: _offers,
+              trip: _trip!,
+              onAccept: (offerId) => _aceptarOferta(offerId),
+              onReject: (offerId) => _rechazarOferta(offerId),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOfferCard(Map<String, dynamic> offer) {
-    final conductor = offer['conductor'] as Map<String, dynamic>?;
-    final monto = num.tryParse(offer['monto']?.toString() ?? '') ?? 0;
-    final presupuesto = num.tryParse(_trip?['precioEstimado']?.toString() ?? '') ?? 0;
-    final diff = presupuesto > 0 ? ((monto - presupuesto) / presupuesto * 100).round() : 0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: const Color(0xFF1A3C6E),
-                child: Text(
-                  _initials(conductor?['nombre'] as String? ?? ''),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(conductor?['nombre'] as String? ?? 'Conductor', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                Text('${conductor?['tipoVehiculo'] ?? ''} \u00b7 ${offer['placa'] ?? conductor?['placa'] ?? ''}', style: const TextStyle(fontSize: 12, color: Colors.black45)),
-              ])),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: diff <= 10 ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  diff <= 0 ? 'Bajo presupuesto' : '+$diff%',
-                  style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w700,
-                    color: diff <= 10 ? const Color(0xFF2E7D32) : const Color(0xFFE65100),
-                  ),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 12),
-            _buildOfferRoute(),
-            const SizedBox(height: 12),
-            Center(
-              child: Column(children: [
-                Text('MONTO DE LA OFERTA', style: TextStyle(fontSize: 10, color: Colors.grey.shade500, letterSpacing: 1.5)),
-                const SizedBox(height: 4),
-                Text('\$${monto.toStringAsFixed(0)}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Color(0xFF1A3C6E))),
-                if (presupuesto > 0)
-                  Text('Presupuesto: \$${presupuesto.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-              ]),
-            ),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(
-                child: SizedBox(height: 48, child: OutlinedButton(
-                  onPressed: () => _rechazarOferta(offer['id']),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: BorderSide(color: Colors.red.shade200),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Rechazar', style: TextStyle(fontWeight: FontWeight.w600)),
-                )),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: SizedBox(height: 48, child: ElevatedButton.icon(
-                  onPressed: () => _aceptarOferta(offer['id']),
-                  icon: const Icon(Icons.check_circle, size: 20),
-                  label: const Text('Aceptar oferta', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4CAF50),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
-                )),
-              ),
-            ]),
-          ],
+        ).then((_) => _fetchOffers(_trip!['id'])),
+        icon: const Icon(Icons.list_alt_rounded, size: 20),
+        label: Text('Ver ofertas (${_offers.length})', style: const TextStyle(fontWeight: FontWeight.w600)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2563EB),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
     );
   }
 
-  Widget _buildDriverCard() {
+
+
+  Widget _buildTrackingLayout() {
+    final estado = _trip!['estado'] as String?;
     final conductor = _trip!['conductor'] as Map<String, dynamic>?;
-    if (conductor == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Tu conductor', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
-          const SizedBox(height: 10),
-          Row(
+    final origen = _trip!['origen'] as Map<String, dynamic>?;
+    final destino = _trip!['destino'] as Map<String, dynamic>?;
+
+    double distKm = 0;
+    int min = 0;
+    String distLabel = '';
+    if (_driverLat != null && _driverLng != null) {
+      final oLat = double.tryParse(origen?['lat']?.toString() ?? '');
+      final oLng = double.tryParse(origen?['lng']?.toString() ?? '');
+      final dLat = double.tryParse(destino?['lat']?.toString() ?? '');
+      final dLng = double.tryParse(destino?['lng']?.toString() ?? '');
+      if (estado == 'aceptado' && oLat != null && oLng != null) {
+        distKm = _haversine(_driverLat!, _driverLng!, oLat, oLng);
+        distLabel = 'al punto de recogida';
+      } else if (dLat != null && dLng != null) {
+        distKm = _haversine(_driverLat!, _driverLng!, dLat, dLng);
+        distLabel = 'al destino';
+      }
+      final velocidadKmph = (_driverSpeed ?? 0) > 5 ? (_driverSpeed! * 3.6) : 30;
+      min = distKm > 0 ? (distKm / velocidadKmph * 60).round() : 0;
+    }
+
+    final statusLabel = _estadoLabel(estado);
+
+    return Column(
+      children: [
+        Expanded(
+          flex: 5,
+          child: Stack(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFFE0E0E0),
-                child: Text(
-                  _initials(conductor['nombre'] as String? ?? ''),
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(conductor['nombre'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text('${conductor['tipoVehiculo'] ?? ''} \u00b7 ${conductor['placa'] ?? ''}', style: const TextStyle(fontSize: 12, color: Colors.black45)),
-                  ],
+              if (origen != null && destino != null) _buildMap(origen, destino),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      _circleButton(Icons.arrow_back_ios_new_rounded, () {
+                        if (_isTripActive) {
+                          _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
+                        } else {
+                          Navigator.pop(context);
+                        }
+                      }),
+                      const SizedBox(width: 12),
+                      Text(statusLabel, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E))),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
+        ),
+        Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [BoxShadow(color: Color(0x14000000), blurRadius: 20, offset: Offset(0, -4))],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 52, height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFD0E8FF),
+                      border: Border.all(color: const Color(0xFF2D9CDB), width: 2),
+                    ),
+                    child: ClipOval(
+                      child: Icon(Icons.person, size: 34, color: const Color(0xFF2D9CDB)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(conductor?['nombre'] as String? ?? 'Conductor', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            const Icon(Icons.star_rounded, color: Color(0xFFFFC107), size: 16),
+                            const SizedBox(width: 3),
+                            Text(
+                              (conductor?['rating'] as num?)?.toStringAsFixed(1) ?? '0.0',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  _iconButton(Icons.phone_outlined, _callDriver),
+                  const SizedBox(width: 10),
+                  _iconButton(Icons.chat_bubble_outline_rounded, _openChat),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1, color: Color(0xFFF0F0F0)),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Tiempo estimado de llegada', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                        const SizedBox(height: 4),
+                        Text('~$min min', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+                      ],
+                    ),
+                  ),
+                  Container(width: 1, height: 40, color: const Color(0xFFF0F0F0)),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Distancia $distLabel', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                          const SizedBox(height: 4),
+                          Text('${distKm.toStringAsFixed(1)} km', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Divider(height: 1, color: Color(0xFFF0F0F0)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(child: _bottomAction(Icons.chat_bubble_outline_rounded, 'Chat', _openChat)),
+                  Expanded(child: _bottomAction(Icons.phone_outlined, 'Llamar', _callDriver)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: OutlinedButton(
+                      onPressed: _cancelar,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE53935), width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Cancelar viaje', style: TextStyle(color: Color(0xFFE53935), fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity, height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: _trip!, role: 'cliente'))),
+                  icon: const Icon(Icons.gavel_outlined, size: 18),
+                  label: const Text('Reportar problema', style: TextStyle(fontWeight: FontWeight.w500)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade600,
+                    side: BorderSide(color: Colors.red.shade300),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _circleButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38, height: 38,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Icon(icon, size: 18, color: const Color(0xFF1A1A2E)),
+      ),
+    );
+  }
+
+  Widget _iconButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(color: const Color(0xFFF5F7FA), shape: BoxShape.circle),
+        child: Icon(icon, size: 20, color: const Color(0xFF1A1A2E)),
+      ),
+    );
+  }
+
+  Widget _bottomAction(IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22, color: const Color(0xFF1A1A2E)),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E))),
         ],
       ),
     );
+  }
+
+  void _callDriver() {
+    final conductor = _trip?['conductor'] as Map<String, dynamic>?;
+    final telefono = conductor?['telefono'] as String?;
+    if (telefono != null && telefono.isNotEmpty) {
+      launchUrl(Uri.parse('tel:$telefono'));
+    } else {
+      _snack('No hay n\u00famero de tel\u00e9fono disponible');
+    }
+  }
+
+  void _openChat() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(trip: _trip!)));
   }
 }
 
