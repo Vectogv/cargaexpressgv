@@ -155,7 +155,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen>
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF22C55E).withOpacity(0.3),
+                                        color: const Color(0xFF22C55E).withValues(alpha: 0.3),
                                         blurRadius: 24,
                                         spreadRadius: 4,
                                       ),
@@ -327,7 +327,7 @@ class _ConfettiPainter extends CustomPainter {
       final opacity = t < 0.7 ? 1.0 : (1.0 - (t - 0.7) / 0.3);
       final rot = p.angle + p.rotSpeed * t * math.pi;
 
-      final paint = Paint()..color = p.color.withOpacity(opacity.clamp(0.0, 1.0));
+      final paint = Paint()..color = p.color.withValues(alpha: opacity.clamp(0.0, 1.0));
 
       canvas.save();
       canvas.translate(x, y);

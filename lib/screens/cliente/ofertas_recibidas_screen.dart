@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'oferta_aceptada_screen.dart';
 
@@ -86,14 +85,17 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
           builder: (_) => OfertaAceptadaScreen(
             conductorNombre: conductor?['nombre'] as String? ?? 'Conductor',
             camion: conductor?['tipoVehiculo'] as String? ?? '',
-            placa: offer?['placa'] as String? ?? conductor?['placa'] as String? ?? '',
+            placa: offer?['placa']?.toString() ?? conductor?['placa']?.toString() ?? '',
             rating: (conductor?['rating'] as num?)?.toDouble() ?? 0,
             onVerSeguimiento: () => Navigator.pop(context),
           ),
         ),
       );
 
-      if (mounted) Navigator.maybePop(context);
+      if (mounted) {
+        setState(() => _acceptingId = null);
+        Navigator.maybePop(context);
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _acceptingId = null);
@@ -154,7 +156,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                     final offer = _offers[i];
                     final conductor = offer['conductor'] as Map<String, dynamic>?;
                     final nombre = conductor?['nombre'] as String? ?? 'Conductor';
-                    final camion = '${conductor?['tipoVehiculo'] ?? ''} · ${offer['placa'] ?? conductor?['placa'] ?? ''}';
+                    final camion = '${conductor?['tipoVehiculo'] ?? ''} · ${offer['placa']?.toString() ?? conductor?['placa']?.toString() ?? ''}';
                     final monto = num.tryParse(offer['monto']?.toString() ?? '') ?? 0;
                     final diff = presupuesto > 0 ? ((monto - presupuesto) / presupuesto * 100).round() : 0;
                     final isAccepting = _acceptingId == offer['id'];
@@ -166,7 +168,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
+                            color: Colors.black.withValues(alpha: 0.06),
                             blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),
@@ -197,11 +199,10 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                                       camion,
                                       style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w400),
                                     ),
-                                    if (diff != 0)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 3),
-                                        child: Text(
-                                          diff <= 0 ? 'Bajo presupuesto' : '+$diff% sobre presupuesto',
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 3),
+                                      child: Text(
+                                        diff < 0 ? 'Bajo presupuesto' : diff == 0 ? 'Igual al presupuesto' : '+$diff% sobre presupuesto',
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,

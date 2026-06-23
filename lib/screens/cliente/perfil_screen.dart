@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
+import '../user/auth_screen.dart';
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -44,12 +45,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
       final url = await ApiClient.instance.uploadAvatar(bytes, picked.name);
       if (mounted && url.isNotEmpty) {
         setState(() { _profile?['avatar'] = url; });
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar actualizado')));
-        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar actualizado')));
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
       }
     }
@@ -61,33 +60,33 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final emailCtrl = TextEditingController(text: _profile?['email'] as String? ?? '');
     final telefonoCtrl = TextEditingController(text: _profile?['telefono'] as String? ?? '');
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Editar perfil'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-              const SizedBox(height: 8),
-              TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellido')),
-              const SizedBox(height: 8),
-              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email'), keyboardType: TextInputType.emailAddress),
-              const SizedBox(height: 8),
-              TextField(controller: telefonoCtrl, decoration: const InputDecoration(labelText: 'Teléfono'), keyboardType: TextInputType.phone),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
-        ],
-      ),
-    );
-
-    if (result != true) return;
     try {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Editar perfil'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+                const SizedBox(height: 8),
+                TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellido')),
+                const SizedBox(height: 8),
+                TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email'), keyboardType: TextInputType.emailAddress),
+                const SizedBox(height: 8),
+                TextField(controller: telefonoCtrl, decoration: const InputDecoration(labelText: 'Teléfono'), keyboardType: TextInputType.phone),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
+          ],
+        ),
+      );
+
+      if (result != true) return;
       await ApiClient.instance.updateProfile({
         'nombre': nombreCtrl.text.trim(),
         'apellido': apellidoCtrl.text.trim(),
@@ -95,13 +94,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
         'telefono': telefonoCtrl.text.trim(),
       });
       await _loadProfile();
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
       }
+    } finally {
+      nombreCtrl.dispose();
+      apellidoCtrl.dispose();
+      emailCtrl.dispose();
+      telefonoCtrl.dispose();
     }
   }
 
@@ -160,14 +164,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   height: 70,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
+                    color: avatar != null && avatar.isNotEmpty ? Colors.transparent : _primaryDark,
                     border: Border.all(color: Colors.grey.shade200, width: 2),
                     image: avatar != null && avatar.isNotEmpty
                         ? DecorationImage(image: NetworkImage(avatar), fit: BoxFit.cover)
-                        : const DecorationImage(
-                            image: NetworkImage('https://randomuser.me/api/portraits/men/32.jpg'),
-                            fit: BoxFit.cover,
-                          ),
+                        : null,
                   ),
+                  child: avatar == null || avatar.isEmpty
+                      ? Center(
+                          child: Text(
+                            _initials(nombre),
+                            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+                          ),
+                        )
+                      : null,
                 ),
                 Positioned(
                   bottom: 0,
@@ -213,10 +223,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
       color: _white,
       child: Column(
         children: [
-          _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
+          _buildMenuItem(Icons.person_outline, 'Informaci\u00f3n personal', _editInfo),
+          _buildMenuItem(Icons.logout, 'Cerrar sesi\u00f3n', () {
+            ApiClient.instance.logout();
+            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
+          }),
         ],
       ),
     );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
   Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap) {

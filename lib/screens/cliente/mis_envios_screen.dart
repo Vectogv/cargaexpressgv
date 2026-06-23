@@ -12,6 +12,7 @@ class MisEnviosScreen extends StatefulWidget {
 class _MisEnviosScreenState extends State<MisEnviosScreen> {
   List<Map<String, dynamic>> _viajes = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -20,12 +21,13 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (!mounted) return;
+    setState(() { _loading = true; _error = null; });
     try {
       final data = await ApiClient.instance.getTripHistory();
       if (mounted) setState(() { _viajes = data; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = e.toString(); });
     }
   }
 
@@ -78,9 +80,29 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _viajes.isEmpty
-              ? const Center(child: Text('No tienes envíos', style: TextStyle(color: Colors.black45)))
-              : RefreshIndicator(
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                        const SizedBox(height: 12),
+                        Text('Error al cargar envíos', style: TextStyle(color: Colors.grey[600])),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : _viajes.isEmpty
+                  ? const Center(child: Text('No tienes envíos', style: TextStyle(color: Colors.black45)))
+                  : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
@@ -108,7 +130,7 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: _estadoColor(estado).withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(color: _estadoColor(estado).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
                   child: Text(_estadoLabel(estado), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _estadoColor(estado))),
                 ),
                 const Spacer(),

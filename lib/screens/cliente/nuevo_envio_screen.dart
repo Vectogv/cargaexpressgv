@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/logger_service.dart';
-import 'rastreo_screen.dart';
 import 'rastreo_screen.dart';
 
 class NuevoEnvioScreen extends StatefulWidget {
@@ -37,6 +37,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   bool _loading = false;
   bool _loadingLocation = false;
   bool _editandoPrecio = false;
+  Timer? _draftTimer;
 
   @override
   void initState() {
@@ -50,18 +51,21 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
   Future<void> _loadDraft() async {
     final prefs = await SharedPreferences.getInstance();
-    _origenCtrl.text = prefs.getString(_prefOrigen) ?? 'Av. Principal, Caracas';
-    _destinoCtrl.text = prefs.getString(_prefDestino) ?? 'Valencia, Zona Industrial';
-    _descripcionCtrl.text = prefs.getString(_prefDescripcion) ?? 'Electrodomésticos, 3 cajas grandes';
-    _precioCtrl.text = prefs.getString(_prefPrecio) ?? '55000';
+    _origenCtrl.text = prefs.getString(_prefOrigen) ?? '';
+    _destinoCtrl.text = prefs.getString(_prefDestino) ?? '';
+    _descripcionCtrl.text = prefs.getString(_prefDescripcion) ?? '';
+    _precioCtrl.text = prefs.getString(_prefPrecio) ?? '';
   }
 
   void _saveDraft() {
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setString(_prefOrigen, _origenCtrl.text);
-      prefs.setString(_prefDestino, _destinoCtrl.text);
-      prefs.setString(_prefDescripcion, _descripcionCtrl.text);
-      prefs.setString(_prefPrecio, _precioCtrl.text);
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), () {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString(_prefOrigen, _origenCtrl.text);
+        prefs.setString(_prefDestino, _destinoCtrl.text);
+        prefs.setString(_prefDescripcion, _descripcionCtrl.text);
+        prefs.setString(_prefPrecio, _precioCtrl.text);
+      });
     });
   }
 
@@ -71,6 +75,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     _destinoCtrl.removeListener(_saveDraft);
     _descripcionCtrl.removeListener(_saveDraft);
     _precioCtrl.removeListener(_saveDraft);
+    _draftTimer?.cancel();
     _origenCtrl.dispose();
     _destinoCtrl.dispose();
     _descripcionCtrl.dispose();
@@ -115,7 +120,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?lat=${latLng.latitude}&lon=${latLng.longitude}&format=json&accept-language=es',
       );
-      final res = await http.Client().get(uri, headers: {'User-Agent': 'CargaExpress/1.0'});
+      final res = await http.get(uri, headers: {'User-Agent': 'CargaExpress/1.0'});
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         return data['display_name'] as String? ?? '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}';
@@ -143,37 +148,34 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
   Future<void> _searchAddress({bool isOrigen = true}) async {
     final ctrl = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Buscar dirección'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Escribe una dirección...',
-            prefixIcon: Icon(Icons.search),
-          ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: const Text('Buscar'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == null || result.trim().isEmpty) return;
-
     try {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Buscar dirección'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Escribe una dirección...',
+              prefixIcon: Icon(Icons.search),
+            ),
+            onSubmitted: (v) => Navigator.pop(ctx, v),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancelar')),
+          ],
+        ),
+      );
+
+      if (result == null || result.trim().isEmpty) return;
+
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(result)}&format=json&limit=5&accept-language=es',
       );
-      final res = await http.Client().get(uri, headers: {'User-Agent': 'CargaExpress/1.0'});
-      if (res.statusCode == 200) {
+      final res = await http.get(uri, headers: {'User-Agent': 'CargaExpress/1.0'});
+        if (res.statusCode != 200) return;
+
         final data = jsonDecode(res.body) as List<dynamic>;
         if (data.isEmpty) {
           if (mounted) _snack('No se encontraron resultados');
@@ -225,9 +227,10 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
             });
           }
         }
-      }
     } catch (e) {
       if (mounted) _snack('Error al buscar dirección');
+    } finally {
+      ctrl.dispose();
     }
   }
 
@@ -267,6 +270,10 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       _snack('Ingresa origen y destino');
       return;
     }
+    if (_origenLatLng == null || _destinoLatLng == null) {
+      _snack('Por favor selecciona origen y destino en el mapa');
+      return;
+    }
     final precio = int.tryParse(_precioCtrl.text.trim());
     if (precio == null || precio <= 0) {
       _snack('Ingresa un precio válido');
@@ -275,16 +282,16 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
     setState(() => _loading = true);
     try {
-      final trip = await ApiClient.instance.requestTrip({
+      await ApiClient.instance.requestTrip({
         'origen': {
           'direccion': _origenCtrl.text.trim(),
-          'lat': _origenLatLng?.latitude ?? 6.2476,
-          'lng': _origenLatLng?.longitude ?? -75.5658,
+          'lat': _origenLatLng!.latitude,
+          'lng': _origenLatLng!.longitude,
         },
         'destino': {
           'direccion': _destinoCtrl.text.trim(),
-          'lat': _destinoLatLng?.latitude ?? 6.2476,
-          'lng': _destinoLatLng?.longitude ?? -75.5658,
+          'lat': _destinoLatLng!.latitude,
+          'lng': _destinoLatLng!.longitude,
         },
         'descripcion': _descripcionCtrl.text.trim().isEmpty ? null : _descripcionCtrl.text.trim(),
         'precioCliente': precio,
@@ -365,7 +372,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                         border: Border.all(color: const Color(0xFFE8E8E8)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -780,7 +787,7 @@ class _InputCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE8E8E8)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

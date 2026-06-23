@@ -10,6 +10,7 @@ import 'api/chat_service.dart';
 import 'api/driver_service.dart';
 import 'api/profile_service.dart';
 import 'api/payment_service.dart';
+import 'api/dispute_service.dart';
 
 class ApiClient {
   static final ApiClient instance = ApiClient._();
@@ -172,6 +173,12 @@ class ApiClient {
   Future<void> disputeTrip(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeTrip(id, motivo: motivo, descripcion: descripcion);
   Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) => TripService.rateTrip(id, puntaje, comentario: comentario);
   Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) => TripService.deliveryPhoto(tripId, bytes, filename);
+
+  // --- Disputes ---
+
+  Future<Map<String, dynamic>> createDispute({required dynamic tripId, required String problema, String? descripcion, List<String>? fotos}) =>
+      DisputeService.createDispute(tripId: tripId, problema: problema, descripcion: descripcion, fotos: fotos);
+  Future<Map<String, dynamic>> getDispute(dynamic id) => DisputeService.getDispute(id);
 
   // --- Offers ---
 

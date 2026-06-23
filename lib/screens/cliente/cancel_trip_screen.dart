@@ -18,8 +18,27 @@ class _CancelTripScreenState extends State<CancelTripScreen> {
     'Otro motivo',
   ];
 
+  static const _reasonsEnCurso = [
+    'Conductor no se present\u00f3',
+    'Demora excesiva',
+    'Problema con la carga',
+    'Emergencia personal',
+    'Otro motivo',
+  ];
+
+  List<String> get _reasonsList => widget.enCurso ? _reasonsEnCurso : _reasons;
+
   String? _selected;
   final _commentController = TextEditingController();
+
+  void _confirm() {
+    final reason = _selected;
+    if (reason == null) return;
+    Navigator.pop(context, {
+      'reason': reason,
+      'comment': _commentController.text.trim(),
+    });
+  }
 
   @override
   void dispose() {
@@ -59,8 +78,8 @@ class _CancelTripScreenState extends State<CancelTripScreen> {
             ),
             const SizedBox(height: 20),
 
-            ...List.generate(_reasons.length, (i) {
-              final reason = _reasons[i];
+            ...List.generate(_reasonsList.length, (i) {
+              final reason = _reasonsList[i];
               final isSelected = _selected == reason;
               return GestureDetector(
                 onTap: () => setState(() => _selected = reason),
@@ -136,15 +155,10 @@ class _CancelTripScreenState extends State<CancelTripScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _selected == null
-                          ? null
-                          : () => Navigator.pop(context, {
-                                'reason': _selected,
-                                'comment': _commentController.text.trim(),
-                              }),
+                      onPressed: _selected == null ? null : _confirm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFE53935),
-                        disabledBackgroundColor: const Color(0xFFE53935).withOpacity(0.45),
+                        disabledBackgroundColor: const Color(0xFFE53935).withValues(alpha: 0.45),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 16),

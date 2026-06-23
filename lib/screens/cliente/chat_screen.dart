@@ -12,7 +12,8 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateMixin {
+  late final AnimationController _dotCtrl;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
@@ -21,6 +22,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isTyping = false;
   Timer? _typingTimer;
   Timer? _pollTimer;
+  Timer? _draftTimer;
   StreamSubscription<Map<String, dynamic>>? _messageSub;
   StreamSubscription<Map<String, dynamic>>? _typingStartSub;
   StreamSubscription<Map<String, dynamic>>? _typingStopSub;
@@ -38,15 +40,21 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _dotCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
     _setup();
   }
 
   @override
   void dispose() {
+    _dotCtrl.dispose();
     _messageController.dispose();
     _scrollCtrl.dispose();
     _typingTimer?.cancel();
     _pollTimer?.cancel();
+    _draftTimer?.cancel();
     _messageSub?.cancel();
     _typingStartSub?.cancel();
     _typingStopSub?.cancel();
@@ -65,9 +73,18 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     await _fetchMessages();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) _fetchMessages();
     });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   void _setupSocket() {
@@ -124,7 +141,13 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     _connectionSub = SocketServiceClient.instance.onConnection.listen((connected) {
-      if (connected && mounted) _fetchMessages();
+      if (!mounted) return;
+      if (connected) {
+        _stopPolling();
+        _fetchMessages();
+      } else {
+        _startPolling();
+      }
     });
   }
 
@@ -306,7 +329,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (!isSent) ...[
             CircleAvatar(
               radius: 14,
-              backgroundColor: _primaryDark.withOpacity(0.2),
+              backgroundColor: _primaryDark.withValues(alpha: 0.2),
               child: Icon(Icons.person, size: 14, color: _primaryDark),
             ),
             const SizedBox(width: 8),
@@ -325,7 +348,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     bottomLeft: Radius.circular(isSent ? 16 : 4),
                     bottomRight: Radius.circular(isSent ? 4 : 16),
                   ),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))],
                 ),
                 child: Text(
                   msg['text'] as String? ?? msg['mensaje'] as String? ?? '',
@@ -343,7 +366,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       status == 'failed' ? Icons.error_outline :
                       status == 'sending' ? Icons.access_time :
                       status == 'read' ? Icons.done_all :
-                      Icons.done_all,
+                      Icons.done,
                       size: 14,
                       color: status == 'failed' ? Colors.red :
                              status == 'sending' ? _textGrey :
@@ -367,7 +390,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           CircleAvatar(
             radius: 14,
-            backgroundColor: _primaryDark.withOpacity(0.2),
+            backgroundColor: _primaryDark.withValues(alpha: 0.2),
             child: Icon(Icons.person, size: 14, color: _primaryDark),
           ),
           const SizedBox(width: 8),
@@ -376,7 +399,7 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: BoxDecoration(
               color: _bubbleReceived,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               _dot(0), const SizedBox(width: 4), _dot(1), const SizedBox(width: 4), _dot(2),
@@ -388,18 +411,30 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _dot(int i) {
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 600 + i * 200),
-      width: 8, height: 8,
-      decoration: BoxDecoration(color: _textGrey, shape: BoxShape.circle),
+    return AnimatedBuilder(
+      animation: _dotCtrl,
+      builder: (ctx, child) {
+        final phase = (_dotCtrl.value * 3 + i / 3) % 1.0;
+        final height = 4.0 + phase * 6.0;
+        return Container(
+          width: 8,
+          height: height,
+          decoration: BoxDecoration(
+            color: _textGrey.withValues(alpha: 0.3 + phase * 0.7),
+            shape: BoxShape.circle,
+          ),
+        );
+      },
     );
   }
 
   Widget _buildInputBar() {
-    return Container(
-      color: _white,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      child: Row(
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        color: _white,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(
         children: [
           Expanded(
             child: Container(
@@ -429,6 +464,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

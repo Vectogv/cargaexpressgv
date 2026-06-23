@@ -66,7 +66,7 @@ class _PagosScreenState extends State<PagosScreen> {
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: _primaryDark.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: _primaryDark.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
         child: Icon(icon, size: 22, color: _primaryDark),
       ),
       title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),

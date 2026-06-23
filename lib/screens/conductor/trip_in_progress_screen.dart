@@ -288,7 +288,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         if (mounted) {
           _snack('El viaje ha sido cancelado');
           _stopGpsTimer();
-          Navigator.pop(context);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) Navigator.pop(context);
+          });
         }
       }
     } catch (e) {
@@ -300,20 +302,23 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     try {
       final accepted = data['accepted'] == true;
       if (mounted) {
-        Navigator.pop(context);
-        if (accepted) {
-          _finalizeTrip();
-        } else {
-          final motivo = data['motivo'] as String? ?? 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega';
-          _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se abrir\u00e1 una disputa.');
-          try {
-            ApiClient.instance.disputeTrip(
-              _trip?['id'],
-              motivo: 'Rechazo de entrega',
-              descripcion: motivo,
-            );
-          } catch (_) {}
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.pop(context);
+          if (accepted) {
+            _finalizeTrip();
+          } else {
+            final motivo = data['motivo'] as String? ?? 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega';
+            _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se abrir\u00e1 una disputa.');
+            try {
+              ApiClient.instance.disputeTrip(
+                _trip?['id'],
+                motivo: 'Rechazo de entrega',
+                descripcion: motivo,
+              );
+            } catch (_) {}
+          }
+        });
       }
     } catch (e) {
       LoggerService.instance.error('trip_in_progress: onFinalizeResponse error', e);

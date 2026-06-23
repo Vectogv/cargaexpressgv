@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 
 class DriverNearbyWarningSheet extends StatelessWidget {
-  final VoidCallback? onConfirm;
+  final VoidCallback? onProceed;
 
-  const DriverNearbyWarningSheet({super.key, this.onConfirm});
+  const DriverNearbyWarningSheet({super.key, this.onProceed});
 
   static Future<void> show(
     BuildContext context, {
-    VoidCallback? onConfirm,
+    VoidCallback? onProceed,
   }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(0.35),
-      builder: (_) => DriverNearbyWarningSheet(onConfirm: onConfirm),
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (_) => DriverNearbyWarningSheet(onProceed: onProceed),
     );
   }
 
@@ -52,7 +52,6 @@ class DriverNearbyWarningSheet extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                onConfirm?.call();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
@@ -62,6 +61,24 @@ class DriverNearbyWarningSheet extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               child: const Text('Entendido', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.2)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                onProceed?.call();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFE53935),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Cancelar viaje de todas formas',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ],

@@ -32,53 +32,94 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   } catch (e) {
     LoggerService.instance.error('_firebaseMessagingBackgroundHandler init error', e);
   }
-
   final data = message.data;
-  if (data['type'] == 'new_trip' || data['event'] == 'trip:nearby') {
-    return;
-  }
-
-  LoggerService.instance.info(
-    'Background FCM: ${data['type'] ?? data['event']}',
-  );
+  if (data['type'] == 'new_trip' || data['event'] == 'trip:nearby') return;
+  LoggerService.instance.info('Background FCM: ${data['type'] ?? data['event']}');
 }
 
 Widget _homeScreenByRole() {
   final rol = ApiClient.instance.rol;
   switch (rol) {
-    case 'admin':
-      return const AdminLiveScreen();
-    case 'conductor':
-      return const conductor.HomeScreen();
-    case 'cliente':
-      return const ClienteHomeScreen();
-    default:
-      return const AuthScreen();
+    case 'admin':     return const AdminLiveScreen();
+    case 'conductor': return const conductor.HomeScreen();
+    case 'cliente':   return const ClienteHomeScreen();
+    default:          return const AuthScreen();
   }
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRY POINT
+// Todo corre dentro de runZonedGuarded para que la zona sea única desde el
+// inicio. ensureInitialized() también debe vivir en esa misma zona.
+// ─────────────────────────────────────────────────────────────────────────────
+void main() {
+  runZonedGuarded(
+    () async {
+      // 1. Binding — DENTRO de la zona.
+      WidgetsFlutterBinding.ensureInitialized();
+
+      // 2. Handlers de error globales.
+      _setupErrorHandlers();
+
+      // 3. Servicios críticos (await — bloqueantes antes del runApp).
+      await _initServices();
+
+      // 4. Sesión + config (no bloquean el arranque de la UI).
+      _recoverSession();
+      unawaited(_loadConfig());
+      if (ApiClient.instance.token != null) {
+        SessionMonitorService.instance.start();
+      }
+
+      // 5. App.
+      runApp(const MainApp());
+    },
+    (error, stack) {
+      LoggerService.instance.error('Unhandled zone error: $error', error, stack);
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance
+            .recordError(error, stack, fatal: true)
+            .catchError((_) {});
+      }
+    },
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Handlers de error de Flutter / plataforma
+// ─────────────────────────────────────────────────────────────────────────────
+void _setupErrorHandlers() {
+  ErrorHandlerService.instance.init();
 
   FlutterError.onError = (details) {
-    LoggerService.instance.error('Flutter framework error: ${details.exception}', details.exception, details.stack);
+    LoggerService.instance.error(
+      'Flutter framework error: ${details.exception}',
+      details.exception,
+      details.stack,
+    );
     if (!kIsWeb) {
-      FirebaseCrashlytics.instance.recordFlutterFatalError(details)
-        .catchError((_) {});
+      FirebaseCrashlytics.instance
+          .recordFlutterFatalError(details)
+          .catchError((_) {});
     }
   };
 
   ui.PlatformDispatcher.instance.onError = (error, stack) {
     LoggerService.instance.error('Platform error', error, stack);
     if (!kIsWeb) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true)
-        .catchError((_) {});
+      FirebaseCrashlytics.instance
+          .recordError(error, stack, fatal: true)
+          .catchError((_) {});
     }
     return true;
   };
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
-    LoggerService.instance.error('ErrorWidget: ${details.exception}', details.exception, details.stack);
+    LoggerService.instance.error(
+      'ErrorWidget: ${details.exception}',
+      details.exception,
+      details.stack,
+    );
     return Material(
       color: const Color(0xFFF5F7FA),
       child: Center(
@@ -90,13 +131,13 @@ Future<void> main() async {
               const Icon(Icons.error_outline, size: 64, color: Colors.orange),
               const SizedBox(height: 16),
               const Text(
-                'Ocurri\u00f3 un error inesperado',
+                'Ocurrió un error inesperado',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                'La aplicaci\u00f3n se recuperar\u00e1 autom\u00e1ticamente.',
+                'La aplicación se recuperará automáticamente.',
                 style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 textAlign: TextAlign.center,
               ),
@@ -106,37 +147,25 @@ Future<void> main() async {
       ),
     );
   };
-
-  ErrorHandlerService.instance.init();
-
-  unawaited(_initServices().then((_) {
-    _loadConfig();
-    _recoverSession();
-    if (ApiClient.instance.token != null) {
-      SessionMonitorService.instance.start();
-    }
-  }));
-
-  runZonedGuarded(() {
-    runApp(const MainApp());
-  }, (error, stack) {
-    LoggerService.instance.error('Unhandled zone error: $error', error, stack);
-    if (!kIsWeb) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true)
-        .catchError((_) {});
-    }
-  });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Inicialización de servicios — todos awaited en secuencia.
+// Los que pueden fallar de forma aislada se envuelven en try/catch.
+// Los que no bloquean el arranque se lanzan con unawaited al final.
+// ─────────────────────────────────────────────────────────────────────────────
 Future<void> _initServices() async {
+  // Firebase — intentar con opciones de plataforma, si falla reintentar sin.
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-  } catch (e) {
+  } catch (_) {
     try {
       await Firebase.initializeApp();
-    } catch (_) {}
+    } catch (e) {
+      LoggerService.instance.error('Firebase init failed', e);
+    }
   }
 
   try {
@@ -145,12 +174,14 @@ Future<void> _initServices() async {
     LoggerService.instance.error('Firebase background handler error', e);
   }
 
+  // ApiClient primero: otros servicios pueden necesitar el token.
   try {
     await ApiClient.instance.init();
   } catch (e) {
     LoggerService.instance.error('ApiClient init error', e);
   }
 
+  // CacheService (Hive) — AWAITED antes de cualquier lectura de caché.
   try {
     await CacheService.instance.init();
   } catch (e) {
@@ -189,26 +220,37 @@ Future<void> _initServices() async {
     LoggerService.instance.error('NotificationProvider init error', e);
   }
 
-  unawaited(NotificationService.instance.init().catchError((e, s) {
-    LoggerService.instance.error('NotificationService init error', e, s);
-  }));
+  // No bloquean el arranque — se lanzan en paralelo al final.
+  unawaited(
+    NotificationService.instance.init().catchError((e, s) {
+      LoggerService.instance.error('NotificationService init error', e, s);
+    }),
+  );
 
-  unawaited(SocketServiceClient.instance.init().catchError((e, s) {
-    LoggerService.instance.error('SocketServiceClient init error', e, s);
-  }));
+  unawaited(
+    SocketServiceClient.instance.init().catchError((e, s) {
+      LoggerService.instance.error('SocketServiceClient init error', e, s);
+    }),
+  );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Recuperación de sesión — sólo lectura, CacheService ya está abierto.
+// ─────────────────────────────────────────────────────────────────────────────
 void _recoverSession() {
   final token = ApiClient.instance.token;
-  if (token != null) {
-    LoggerService.instance.info('Session recovered for user: ${ApiClient.instance.userId}');
-    AnalyticsService.instance.setUserId(ApiClient.instance.userId ?? 'unknown');
-    AnalyticsService.instance.logEvent('session_recovered');
+  if (token == null) return;
 
-    final cachedTrip = CacheService.instance.getCachedActiveTrip();
-    if (cachedTrip != null) {
-      LoggerService.instance.info('Cached active trip found: ${cachedTrip['id']}');
-    }
+  LoggerService.instance
+      .info('Session recovered for user: ${ApiClient.instance.userId}');
+  AnalyticsService.instance
+      .setUserId(ApiClient.instance.userId ?? 'unknown');
+  AnalyticsService.instance.logEvent('session_recovered');
+
+  final cachedTrip = CacheService.instance.getCachedActiveTrip();
+  if (cachedTrip != null) {
+    LoggerService.instance
+        .info('Cached active trip found: ${cachedTrip['id']}');
   }
 }
 
@@ -216,11 +258,15 @@ Future<void> _loadConfig() async {
   try {
     final token = await ApiClient.instance.fetchMapboxToken();
     MapConfig.mapboxAccessToken = token;
-  } catch (e) {
-    LoggerService.instance.debug('Mapbox token not available, using OSM fallback');
+  } catch (_) {
+    LoggerService.instance
+        .debug('Mapbox token not available, using OSM fallback');
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// App widget
+// ─────────────────────────────────────────────────────────────────────────────
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
 

@@ -12,6 +12,7 @@ class ViajeDetalleScreen extends StatefulWidget {
 class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   Map<String, dynamic>? _trip;
   bool _loading = true;
+  bool _rated = false;
   int _rating = 0;
 
   @override
@@ -30,10 +31,13 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   }
 
   Future<void> _calificar() async {
-    if (_rating == 0) return;
+    if (_rating == 0 || _rated) return;
     try {
       await ApiClient.instance.rateTrip(widget.tripId, _rating);
-      if (mounted) _snack('Calificación guardada');
+      if (mounted) {
+        setState(() => _rated = true);
+        _snack('Calificación guardada');
+      }
     } catch (e) {
       if (mounted) _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     }
@@ -124,9 +128,9 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _estadoColor(estado).withOpacity(0.1),
+        color: _estadoColor(estado).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _estadoColor(estado).withOpacity(0.3)),
+        border: Border.all(color: _estadoColor(estado).withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,21 +285,26 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
               );
             }),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _rating > 0 ? _calificar : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A3C6E),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
+          if (_rated) ...[
+            const SizedBox(height: 8),
+            const Text('Ya calificaste este viaje', style: TextStyle(color: Colors.black45, fontSize: 13), textAlign: TextAlign.center),
+          ] else ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _rating > 0 ? _calificar : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1A3C6E),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                child: const Text('Enviar calificación', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
-              child: const Text('Enviar calificación', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
-          ),
+          ],
         ],
       ),
     );

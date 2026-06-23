@@ -24,7 +24,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   static const Color _primaryBlue = Color(0xFF2563EB);
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
   static const Color _white = Colors.white;
 
   int _selectedNavIndex = 0;
@@ -33,7 +32,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   bool _loading = true;
   int _notifUnread = 0;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
-  StreamSubscription<Map<String, dynamic>>? _notifSub;
 
   final List<_NavItem> _navItems = [
     _NavItem(icon: Icons.home_rounded, label: 'Inicio'),
@@ -65,7 +63,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   @override
   void dispose() {
     _socketSub?.cancel();
-    _notifSub?.cancel();
     super.dispose();
   }
 
@@ -91,10 +88,13 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
   void _redirectToTracking() {
     if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const RastreoScreen()),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RastreoScreen()),
+      );
+    });
   }
 
   String _estadoLabel(String? estado) {
@@ -299,14 +299,14 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
               ),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
-                BoxShadow(color: _primaryBlue.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6)),
+                BoxShadow(color: _primaryBlue.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6)),
               ],
             ),
             child: Column(
               children: [
                 Container(
                   width: 64, height: 64,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
                   child: const Icon(Icons.local_shipping, color: Colors.white, size: 32),
                 ),
                 const SizedBox(height: 16),
@@ -327,7 +327,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
                     child: Row(
                       children: [
                         CircleAvatar(
@@ -344,7 +344,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(conductor['nombre'] as String? ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                              Text('${conductor['tipoVehiculo'] ?? ''} \u00b7 ${conductor['placa'] ?? ''}', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11)),
+                              Text('${conductor['tipoVehiculo'] ?? ''} \u00b7 ${conductor['placa'] ?? ''}', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
                             ],
                           ),
                         ),
@@ -495,8 +495,11 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
   Future<void> _logout() async {
     await ApiClient.instance.logout();
-    if (!context.mounted) return;
-    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
+    });
   }
 }
 

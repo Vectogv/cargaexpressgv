@@ -133,7 +133,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _redirectToActiveTrip() {
     if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip)));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip)));
+    });
   }
 
   Future<void> _fetchActiveTrip() async {
