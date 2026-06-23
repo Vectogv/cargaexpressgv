@@ -158,6 +158,10 @@ class NotificationService {
       _socket!.on('connect', (_) {
         _reconnectAttempts = 0;
         LoggerService.instance.info('NotificationService socket connected');
+        final userId = ApiClient.instance.userId;
+        if (userId != null) {
+          _socket!.emit('join:client', {'userId': userId});
+        }
       });
 
       _socket!.on('disconnect', (_) {

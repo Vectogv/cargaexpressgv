@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
@@ -15,11 +16,8 @@ import 'surveys_screen.dart';
 import 'profile_screen.dart';
 import 'documents_screen.dart';
 import 'forum_screen.dart';
-import 'sos_alert_screen.dart';
 import 'conductor_trip_detail_screen.dart';
 import 'trip_history_screen.dart';
-import 'support_screen.dart';
-import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,77 +29,80 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _bottomIndex = 0;
-  List<Map<String, dynamic>> _nearbyTrips = [];
-  bool _loadingTrips = true;
   bool _online = true;
   bool _statusLoading = false;
   Map<String, dynamic>? _activeTrip;
-
-  Map<String, dynamic>? _earnings;
-  Map<String, dynamic>? _stats;
   Map<String, dynamic>? _profile;
-  Map<String, dynamic>? _commission;
 
-  StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
-  StreamSubscription<int>? _chatUnreadSub;
-  int _chatUnread = 0;
-  int _notifUnread = 0;
+  StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
+  int _knownNearbyCount = 0;
+  final Set<String> _offeredTripIds = {};
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _primaryBlue = Color(0xFF1565C0);
+  static const Color _primaryBlue = Color(0xFF1A3C6E);
+  static const Color _accentBlue = Color(0xFF2563EB);
+  static const Color _textSecondary = Color(0xFF6B7280);
+  static const Color _white = Colors.white;
   static const Color _accentGreen = Color(0xFF4CAF50);
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
   static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
     super.initState();
-    _chatUnread = SocketServiceClient.instance.chatUnreadCount;
-    _notifUnread = NotificationService.instance.unreadCount;
     _fetchData();
 
-    _socketSub = NotificationService.instance.onNotification.listen((event) {
+    _socketSub = NotificationService.instance.onNotification.listen((event) async {
       final tipo = event['__event'] as String?;
       if (tipo == 'trip:nearby') {
         if (_activeTrip == null) {
-          _showNewTripBanner(event);
-          _fetchNearbyTrips();
+          final tripId = (event['_id'] ?? event['id']).toString();
+          if (!_offeredTripIds.contains(tripId)) {
+            _showNewTripBanner(event);
+          }
         }
       } else if (tipo == 'trip:accepted') {
         final tripId = event['tripId'] ?? event['id'];
         if (tripId != null) {
           DriverLocationService.instance.removeTrip(tripId);
         }
-        _fetchActiveTrip();
+        await _fetchActiveTrip();
+        if (_activeTrip != null) {
+          CacheService.instance.cacheActiveTrip(_activeTrip!);
+          _redirectToActiveTrip();
+        }
       } else if (tipo == 'trip:status') {
         final estado = event['estado'] as String?;
         if (estado == 'completado' || estado == 'cancelado') {
           if (mounted) setState(() => _activeTrip = null);
-          _fetchNearbyTrips();
         } else {
           _fetchActiveTrip();
         }
       }
-      if (mounted) setState(() => _notifUnread = NotificationService.instance.unreadCount);
     });
 
     _tripSub = DriverLocationService.instance.onTripsUpdated.listen((trips) {
-      if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
-    });
-
-    _chatUnreadSub = SocketServiceClient.instance.onChatUnreadChange.listen((count) {
-      if (mounted) setState(() => _chatUnread = count);
+      if (_activeTrip != null) return;
+      final disponibles = trips.where((t) {
+        final id = (t['_id'] ?? t['id']).toString();
+        return !_offeredTripIds.contains(id);
+      }).toList();
+      if (disponibles.length > _knownNearbyCount) {
+        final nuevos = disponibles.where((t) => t['notified'] != true).toList();
+        if (nuevos.isNotEmpty) {
+          for (final t in nuevos) { t['notified'] = true; }
+          _showNewTripBanner(nuevos.first);
+        }
+      }
+      _knownNearbyCount = disponibles.length;
     });
   }
 
   @override
   void dispose() {
-    _tripSub?.cancel();
     _socketSub?.cancel();
-    _chatUnreadSub?.cancel();
+    _tripSub?.cancel();
     super.dispose();
   }
 
@@ -116,26 +117,39 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
     }
-    await Future.wait([
-      _fetchStats(),
-      _fetchActiveTrip(),
-    ]);
+    await _fetchActiveTrip();
     if (_activeTrip != null) {
       CacheService.instance.cacheActiveTrip(_activeTrip!);
       _redirectToActiveTrip();
       return;
     }
     if (_online && _verificacionEstado == 'aprobado') {
-      await DriverLocationService.instance.start();
+      try {
+        await ApiClient.instance.setDriverStatus(true);
+      } catch (_) {}
+      if (!await DriverLocationService.instance.start()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Permiso de ubicación denegado. Actívalo en Ajustes.'),
+              action: SnackBarAction(
+                label: 'Abrir',
+                textColor: Colors.yellow,
+                onPressed: () => openAppSettings(),
+              ),
+              duration: const Duration(seconds: 8),
+            ),
+          );
+        }
+      }
     }
-    await _fetchNearbyTrips();
   }
 
   void _redirectToActiveTrip() {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip)));
+      Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip)));
     });
   }
 
@@ -161,41 +175,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final profile = await ApiClient.instance.getProfile();
       if (mounted) setState(() => _profile = profile);
-    } catch (_) {}
-  }
-
-  Future<void> _fetchNearbyTrips() async {
-    if (_verificacionEstado != 'aprobado') {
-      if (mounted) setState(() => _loadingTrips = false);
-      return;
+    } catch (e) {
+      debugPrint('Error cargando perfil: $e');
     }
-    if (DriverLocationService.instance.lastLat != null && DriverLocationService.instance.lastLng != null) {
-      try {
-        final trips = await ApiClient.instance.getNearbyTrips(
-          DriverLocationService.instance.lastLat!,
-          DriverLocationService.instance.lastLng!,
-          radio: 20,
-        );
-        if (mounted) setState(() { _nearbyTrips = trips; _loadingTrips = false; });
-        return;
-      } catch (_) {}
-    }
-    if (mounted) setState(() => _loadingTrips = false);
-  }
-
-  Future<void> _fetchStats() async {
-    try {
-      final results = await Future.wait([
-        ApiClient.instance.getEarnings(),
-        ApiClient.instance.getDriverStats(),
-        ApiClient.instance.getDebt(),
-      ]);
-      if (mounted) setState(() {
-        _earnings = results[0];
-        _stats = results[1];
-        _commission = results[2];
-      });
-    } catch (_) {}
   }
 
   Future<void> _toggleStatus() async {
@@ -205,8 +187,21 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() => _online = !_online);
         if (_online) {
-          await DriverLocationService.instance.start();
-          _fetchNearbyTrips();
+          if (!await DriverLocationService.instance.start()) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Permiso de ubicación denegado. Actívalo en Ajustes.'),
+                  action: SnackBarAction(
+                    label: 'Abrir',
+                    textColor: Colors.yellow,
+                    onPressed: () => openAppSettings(),
+                  ),
+                  duration: const Duration(seconds: 8),
+                ),
+              );
+            }
+          }
         } else {
           DriverLocationService.instance.pause();
         }
@@ -234,31 +229,31 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: const Color(0xFF1565C0),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 6),
-        action: SnackBarAction(
-          label: 'Ver',
-          textColor: Colors.yellow,
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: event)));
-          },
-        ),
+          action: SnackBarAction(
+            label: 'Ver',
+            textColor: Colors.yellow,
+            onPressed: () async {
+              if (event['id'] == null && event['_id'] == null) return;
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: event)));
+              _resetNearbyNotificationState();
+            },
+          ),
       ),
     );
+  }
+
+  void _resetNearbyNotificationState() {
+    _knownNearbyCount = 0;
+    final trips = DriverLocationService.instance.nearbyTrips;
+    for (final t in trips) {
+      t.remove('notified');
+    }
+    DriverLocationService.instance.refreshTrips();
   }
 
   String? get _verificacionEstado {
     final conductor = _profile?['conductor'] as Map<String, dynamic>?;
     return conductor?['estadoVerificacion'] as String?;
-  }
-
-  bool get _tieneDocsFaltantes {
-    final conductor = _profile?['conductor'] as Map<String, dynamic>?;
-    if (conductor == null) return false;
-    final campos = ['fotoCedula', 'fotoLicencia', 'fotoVehiculo', 'fotoConductor'];
-    for (final c in campos) {
-      final val = conductor[c] as String?;
-      if (val == null || val.isEmpty) return true;
-    }
-    return false;
   }
 
   String _statusLabel() {
@@ -275,19 +270,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return _accentGreen;
   }
 
-  IconData _statusIcon() {
-    final estado = _verificacionEstado;
-    if (estado == 'rechazado' || estado == 'pendiente') return Icons.verified_outlined;
-    if (!_online) return Icons.cloud_off;
-    return Icons.verified;
-  }
-
   void _navigate(int index) {
     if (index == 5) {
       SocketServiceClient.instance.resetChatUnread();
     }
     final routes = <int, Widget>{
-      1: const TripInProgressScreen(),
+      1: TripInProgressScreen(trip: _activeTrip),
       2: const OffersScreen(),
       4: const EarningsScreen(),
       5: TripChatScreen(trip: _activeTrip),
@@ -297,8 +285,6 @@ class _HomeScreenState extends State<HomeScreen> {
       9: const ProfileScreen(),
       10: const DocumentsScreen(),
       11: const TripHistoryScreen(),
-      12: const SupportScreen(),
-      13: const SettingsScreen(),
     };
     final route = routes[index];
     if (route != null) {
@@ -362,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundColor: _white.withOpacity(0.2),
+                  backgroundColor: _white.withValues(alpha: 0.2),
                   child: Text(
                     _initials(ApiClient.instance.nombreCompleto),
                     style: TextStyle(color: _white, fontWeight: FontWeight.w700, fontSize: 18),
@@ -447,120 +433,141 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomNav() {
+    final items = [
+      _NavItem(icon: Icons.home_rounded, label: 'Inicio'),
+      _NavItem(icon: Icons.receipt_long_rounded, label: 'Viajes'),
+      _NavItem(icon: Icons.bar_chart_rounded, label: 'Ingresos'),
+      _NavItem(icon: Icons.person_rounded, label: 'Perfil'),
+    ];
+
     return Container(
       decoration: BoxDecoration(
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, -2))],
-      ),
-      child: BottomNavigationBar(
-        currentIndex: _bottomIndex,
-        onTap: (i) {
-          if (i == 4) {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
-          } else {
-            setState(() => _bottomIndex = i);
-          }
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: _white,
-        selectedItemColor: _primaryBlue,
-        unselectedItemColor: _textGrey,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
-        elevation: 0,
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.forum_outlined), label: 'Foro'),
-          BottomNavigationBarItem(icon: Icon(Icons.poll_outlined), label: 'Encuestas'),
-          BottomNavigationBarItem(icon: Icon(Icons.monetization_on_outlined), label: 'Ganancias'),
-          BottomNavigationBarItem(
-            icon: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
-              child: Icon(Icons.sos, color: Colors.red.shade700, size: 22),
-            ),
-            label: 'SOS',
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
           ),
         ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(items.length, (i) {
+              final selected = i == _bottomIndex;
+              return GestureDetector(
+                onTap: () {
+                  if (i == 0) {
+                    setState(() => _bottomIndex = 0);
+                  } else if (i == 1) {
+                    _navigate(11);
+                  } else if (i == 2) {
+                    _navigate(4);
+                  } else if (i == 3) {
+                    _navigate(9);
+                  }
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        items[i].icon,
+                        color: selected ? _accentBlue : _textSecondary,
+                        size: 26,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        items[i].label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                          color: selected ? _accentBlue : _textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
-      color: _white,
-      padding: const EdgeInsets.only(top: 44, left: 8, right: 12, bottom: 12),
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: const EdgeInsets.only(left: 4, right: 12, top: 6, bottom: 6),
+      decoration: BoxDecoration(
+        color: _primaryBlue,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.menu_rounded, color: _textDark, size: 24),
+            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(color: _primaryDark, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.local_shipping, color: Colors.white, size: 18),
-          ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 4),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Buenos d\u00edas, ${ApiClient.instance.nombre ?? ''}',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark),
-                ),
-                GestureDetector(
-                  onTap: _tieneDocsFaltantes || _verificacionEstado == 'rechazado' || _verificacionEstado == 'pendiente'
-                      ? () => _navigate(10)
-                      : null,
-                  child: Row(
-                    children: [
-                      Icon(_statusIcon(), color: _statusColor(), size: 11),
-                      const SizedBox(width: 3),
-                      Text(
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
                         _statusLabel(),
-                        style: TextStyle(fontSize: 10, color: _statusColor(), fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (_activeTrip != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _accentGreen.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Activo',
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
               ],
             ),
           ),
-          if (_activeTrip != null)
-            _badgeIcon(Icons.chat_bubble_outline, _chatUnread, () {
-              SocketServiceClient.instance.resetChatUnread();
-              _navigate(5);
-            }),
-          const SizedBox(width: 4),
-          _badgeIcon(Icons.notifications_outlined, _notifUnread, () => _navigate(6)),
+          if (_statusLoading)
+            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+          else
+            Switch(
+              value: _online,
+              onChanged: (_) => _toggleStatus(),
+              activeThumbColor: Colors.white,
+              activeTrackColor: _accentBlue,
+              inactiveThumbColor: Colors.white,
+              inactiveTrackColor: Colors.white24,
+            ),
         ],
       ),
-    );
-  }
-
-  Widget _badgeIcon(IconData icon, int count, VoidCallback? onTap) {
-    return Stack(
-      children: [
-        IconButton(
-          icon: Icon(icon, color: _textDark, size: 24),
-          onPressed: onTap ?? () {},
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-        ),
-        if (count > 0)
-          Positioned(
-            right: 2, top: 2,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-              child: Text(
-                count > 9 ? '9+' : '$count',
-                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-      ],
     );
   }
 
@@ -583,7 +590,7 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: BoxDecoration(
               gradient: const LinearGradient(colors: [Color(0xFF1A3C6E), Color(0xFF1565C0)]),
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 6))],
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 6))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,7 +598,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: _accentGreen.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                    decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       const Icon(Icons.trip_origin, size: 14, color: Colors.white),
                       const SizedBox(width: 4),
@@ -620,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: const Text('Ver viaje en el mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: _primaryDark,
+                      foregroundColor: _primaryBlue,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 0,
                     ),
@@ -651,314 +658,190 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_activeTrip != null) {
       return _buildActiveTripCard();
     }
+    final sinConductor = _profile?['conductor'] == null;
+    final noVerificado = _verificacionEstado == 'rechazado' || _verificacionEstado == 'pendiente';
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatusToggle(),
-          const SizedBox(height: 16),
-          _buildMainCards(),
-          const SizedBox(height: 20),
-          _buildAvailableTrips(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 12, height: 12,
-            decoration: BoxDecoration(color: _online ? _accentGreen : Colors.grey, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(_online ? 'En l\u00ednea' : 'Fuera de l\u00ednea', style: const TextStyle(fontWeight: FontWeight.w600))),
-          _statusLoading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : Switch(
-                  value: _online,
-                  onChanged: (_) => _toggleStatus(),
-                  activeColor: _accentGreen,
+          if (sinConductor)
+            GestureDetector(
+              onTap: () => _navigate(10),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.blue.shade200),
                 ),
+                child: Column(
+                  children: [
+                    Icon(Icons.person_add_alt_1, size: 40, color: Colors.blue.shade400),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Completa tu registro como conductor',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1)),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Toca para ir a Documentación',
+                      style: TextStyle(fontSize: 13, color: Colors.blue.shade700),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (noVerificado)
+            GestureDetector(
+              onTap: () => _navigate(10),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.verified_outlined, size: 40, color: Colors.orange.shade400),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Debes completar la verificación',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFE65100)),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Toca para ir a Documentación',
+                      style: TextStyle(fontSize: 13, color: Colors.orange.shade700),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Center(
+            child: Text(
+              'Viajes disponibles',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildWaitingCard(),
         ],
       ),
     );
   }
 
-  num _toNum(dynamic v) {
-    if (v is num) return v;
-    if (v is Map) return (v['amount'] ?? v['monto'] ?? 0) as num;
-    return 0;
-  }
-
-  Widget _buildMainCards() {
-    final gananciaHoy = _toNum(_earnings?['hoy']);
-    final viajesHoy = _toNum(_stats?['viajesHoy']);
-    final viajesTotal = _toNum(_stats?['viajes']);
-    final calificacion = _toNum(_stats?['calificacion']);
-    final comision = _toNum(_commission?['monto'] ?? _commission?['deuda']);
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: _buildStatCard(Icons.monetization_on_outlined, '\$${_fmtAmount(gananciaHoy)}', 'Ganancias del d\u00eda', const Color(0xFFE8F5E9), const Color(0xFF2E7D32))),
-            const SizedBox(width: 8),
-            Expanded(child: _buildStatCard(Icons.route_outlined, '$viajesHoy', 'Viajes hoy', const Color(0xFFE3F2FD), const Color(0xFF1565C0))),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _buildStatCard(Icons.assignment_turned_in_outlined, '$viajesTotal', 'Total completados', const Color(0xFFFFF8E1), const Color(0xFFFF8F00))),
-            const SizedBox(width: 8),
-            Expanded(child: _buildStatCard(Icons.star_rounded, calificacion.toStringAsFixed(1), 'Calificaci\u00f3n', const Color(0xFFF3E5F5), const Color(0xFF6A1B9A))),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _buildCommissionCard(comision),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(IconData icon, String value, String label, Color bg, Color iconColor) {
+  Widget _buildWaitingCard() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(height: 6),
-          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _textDark)),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 8.5, color: _textGrey), textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommissionCard(num comision) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.account_balance_wallet_outlined, color: Colors.red.shade700, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Text('Deuda pendiente', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-          Text('\$${_fmtAmount(comision)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.red.shade700)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAvailableTrips() {
-    final estado = _verificacionEstado;
-    final verificado = estado == 'aprobado';
-    final sinConductor = _profile?['conductor'] == null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Viajes disponibles', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark)),
-        const SizedBox(height: 12),
-        if (sinConductor)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.blue.shade200)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
             child: Column(
               children: [
-                Icon(Icons.person_add_alt_1, size: 40, color: Colors.blue.shade400),
-                const SizedBox(height: 10),
-                const Text('Completa tu registro como conductor', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1))),
-                const SizedBox(height: 4),
-                Text('Toca para ir a Documentaci\u00f3n', style: TextStyle(fontSize: 13, color: Colors.blue.shade700)),
+                const Text(
+                  'Esperando solicitudes...',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Te notificaremos cuando\nhaya un nuevo envío.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _textSecondary,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
-          )
-        else if (!verificado)
-          GestureDetector(
-            onTap: () => _navigate(10),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.orange.shade200)),
-              child: Column(
+          ),
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+            ),
+            child: SizedBox(
+              height: 260,
+              child: Stack(
                 children: [
-                  Icon(Icons.verified_outlined, size: 40, color: Colors.orange.shade400),
-                  const SizedBox(height: 10),
-                  const Text('Debes completar la verificaci\u00f3n', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFE65100))),
-                  const SizedBox(height: 4),
-                  Text('Toca para ir a Documentaci\u00f3n', style: TextStyle(fontSize: 13, color: Colors.orange.shade700)),
+                  CustomPaint(
+                    size: const Size(double.infinity, 260),
+                    painter: _MockMapPainter(),
+                  ),
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: _accentBlue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _accentBlue.withValues(alpha: 0.4),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.navigation,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                        Container(
+                          width: 60,
+                          height: 60,
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _accentBlue.withValues(alpha: 0.12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          )
-        else if (_loadingTrips)
-          const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
-        else if (_nearbyTrips.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
-            child: const Center(child: Text('No hay viajes disponibles cerca', style: TextStyle(color: Colors.black45))),
-          )
-        else
-          ..._nearbyTrips.take(10).map((t) => _buildTripCard(t)),
-      ],
-    );
-  }
-
-  Widget _buildTripCard(Map<String, dynamic> t) {
-    final origen = t['origen'] as Map<String, dynamic>?;
-    final destino = t['destino'] as Map<String, dynamic>?;
-    final precio = t['precioEstimado'] is num ? t['precioEstimado'] as num : num.tryParse('${t['precioEstimado']}');
-    final distancia = t['distancia'] is num ? t['distancia'] as num : num.tryParse('${t['distancia']}');
-    final carga = t['carga'] as String? ?? 'No especificada';
-    final descripcion = t['descripcion'] as String? ?? '';
-    final tiempo = t['tiempoEstimado'] is num ? t['tiempoEstimado'] as num : num.tryParse('${t['tiempoEstimado']}');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(16), boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4)),
-      ]),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(Icons.access_time, size: 14, color: _textGrey),
-              const SizedBox(width: 4),
-              Text('${_fmtDate(t['createdAt'] as String?)}', style: TextStyle(fontSize: 12, color: _textGrey)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: _accentGreen.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.near_me, size: 12, color: _accentGreen),
-                  const SizedBox(width: 4),
-                  Text('${distancia?.toStringAsFixed(1) ?? '?'} km', style: TextStyle(color: _accentGreen, fontSize: 12, fontWeight: FontWeight.w700)),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 14),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Column(children: [
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: const Color(0xFF1E88E5), shape: BoxShape.circle)),
-                Container(width: 2, height: 28, color: Colors.grey.shade300),
-                Container(width: 10, height: 10, decoration: BoxDecoration(border: Border.all(color: const Color(0xFF4CAF50), width: 2), shape: BoxShape.circle)),
-              ]),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Salida', style: TextStyle(fontSize: 11, color: _textGrey)),
-                Text(origen?['direccion'] as String? ?? 'Origen', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
-                const SizedBox(height: 14),
-                Text('Llegada', style: TextStyle(fontSize: 11, color: _textGrey)),
-                Text(destino?['direccion'] as String? ?? 'Destino', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
-              ])),
-            ]),
-            const SizedBox(height: 14),
-            const Divider(height: 1),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(10)),
-              child: Row(children: [
-                Icon(Icons.inventory_2_outlined, size: 18, color: _primaryDark),
-                const SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(carga, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
-                  if (descripcion.isNotEmpty)
-                    Text(descripcion, style: TextStyle(fontSize: 12, color: _textGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
-                ])),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Presupuesto', style: TextStyle(fontSize: 11, color: _textGrey)),
-                  Text('\$${precio?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _primaryDark)),
-                ]),
-                if (tiempo != null)
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('Tiempo estimado', style: TextStyle(fontSize: 11, color: _textGrey)),
-                    Row(children: [
-                      Icon(Icons.schedule, size: 16, color: _textGrey),
-                      const SizedBox(width: 4),
-                      Text('$tiempo min', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark)),
-                    ]),
-                  ]),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity, height: 48,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  DriverLocationService.instance.removeTrip(t['_id'] ?? t['id']);
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: t)));
-                },
-                icon: const Icon(Icons.send_rounded, size: 20),
-                label: const Text('Enviar oferta', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primaryDark,
-                  foregroundColor: _white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
-  }
-
-  String _fmtAmount(num amount) {
-    if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(amount % 1000 == 0 ? 0 : 1)}k';
-    }
-    if (amount == amount.roundToDouble()) return amount.toInt().toString();
-    return amount.toStringAsFixed(2);
-  }
-
-  String _fmtDate(String? iso) {
-    if (iso == null) return '';
-    final dt = DateTime.tryParse(iso);
-    if (dt == null) return '';
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m';
   }
 
   String _initials(String? name) {
@@ -967,4 +850,65 @@ class _HomeScreenState extends State<HomeScreen> {
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name[0].toUpperCase();
   }
+}
+
+class _MockMapPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = const Color(0xFFE8F0E9),
+    );
+
+    final roadPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.round;
+
+    final minorRoadPaint = Paint()
+      ..color = const Color(0xFFF3F4F6)
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+
+    final blockPaint = Paint()..color = const Color(0xFFD4E6D5);
+
+    final blocks = [
+      Rect.fromLTWH(10, 20, 100, 70),
+      Rect.fromLTWH(130, 20, 80, 70),
+      Rect.fromLTWH(230, 20, 110, 70),
+      Rect.fromLTWH(10, 120, 100, 60),
+      Rect.fromLTWH(130, 120, 80, 60),
+      Rect.fromLTWH(230, 120, 110, 60),
+      Rect.fromLTWH(10, 210, 100, 50),
+      Rect.fromLTWH(130, 210, 80, 50),
+      Rect.fromLTWH(230, 210, 110, 50),
+    ];
+
+    for (final block in blocks) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(block, const Radius.circular(4)),
+        blockPaint,
+      );
+    }
+
+    for (double y in [105.0, 195.0]) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), roadPaint);
+    }
+    canvas.drawLine(Offset(0, 15), Offset(size.width, 15), minorRoadPaint);
+
+    for (double x in [120.0, 220.0]) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), roadPaint);
+    }
+    canvas.drawLine(Offset(5, 0), Offset(5, size.height), minorRoadPaint);
+    canvas.drawLine(Offset(size.width - 5, 0), Offset(size.width - 5, size.height), minorRoadPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _NavItem {
+  final IconData icon;
+  final String label;
+  const _NavItem({required this.icon, required this.label});
 }

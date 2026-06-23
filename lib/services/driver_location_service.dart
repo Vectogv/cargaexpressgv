@@ -23,6 +23,7 @@ class DriverLocationService {
   int _locationErrorCount = 0;
   int _locationRetryAttempt = 0;
   Timer? _retryPositionTimer;
+  DateTime _lastLocationSent = DateTime(2000);
 
   List<Map<String, dynamic>> _nearbyTrips = [];
   final _tripStreamController = StreamController<List<Map<String, dynamic>>>.broadcast();
@@ -33,8 +34,8 @@ class DriverLocationService {
   double? get lastLat => _lastLat;
   double? get lastLng => _lastLng;
 
-  Future<void> start() async {
-    if (_running) return;
+  Future<bool> start() async {
+    if (_running) return true;
     _running = true;
     _online = true;
 
@@ -42,7 +43,7 @@ class DriverLocationService {
     if (!granted) {
       _running = false;
       LoggerService.instance.warning('DriverLocationService: location permission denied');
-      return;
+      return false;
     }
 
     _startPositionStream();
@@ -58,6 +59,7 @@ class DriverLocationService {
         LoggerService.instance.error('DriverLocationService: background location start error', e);
       }
     }
+    return true;
   }
 
   void _startPositionStream() {
@@ -78,18 +80,7 @@ class DriverLocationService {
           FraudDetectionService.instance.checkGpsPosition(pos);
           _lastLat = pos.latitude;
           _lastLng = pos.longitude;
-          try {
-            if (NetworkMonitorService.instance.isOnline) {
-              await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
-            }
-          } catch (e) {
-            ErrorHandlerService.instance.handleError(
-              e,
-              null,
-              category: ErrorCategory.network,
-              message: 'Error al enviar ubicaci\u00f3n',
-            );
-          }
+          await _sendLocation(pos.latitude, pos.longitude);
         },
         onError: (e) {
           _locationErrorCount++;
@@ -122,6 +113,23 @@ class DriverLocationService {
     }
   }
 
+  Future<void> _sendLocation(double lat, double lng) async {
+    final now = DateTime.now();
+    if (now.difference(_lastLocationSent).inSeconds < 5) return;
+    _lastLocationSent = now;
+    if (!NetworkMonitorService.instance.isOnline) return;
+    try {
+      await ApiClient.instance.updateLocation(lat, lng);
+    } catch (e) {
+      ErrorHandlerService.instance.handleError(
+        e,
+        null,
+        category: ErrorCategory.network,
+        message: 'Error al enviar ubicaci\u00f3n',
+      );
+    }
+  }
+
   Future<void> _sendInitialLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -129,9 +137,7 @@ class DriverLocationService {
       );
       _lastLat = pos.latitude;
       _lastLng = pos.longitude;
-      if (NetworkMonitorService.instance.isOnline) {
-        await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
-      }
+      await _sendLocation(pos.latitude, pos.longitude);
     } catch (e) {
       LoggerService.instance.error('DriverLocationService._sendInitialLocation error', e);
     }
@@ -173,6 +179,7 @@ class DriverLocationService {
 
   void pause() {
     _online = false;
+    _running = false;
     _tripPollTimer?.cancel();
     _tripPollTimer = null;
     _positionSub?.cancel();
@@ -215,6 +222,12 @@ class DriverLocationService {
 
   void removeTrip(dynamic tripId) {
     _nearbyTrips.removeWhere((t) => t['id'] == tripId);
+    if (!_tripStreamController.isClosed) {
+      _tripStreamController.add(List.from(_nearbyTrips));
+    }
+  }
+
+  void refreshTrips() {
     if (!_tripStreamController.isClosed) {
       _tripStreamController.add(List.from(_nearbyTrips));
     }

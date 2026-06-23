@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../services/api_client.dart';
+import '../../services/driver_location_service.dart';
 import '../../services/socket_service_client.dart';
 import 'trip_in_progress_screen.dart';
+import 'hacer_oferta_screen.dart';
 
 enum OfferStatus { none, sending, sent, accepted, rejected }
 
@@ -16,18 +17,41 @@ class ConductorTripDetailScreen extends StatefulWidget {
 }
 
 class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
-  final _montoCtrl = TextEditingController();
   bool _loading = false;
   String? _placa;
+  String? _tipoVehiculo;
   OfferStatus _offerStatus = OfferStatus.none;
   StreamSubscription<Map<String, dynamic>>? _offerAcceptedSub;
   StreamSubscription<Map<String, dynamic>>? _offerRejectedSub;
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
 
+  late int _secondsLeft;
+  Timer? _expireTimer;
+
+  static const Color _accentBlue = Color(0xFF2563EB);
+  static const Color _green = Color(0xFF16A34A);
+  static const Color _orange = Color(0xFFEA580C);
+  static const Color _textSecondary = Color(0xFF6B7280);
+  static const Color _divider = Color(0xFFE5E7EB);
+
   @override
   void initState() {
     super.initState();
+    _secondsLeft = (widget.trip['expiresIn'] as int?) ?? 30;
+    _expireTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_secondsLeft <= 0) {
+        t.cancel();
+        if (mounted) {
+          Navigator.of(context).maybePop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('La solicitud expiró')),
+          );
+        }
+      } else {
+        if (mounted) setState(() => _secondsLeft--);
+      }
+    });
     _fetchProfile();
     _setupSocketListeners();
   }
@@ -76,21 +100,19 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       final profile = await ApiClient.instance.getProfile();
       final conductor = profile['conductor'] as Map<String, dynamic>?;
       if (conductor != null && mounted) {
-        _placa = conductor['placa'] as String?;
+        setState(() {
+          _placa = conductor['placa'] as String?;
+          _tipoVehiculo = conductor['tipoVehiculo'] as String?;
+        });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error cargando perfil conductor: $e');
+    }
   }
-
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _primaryBlue = Color(0xFF1565C0);
-  static const Color _accentGreen = Color(0xFF4CAF50);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
 
   @override
   void dispose() {
-    _montoCtrl.dispose();
+    _expireTimer?.cancel();
     _offerAcceptedSub?.cancel();
     _offerRejectedSub?.cancel();
     _tripStatusSub?.cancel();
@@ -100,34 +122,45 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
 
   dynamic get _tripId => widget.trip['_id'] ?? widget.trip['id'];
 
-  Future<void> _makeOffer() async {
-    final monto = int.tryParse(_montoCtrl.text.trim());
-    if (monto == null || monto <= 0) {
-      _snack('Ingresa un monto v\u00e1lido');
-      return;
-    }
-    if (_tripId == null) {
-      _snack('Error: ID del viaje no disponible');
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await ApiClient.instance.makeOffer(_tripId, monto, placa: _placa);
-      setState(() {
-        _offerStatus = OfferStatus.sent;
-      });
-      _snack('Oferta enviada exitosamente');
-    } catch (e) {
-      _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  String get _timerLabel {
+    final m = (_secondsLeft ~/ 60).toString().padLeft(2, '0');
+    final s = (_secondsLeft % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  Future<void> _showOfferSheet() async {
+    final precioEstimado = widget.trip['precioEstimado'];
+    final ofertaInicial = _toNum(precioEstimado)?.toDouble() ?? 55000;
+    final precioStr = precioEstimado != null ? '\$${_formatMonto(precioEstimado)}' : '\$50.000';
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HacerOfertaScreen(
+          tripId: _tripId,
+          precioCliente: precioStr,
+          ofertaInicial: ofertaInicial,
+          placa: _placa,
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      setState(() => _offerStatus = OfferStatus.sent);
+      if (_tripId != null) {
+        DriverLocationService.instance.removeTrip(_tripId.toString());
+      }
     }
   }
 
-  
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  String _formatMonto(dynamic v) {
+    final n = _toNum(v);
+    if (n == null) return '0';
+    final s = n.toInt().toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(s[i]);
+    }
+    return buffer.toString();
   }
 
   @override
@@ -135,337 +168,297 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     final t = widget.trip;
     final origen = t['origen'] as Map<String, dynamic>?;
     final destino = t['destino'] as Map<String, dynamic>?;
-    final cliente = t['cliente'] as Map<String, dynamic>?;
-    final carga = t['carga'] as String? ?? 'No especificada';
-    final descripcion = t['descripcion'] as String? ?? '';
+    final precio = (_toNum(t['precioEstimado'])?.toStringAsFixed(0) ?? '0');
+    final distancia = t['distancia'] is num
+        ? '${(t['distancia'] as num).toStringAsFixed(1)} km'
+        : '${t['distancia'] ?? '?'}';
+    final descripcionCarga = t['descripcion'] as String? ?? 'No especificada';
+    final tipoVehiculoStr = _tipoVehiculo ?? t['tipoVehiculo'] as String? ?? 'No especificado';
 
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: _textDark,
         elevation: 0,
-        title: const Text('Detalle del viaje', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildRouteCard(origen, destino),
-            const SizedBox(height: 12),
-            _buildCargoCard(carga, descripcion),
-            const SizedBox(height: 12),
-            _buildInfoCard(t),
-            if (cliente != null) ...[
-              const SizedBox(height: 12),
-              _buildClientCard(cliente),
-            ],
-            const SizedBox(height: 12),
-            _buildOfferSection(t),
-          ],
+        centerTitle: true,
+        title: const Text(
+          'Nueva solicitud',
+          style: TextStyle(color: Color(0xFF111827), fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF111827), size: 20),
+          onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
-    );
-  }
-
-  Widget _buildRouteCard(Map<String, dynamic>? origen, Map<String, dynamic>? destino) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
         children: [
-          const Text('Ruta', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
-          const SizedBox(height: 12),
-          _routePoint(origen?['direccion'] as String? ?? 'Origen', const Color(0xFF1E88E5), 'Direcci\u00f3n de salida'),
-          Padding(
-            padding: const EdgeInsets.only(left: 5),
-            child: SizedBox(width: 2, height: 24, child: Container(color: const Color(0xFFE0E0E0))),
-          ),
-          _routePoint(destino?['direccion'] as String? ?? 'Destino', const Color(0xFF4CAF50), 'Direcci\u00f3n de llegada'),
-        ],
-      ),
-    );
-  }
-
-  Widget _routePoint(String dir, Color color, String label) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        margin: const EdgeInsets.only(top: 2),
-        width: 12, height: 12,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-      ),
-      const SizedBox(width: 10),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black45)),
-        const SizedBox(height: 2),
-        Text(dir, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-      ])),
-    ]);
-  }
-
-  Widget _buildCargoCard(String carga, String descripcion) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Carga', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
-          const SizedBox(height: 10),
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: _primaryDark.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.inventory_2_outlined, size: 22, color: _primaryDark),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(carga, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _textDark)),
-              if (descripcion.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(descripcion, style: TextStyle(fontSize: 13, color: _textGrey)),
-                ),
-            ])),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(Map<String, dynamic> t) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Informaci\u00f3n del viaje', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
-          const SizedBox(height: 12),
-          _infoRow('Presupuesto del cliente', '\$${(_toNum(t['precioEstimado'])?.toStringAsFixed(0) ?? '0')}'),
-          _infoRow('Distancia', '${(_toNum(t['distancia'])?.toStringAsFixed(1) ?? '?')} km'),
-          if (_toNum(t['tiempoEstimado']) != null)
-            _infoRow('Tiempo estimado', '${_toNum(t['tiempoEstimado'])} min'),
-          _infoRow('Publicado', _formatDate(t['createdAt'] as String?)),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: const TextStyle(color: _textGrey)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ]),
-    );
-  }
-
-  Widget _buildClientCard(Map<String, dynamic> cliente) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Cliente', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
-          const SizedBox(height: 10),
-          Row(children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: _primaryDark,
-              child: Text(
-                _initials(cliente['nombre'] as String? ?? ''),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildOfferStatus(),
+                  const SizedBox(height: 16),
+                  _buildPriceCard(precio),
+                  const SizedBox(height: 20),
+                  _buildRouteSection(origen, destino),
+                  _buildDivider(),
+                  _buildInfoRow('Distancia total', distancia),
+                  _buildDivider(),
+                  _buildInfoRow('Descripción de la carga', descripcionCarga),
+                  _buildDivider(),
+                  _buildInfoRow('Tipo de vehículo requerido', tipoVehiculoStr),
+                  const SizedBox(height: 20),
+                  _buildExpirationBanner(),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(cliente['nombre'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-              if (cliente['calificacion'] != null)
-                Row(children: [
-                  const Icon(Icons.star, size: 16, color: Color(0xFFFF8F00)),
-                  const SizedBox(width: 4),
-                  Text('${cliente['calificacion']}', style: const TextStyle(fontSize: 13, color: _textGrey)),
-                ]),
-            ])),
-          ]),
+          ),
+          _buildBottomButtons(),
         ],
       ),
     );
   }
 
-  Widget _buildOfferSection(Map<String, dynamic> t) {
+  Widget _buildOfferStatus() {
     switch (_offerStatus) {
-      case OfferStatus.sent:
-        return _buildWaitingSection(t);
-      case OfferStatus.accepted:
-        return _buildAcceptedSection();
-      case OfferStatus.rejected:
-        return _buildRejectedSection();
       case OfferStatus.none:
       case OfferStatus.sending:
-        return _buildOfferForm(t);
+        return const SizedBox.shrink();
+      case OfferStatus.sent:
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFFED7AA)),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 22, height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: _orange),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Oferta enviada',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF9A3412)),
+                    ),
+                    Text(
+                      'Esperando respuesta del cliente...',
+                      style: TextStyle(fontSize: 12, color: _textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      case OfferStatus.accepted:
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFBBF7D0)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle, color: _green, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '¡Oferta aceptada!',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: _green),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'El cliente aceptó tu oferta. Dirígete al punto de origen.',
+                      style: TextStyle(fontSize: 12, color: _textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      case OfferStatus.rejected:
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFFECACA)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.cancel_outlined, color: Colors.red, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Oferta rechazada',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.red),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'El cliente rechazó tu oferta. Busca otros viajes.',
+                      style: TextStyle(fontSize: 12, color: _textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
     }
   }
 
-  Widget _buildWaitingSection(Map<String, dynamic> t) {
+  Widget _buildPriceCard(String precio) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFF8F00).withOpacity(0.3)),
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
-      child: Column(
-        children: [
-          Row(children: [
-            SizedBox(
-              width: 24, height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.5, color: const Color(0xFFFF8F00)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Esperando respuesta del cliente', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFFE65100))),
-                Text('Monto ofertado: \$${(_toNum(t['monto'])?.toStringAsFixed(0) ?? _montoCtrl.text)}', style: const TextStyle(fontSize: 13, color: _textGrey)),
-              ]),
-            ),
-          ]),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-            child: Row(children: [
-              Icon(Icons.info_outline, size: 16, color: const Color(0xFFFF8F00)),
-              const SizedBox(width: 8),
-              Expanded(child: Text('El cliente est\u00e1 revisando tu propuesta. Te notificaremos cuando responda.', style: TextStyle(fontSize: 12, color: _textGrey))),
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAcceptedSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: _accentGreen.withOpacity(0.08), borderRadius: BorderRadius.circular(14), border: Border.all(color: _accentGreen.withOpacity(0.3))),
-      child: Column(
-        children: [
-          Row(children: [
-            const Icon(Icons.check_circle, color: _accentGreen, size: 32),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('\u00a1Oferta aceptada!', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: _accentGreen)),
-                const SizedBox(height: 2),
-                Text('El cliente ha aceptado tu oferta. Dir\u00edgete al punto de origen.', style: TextStyle(fontSize: 13, color: _textGrey)),
-              ]),
-            ),
-          ]),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity, height: 48,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const TripInProgressScreen()),
-                );
-              },
-              icon: const Icon(Icons.map_outlined, size: 20),
-              label: const Text('Ir al mapa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryBlue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRejectedSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.red.withOpacity(0.06), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.red.withOpacity(0.2))),
-      child: Row(children: [
-        const Icon(Icons.cancel_outlined, color: Colors.red, size: 32),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Oferta rechazada', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Colors.red)),
-            const SizedBox(height: 2),
-            Text('El cliente ha rechazado tu oferta. Puedes buscar otros viajes disponibles.', style: TextStyle(fontSize: 13, color: _textGrey)),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildOfferForm(Map<String, dynamic> t) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: _primaryBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.payments_outlined, size: 20, color: _primaryBlue),
-            ),
-            const SizedBox(width: 10),
-            const Text('Tu oferta', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
-          ]),
-          const SizedBox(height: 6),
-          Text('Ingresa el monto por el que har\u00edas este viaje', style: TextStyle(fontSize: 12, color: _textGrey)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _montoCtrl,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              prefixText: '\$ ',
-              hintText: '0',
-              hintStyle: TextStyle(color: Colors.grey.shade300),
-              filled: true,
-              fillColor: _bgLight,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            ),
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Row(children: [
-            Icon(Icons.info_outline, size: 14, color: _textGrey),
-            const SizedBox(width: 6),
-            Text('Presupuesto del cliente: \$${(_toNum(t['precioEstimado'])?.toStringAsFixed(0) ?? '0')}', style: TextStyle(fontSize: 12, color: _textGrey)),
-          ]),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity, height: 50,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _makeOffer,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryBlue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
+          Row(
+            children: [
+              const Icon(Icons.person_outline_rounded, size: 15, color: _textSecondary),
+              const SizedBox(width: 6),
+              const Text(
+                'Precio propuesto por el cliente',
+                style: TextStyle(fontSize: 12, color: _textSecondary),
               ),
-              child: _loading
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                  : const Text('Enviar oferta', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '\$$precio',
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _green),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteSection(Map<String, dynamic>? origen, Map<String, dynamic>? destino) {
+    return Column(
+      children: [
+        _buildRouteRow(
+          icon: Icons.location_on_outlined,
+          iconColor: _accentBlue,
+          label: 'Origen',
+          value: origen?['direccion'] as String? ?? 'Origen',
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 11),
+          child: Column(
+            children: List.generate(
+              3,
+              (_) => Container(
+                width: 2,
+                height: 5,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+                color: _divider,
+              ),
+            ),
+          ),
+        ),
+        _buildRouteRow(
+          icon: Icons.remove_circle_outline_rounded,
+          iconColor: _textSecondary,
+          label: 'Destino',
+          value: destino?['direccion'] as String? ?? 'Destino',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRouteRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: iconColor, size: 22),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF111827))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() => const Divider(color: _divider, height: 1);
+
+  Widget _buildExpirationBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'La solicitud expirará en',
+            style: TextStyle(fontSize: 14, color: Color(0xFF92400E)),
+          ),
+          Text(
+            _timerLabel,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: _orange,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -473,17 +466,91 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
+  Widget _buildBottomButtons() {
+    if (_offerStatus == OfferStatus.accepted) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: _divider)),
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: widget.trip)),
+              );
+            },
+            icon: const Icon(Icons.map_outlined, size: 20),
+            label: const Text('Ir al mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accentBlue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+          ),
+        ),
+      );
+    }
 
-  String _formatDate(String? iso) {
-    if (iso == null) return '';
-    final dt = DateTime.tryParse(iso);
-    if (dt == null) return '';
-    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (_offerStatus == OfferStatus.sent) {
+      return const SizedBox.shrink();
+    }
+
+    if (_offerStatus == OfferStatus.rejected) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: _divider)),
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: OutlinedButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: _accentBlue, width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text(
+              'Volver a viajes disponibles',
+              style: TextStyle(color: _accentBlue, fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: _divider)),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          onPressed: _loading ? null : _showOfferSheet,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accentBlue,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            elevation: 0,
+          ),
+          child: _loading
+              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+              : const Text(
+                  'Hacer oferta',
+                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+        ),
+      ),
+    );
   }
 
   num? _toNum(dynamic v) {
