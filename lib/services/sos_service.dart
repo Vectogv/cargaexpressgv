@@ -14,15 +14,13 @@ class SosService {
     }
 
     final payload = {
-      'tripId': tripId,
-      'latitude': pos.latitude,
-      'longitude': pos.longitude,
-      'speed': pos.speed,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'viajeId': tripId,
+      'lat': pos.latitude,
+      'lng': pos.longitude,
     };
 
     try {
-      final data = await HttpClient.post('/api/sos', body: payload, auth: true);
+      final data = await HttpClient.post('/api/emergency', body: payload, auth: true);
       return SosAlertModel.fromJson(data);
     } catch (e) {
       LoggerService.instance.error('SosService.sendAlert: API error', e);

@@ -70,7 +70,7 @@ class TripService {
   }
 
   static Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) async {
-    final data = await HttpClient.uploadFile('/api/trips/$tripId/delivery-photo', bytes: bytes, filename: filename, fieldName: 'foto', auth: true);
+    final data = await HttpClient.uploadFile('/api/trips/$tripId/delivery-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
     return data['url'] as String? ?? '';
   }
 

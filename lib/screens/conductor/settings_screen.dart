@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notifViaje = true;
   bool _ubicacion = true;
   bool _visible = true;
+  bool _loading = true;
 
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
@@ -26,22 +28,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _load();
   }
 
-  void _load() {
+  Future<void> _load() async {
+    try {
+      final settings = await ApiClient.instance.getSettings();
+      if (mounted) setState(() {
+        _sonido = settings['notificacionesSonido'] as bool? ?? true;
+        _visible = settings['visibilidad'] == 'visible';
+        _loading = false;
+      });
+    } catch (_) {
+      _loadFromCache();
+    }
+  }
+
+  void _loadFromCache() {
     setState(() {
       _sonido = CacheService.instance.getPreference('sonido') as bool? ?? true;
       _vibrar = CacheService.instance.getPreference('vibrar') as bool? ?? true;
       _notifViaje = CacheService.instance.getPreference('notifViaje') as bool? ?? true;
       _ubicacion = CacheService.instance.getPreference('ubicacion') as bool? ?? true;
       _visible = CacheService.instance.getPreference('visible') as bool? ?? true;
+      _loading = false;
     });
   }
 
-  void _save() {
+  Future<void> _save() async {
     CacheService.instance.setPreference('sonido', _sonido);
     CacheService.instance.setPreference('vibrar', _vibrar);
     CacheService.instance.setPreference('notifViaje', _notifViaje);
     CacheService.instance.setPreference('ubicacion', _ubicacion);
     CacheService.instance.setPreference('visible', _visible);
+
+    try {
+      await ApiClient.instance.updateSettings({
+        'notificacionesSonido': _sonido,
+        'visibilidad': _visible ? 'visible' : 'oculto',
+      });
+    } catch (_) {}
   }
 
   @override
@@ -52,7 +75,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: _white, foregroundColor: _textDark, elevation: 0,
         title: const Text('Ajustes', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
       ),
-      body: ListView(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _buildSection('Notificaciones', [

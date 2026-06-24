@@ -201,6 +201,13 @@ class ApiClient {
   Future<Map<String, dynamic>> getDriverStats() => DriverService.getDriverStats();
   Future<Map<String, dynamic>> getTodayStats() => DriverService.getTodayStats();
   Future<Map<String, dynamic>> getDebt() => DriverService.getDebt();
+  Future<Map<String, dynamic>> getEarningsHistory({String periodo = 'todo', int page = 1, int limit = 20}) => DriverService.getEarningsHistory(periodo: periodo, page: page, limit: limit);
+  Future<List<int>> getEarningsPdf({String periodo = 'todo'}) => DriverService.getEarningsPdf(periodo: periodo);
+
+  // --- Settings ---
+
+  Future<Map<String, dynamic>> getSettings() => ProfileService.getSettings();
+  Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> data) => ProfileService.updateSettings(data);
 
   // --- Notifications & Misc ---
 

@@ -41,6 +41,23 @@ class DriverService {
     return HttpClient.get('/api/payment/debt', auth: true);
   }
 
+  static Future<Map<String, dynamic>> getEarningsHistory({String periodo = 'todo', int page = 1, int limit = 20}) async {
+    return HttpClient.get('/api/drivers/earnings/history?periodo=$periodo&page=$page&limit=$limit', auth: true);
+  }
+
+  static Future<List<int>> getEarningsPdf({String periodo = 'todo'}) async {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (ApiClient.instance.token != null) {
+      headers['Authorization'] = 'Bearer ${ApiClient.instance.token}';
+    }
+    final res = await http.get(
+      Uri.parse('${HttpClient.baseUrl}/api/drivers/earnings/pdf?periodo=$periodo'),
+      headers: headers,
+    );
+    if (res.statusCode != 200) throw Exception('Error al descargar PDF');
+    return res.bodyBytes.toList();
+  }
+
   static Future<String> uploadDocumentCedula(Uint8List bytes, String filename) async {
     final data = await HttpClient.uploadFile('/api/drivers/verification/cedula', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
     return data['fotoCedula'] as String? ?? '';

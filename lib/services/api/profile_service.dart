@@ -41,6 +41,14 @@ class ProfileService {
     await HttpClient.post('/api/moderator/encuestas/$id/answer', body: {'opcionId': opcionId}, auth: true);
   }
 
+  static Future<Map<String, dynamic>> getSettings() async {
+    return HttpClient.get('/api/settings', auth: true);
+  }
+
+  static Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> data) async {
+    return HttpClient.put('/api/settings', body: data, auth: true);
+  }
+
   static Future<Map<String, dynamic>> getHelp() async {
     return HttpClient.get('/api/support/help', auth: true);
   }
