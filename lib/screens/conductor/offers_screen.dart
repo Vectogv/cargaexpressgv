@@ -164,7 +164,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     }
     return Container(
       width: double.infinity, padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: c.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: c.withOpacity(0.3))),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: c.withValues(alpha: 0.3))),
       child: Row(children: [
         Icon(Icons.info_outline, size: 18, color: c),
         const SizedBox(width: 8),
@@ -226,7 +226,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: c.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
       child: Text(label, style: TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w600)),
     );
   }

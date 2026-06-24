@@ -562,7 +562,7 @@ class _VerificacionesScreenState extends State<VerificacionesScreen>
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF1A237E).withOpacity(0.35),
+                      color: const Color(0xFF1A237E).withValues(alpha: 0.35),
                       blurRadius: 12,
                       offset: const Offset(0, 5),
                     ),
@@ -718,12 +718,12 @@ class _DocumentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: page.accentColor.withOpacity(0.06),
+            color: page.accentColor.withValues(alpha: 0.06),
             blurRadius: 30,
             offset: const Offset(0, 12),
           ),
@@ -740,7 +740,7 @@ class _DocumentCard extends StatelessWidget {
                 gradient: LinearGradient(
                   colors: [
                     page.accentColor,
-                    page.accentColor.withOpacity(0.4),
+                    page.accentColor.withValues(alpha: 0.4),
                   ],
                 ),
               ),
@@ -779,7 +779,7 @@ class _DocumentCard extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: page.accentColor.withOpacity(0.1),
+            color: page.accentColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(page.icon, color: page.accentColor, size: 18),
@@ -816,7 +816,7 @@ class _DocumentCard extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: page.accentColor.withOpacity(0.4),
+              color: page.accentColor.withValues(alpha: 0.4),
               width: 2,
             ),
           ),
@@ -891,7 +891,7 @@ class _DocumentCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
               color: row == 0
-                  ? page.accentColor.withOpacity(0.06)
+                  ? page.accentColor.withValues(alpha: 0.06)
                   : Colors.transparent,
               border: row < 2
                   ? Border(
@@ -907,7 +907,7 @@ class _DocumentCard extends StatelessWidget {
                     margin: EdgeInsets.only(right: col < 2 ? 6 : 0),
                     decoration: BoxDecoration(
                       color: row == 0
-                          ? page.accentColor.withOpacity(0.3)
+                          ? page.accentColor.withValues(alpha: 0.3)
                           : Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(3),
                     ),
@@ -949,7 +949,7 @@ class _DocumentCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: page.accentColor.withOpacity(0.08),
+                color: page.accentColor.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -1016,7 +1016,7 @@ class _SignaturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withOpacity(0.7)
+      ..color = color.withValues(alpha: 0.7)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -1049,12 +1049,12 @@ class _SealPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final paint = Paint()
-      ..color = color.withOpacity(0.3)
+      ..color = color.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
     canvas.drawCircle(center, size.width * 0.4, paint);
-    paint.color = color.withOpacity(0.5);
+    paint.color = color.withValues(alpha: 0.5);
 
     for (int i = 0; i < 8; i++) {
       final angle = (i * math.pi * 2) / 8;
@@ -1066,7 +1066,7 @@ class _SealPainter extends CustomPainter {
     }
 
     paint
-      ..color = color.withOpacity(0.6)
+      ..color = color.withValues(alpha: 0.6)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, size.width * 0.12, paint);
   }

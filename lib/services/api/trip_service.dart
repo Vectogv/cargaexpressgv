@@ -59,8 +59,8 @@ class TripService {
     await HttpClient.post('/api/trips/$id/request-cancellation', body: {'motivo': motivo}, auth: true);
   }
 
-  static Future<void> disputeTrip(dynamic id, {required String motivo, String? descripcion}) async {
-    await HttpClient.post('/api/trips/$id/dispute', body: {'motivo': motivo, 'descripcion': descripcion}, auth: true);
+  static Future<Map<String, dynamic>> disputeTrip(dynamic id, {required String motivo, String? descripcion}) async {
+    return HttpClient.post('/api/trips/$id/dispute', body: {'motivo': motivo, 'descripcion': descripcion}, auth: true);
   }
 
   static Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) async {

@@ -12,7 +12,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Map<String, dynamic>> _notifications = [];
   bool _loading = true;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
   static const Color _bgLight = Color(0xFFF5F7FA);
@@ -125,53 +124,70 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildNotifCard(Map<String, dynamic> notif) {
     final tipo = notif['tipo'] as String?;
     final leido = notif['leido'] == true;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: _bgForTipo(tipo), borderRadius: BorderRadius.circular(12)),
-            child: Icon(_iconForTipo(tipo), color: _colorForTipo(tipo), size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  notif['titulo'] as String? ?? '',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: leido ? FontWeight.w500 : FontWeight.w700,
-                    color: _textDark,
-                    height: 1.4,
-                  ),
-                ),
-                if (notif['mensaje'] != null) ...[
-                  const SizedBox(height: 2),
-                  Text(notif['mensaje'] as String, style: TextStyle(fontSize: 12, color: _textGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
-                ],
-                const SizedBox(height: 4),
-                Text(_formatDate(notif['createdAt'] as String?), style: TextStyle(fontSize: 11, color: _textGrey)),
-              ],
-            ),
-          ),
-          if (!leido)
+    return InkWell(
+      onTap: () => _onNotifTap(notif),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Container(
-              width: 9,
-              height: 9,
-              margin: const EdgeInsets.only(top: 4),
-              decoration: const BoxDecoration(color: Color(0xFF1565C0), shape: BoxShape.circle),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: _bgForTipo(tipo), borderRadius: BorderRadius.circular(12)),
+              child: Icon(_iconForTipo(tipo), color: _colorForTipo(tipo), size: 22),
             ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notif['titulo'] as String? ?? '',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: leido ? FontWeight.w500 : FontWeight.w700,
+                      color: _textDark,
+                      height: 1.4,
+                    ),
+                  ),
+                  if (notif['mensaje'] != null) ...[
+                    const SizedBox(height: 2),
+                    Text(notif['mensaje'] as String, style: TextStyle(fontSize: 12, color: _textGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(_formatDate(notif['createdAt'] as String?), style: TextStyle(fontSize: 11, color: _textGrey)),
+                ],
+              ),
+            ),
+            if (!leido)
+              Container(
+                width: 9,
+                height: 9,
+                margin: const EdgeInsets.only(top: 4),
+                decoration: const BoxDecoration(color: Color(0xFF1565C0), shape: BoxShape.circle),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onNotifTap(Map<String, dynamic> notif) {
+    if (!notif['leido'] == true) {
+      setState(() => notif['leido'] = true);
+      ApiClient.instance.markNotificationRead(notif['id']).catchError((_) {});
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(notif['mensaje'] as String? ?? notif['titulo'] as String? ?? ''),
+        duration: const Duration(seconds: 2),
       ),
     );
   }

@@ -94,9 +94,9 @@ class ConductorEnLaZonaScreen extends StatelessWidget {
                       ),
                       Row(
                         children: [
-                          _IconActionButton(icon: Icons.phone, onTap: onCall ?? () {}),
+                          _IconActionButton(icon: Icons.phone, onTap: onCall),
                           const SizedBox(width: 12),
-                          _IconActionButton(icon: Icons.chat_bubble_outline, onTap: onChat ?? () {}),
+                          _IconActionButton(icon: Icons.chat_bubble_outline, onTap: onChat),
                         ],
                       ),
                     ],
@@ -116,9 +116,9 @@ class ConductorEnLaZonaScreen extends StatelessWidget {
             padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8, top: 8),
             child: Row(
               children: [
-                _BottomBarButton(icon: Icons.chat_bubble_outline, label: 'Chat', onTap: onChat ?? () {}),
+                _BottomBarButton(icon: Icons.chat_bubble_outline, label: 'Chat', onTap: onChat),
                 Container(width: 1, height: 40, color: const Color(0xFFE5E7EB)),
-                _BottomBarButton(icon: Icons.phone, label: 'Llamar', onTap: onCall ?? () {}),
+                _BottomBarButton(icon: Icons.phone, label: 'Llamar', onTap: onCall),
               ],
             ),
           ),
@@ -151,8 +151,8 @@ class _MapGridPainter extends CustomPainter {
 
 class _IconActionButton extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onTap;
-  const _IconActionButton({required this.icon, required this.onTap});
+  final VoidCallback? onTap;
+  const _IconActionButton({required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -170,8 +170,8 @@ class _IconActionButton extends StatelessWidget {
 class _BottomBarButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
-  const _BottomBarButton({required this.icon, required this.label, required this.onTap});
+  final VoidCallback? onTap;
+  const _BottomBarButton({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {

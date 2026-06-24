@@ -90,11 +90,11 @@ class _SosMonitorScreenState extends State<SosMonitorScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)]),
       child: Row(children: [
         Container(
           width: 44, height: 44,
-          decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
           child: Icon(Icons.warning_amber_rounded, color: color, size: 22),
         ),
         const SizedBox(width: 12),
@@ -108,7 +108,7 @@ class _SosMonitorScreenState extends State<SosMonitorScreen> {
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
             child: Text(_statusLabel(alert.status), style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700)),
           ),
           if (alert.timestamp != null) ...[

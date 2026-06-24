@@ -42,6 +42,8 @@ class SocketServiceClient {
   final _adminDisputeCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _adminCancellationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _adminEmergencyCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _disputeUpdatedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _disputeResolvedCtrl = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onTripStatus => _tripStatusCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverLocation => _driverLocationCtrl.stream;
@@ -64,6 +66,8 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onAdminDispute => _adminDisputeCtrl.stream;
   Stream<Map<String, dynamic>> get onAdminCancellation => _adminCancellationCtrl.stream;
   Stream<Map<String, dynamic>> get onAdminEmergency => _adminEmergencyCtrl.stream;
+  Stream<Map<String, dynamic>> get onDisputeUpdated => _disputeUpdatedCtrl.stream;
+  Stream<Map<String, dynamic>> get onDisputeResolved => _disputeResolvedCtrl.stream;
 
   Stream<bool> get onConnection => _connectionCtrl.stream;
 
@@ -266,6 +270,14 @@ class SocketServiceClient {
       safeOn('admin:emergency', (data) {
         if (data is Map) safeAdd(_adminEmergencyCtrl, Map<String, dynamic>.from(data));
       });
+
+      safeOn('dispute:updated', (data) {
+        if (data is Map) safeAdd(_disputeUpdatedCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('dispute:resolved', (data) {
+        if (data is Map) safeAdd(_disputeResolvedCtrl, Map<String, dynamic>.from(data));
+      });
     } catch (e) {
       LoggerService.instance.error('SocketServiceClient._connect error', e);
       _scheduleReconnect();
@@ -342,6 +354,8 @@ class SocketServiceClient {
     _adminDisputeCtrl.close();
     _adminCancellationCtrl.close();
     _adminEmergencyCtrl.close();
+    _disputeUpdatedCtrl.close();
+    _disputeResolvedCtrl.close();
     _connectionCtrl.close();
   }
 }

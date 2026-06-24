@@ -177,7 +177,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       children: [
         IconButton(
           icon: Icon(icon, color: const Color(0xFF1A1A2E), size: 22),
-          onPressed: onTap ?? () {},
+          onPressed: onTap,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
         ),

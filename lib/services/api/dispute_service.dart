@@ -18,4 +18,8 @@ class DisputeService {
   static Future<Map<String, dynamic>> getDispute(dynamic id) async {
     return HttpClient.get('/api/disputes/$id', auth: true);
   }
+
+  static Future<Map<String, dynamic>> submitVersion(dynamic id, String version) async {
+    return HttpClient.post('/api/disputes/$id/version', body: {'version': version}, auth: true);
+  }
 }

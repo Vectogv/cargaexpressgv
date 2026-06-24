@@ -41,7 +41,16 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
   void initState() {
     super.initState();
     _ofertaActual = widget.ofertaInicial;
-    _controller = TextEditingController(text: _formatValue(_ofertaActual));
+    _controller = TextEditingController(text: _ofertaActual.toInt().toString());
+    _controller.addListener(() {
+      final raw = _controller.text;
+      final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
+      if (digits.isEmpty) {
+        _ofertaActual = 0;
+        return;
+      }
+      _ofertaActual = double.parse(digits);
+    });
   }
 
   @override
@@ -64,21 +73,10 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
   }
 
   void _aplicarIncremento(double incremento) {
-    setState(() {
-      _ofertaActual += incremento;
-      _controller.text = _formatValue(_ofertaActual);
-      _controller.selection =
-          TextSelection.collapsed(offset: _controller.text.length);
-    });
-  }
-
-  void _onOfertaChanged(String raw) {
-    final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
-    if (digits.isEmpty) {
-      _ofertaActual = 0;
-      return;
-    }
-    _ofertaActual = double.parse(digits);
+    _ofertaActual += incremento;
+    _controller.text = _ofertaActual.toInt().toString();
+    _controller.selection =
+        TextSelection.collapsed(offset: _controller.text.length);
   }
 
   Future<void> _enviarOferta() async {
@@ -89,8 +87,8 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
     }
     setState(() => _sending = true);
     try {
-      await ApiClient.instance.makeOffer(widget.tripId, monto, placa: widget.placa);
-      if (mounted) Navigator.of(context).pop(true);
+      await ApiClient.instance.makeOffer(widget.tripId, monto, placa: widget.placa, mensaje: _mensajeController.text);
+      if (mounted) Navigator.of(context).pop(_formatValue(_ofertaActual));
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
@@ -212,7 +210,6 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           focusNode: _ofertaFocus,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onChanged: _onOfertaChanged,
           style: const TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,

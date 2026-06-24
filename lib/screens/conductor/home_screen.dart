@@ -12,12 +12,12 @@ import 'offers_screen.dart';
 import 'earnings_screen.dart';
 import 'trip_chat_screen.dart';
 import 'notifications_screen.dart';
-import 'surveys_screen.dart';
 import 'profile_screen.dart';
 import 'documents_screen.dart';
-import 'forum_screen.dart';
 import 'conductor_trip_detail_screen.dart';
 import 'trip_history_screen.dart';
+import 'support_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -234,7 +234,9 @@ class _HomeScreenState extends State<HomeScreen> {
             textColor: Colors.yellow,
             onPressed: () async {
               if (event['id'] == null && event['_id'] == null) return;
+              final tripId = (event['id'] ?? event['_id']).toString();
               await Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: event)));
+              _offeredTripIds.add(tripId);
               _resetNearbyNotificationState();
             },
           ),
@@ -280,15 +282,19 @@ class _HomeScreenState extends State<HomeScreen> {
       4: const EarningsScreen(),
       5: TripChatScreen(trip: _activeTrip),
       6: const NotificationsScreen(),
-      7: const ForumScreen(),
-      8: const SurveysScreen(),
       9: const ProfileScreen(),
       10: const DocumentsScreen(),
       11: const TripHistoryScreen(),
+      12: const SupportScreen(),
+      13: const SettingsScreen(),
     };
     final route = routes[index];
     if (route != null) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => route));
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Próximamente disponible'), duration: Duration(seconds: 2)),
+      );
     }
   }
 
@@ -302,16 +308,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _buildHeader(),
           Expanded(
-            child: IndexedStack(
-              index: _bottomIndex,
-              children: [
-                _buildHomeContent(),
-                const ForumScreen(),
-                const SurveysScreen(),
-                const EarningsScreen(),
-                const SizedBox(),
-              ],
-            ),
+            child: _buildHomeContent(),
           ),
         ],
       ),

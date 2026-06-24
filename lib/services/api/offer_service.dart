@@ -1,10 +1,13 @@
 import 'http_client.dart';
 
 class OfferService {
-  static Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto, {String? placa}) async {
+  static Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto, {String? placa, String? mensaje}) async {
     final body = <String, dynamic>{'monto': monto};
     if (placa != null && placa.isNotEmpty) {
       body['placa'] = placa;
+    }
+    if (mensaje != null && mensaje.trim().isNotEmpty) {
+      body['mensaje'] = mensaje.trim();
     }
     return HttpClient.post('/api/trips/$tripId/offers', body: body, auth: true);
   }

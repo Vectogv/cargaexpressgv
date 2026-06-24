@@ -44,9 +44,6 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
       if (mounted) {
         setState(() => _sent = true);
         _snack('Alerta SOS enviada. Notificando a soporte...');
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) Navigator.pop(context);
-        });
       }
     } catch (e) {
       if (mounted) {
@@ -85,7 +82,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16,
-                      color: _white.withOpacity(0.85),
+                      color: _white.withValues(alpha: 0.85),
                       height: 1.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -137,7 +134,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
               height: 200 * _pulseAnimation.value,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.red.withOpacity(0.08),
+                color: Colors.red.withValues(alpha: 0.08),
               ),
             ),
             Container(
@@ -145,7 +142,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
               height: 170 * _pulseAnimation.value,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.red.withOpacity(0.12),
+                color: Colors.red.withValues(alpha: 0.12),
               ),
             ),
             Container(
@@ -153,7 +150,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
               height: 145 * _pulseAnimation.value,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.red.withOpacity(0.18),
+                color: Colors.red.withValues(alpha: 0.18),
               ),
             ),
             Container(
@@ -164,7 +161,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
                 color: _sent ? Colors.green.shade600 : Colors.red.shade600,
                 boxShadow: [
                   BoxShadow(
-                    color: (_sent ? Colors.green : Colors.red).withOpacity(0.5),
+                    color: (_sent ? Colors.green : Colors.red).withValues(alpha: 0.5),
                     blurRadius: 24,
                     spreadRadius: 4,
                   ),
@@ -189,7 +186,25 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
   }
 
   Widget _buildActivateButton() {
-    if (_sent) return const SizedBox.shrink();
+    if (_sent) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0D1B2E),
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+            ),
+            child: const Text('Cerrar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: SizedBox(

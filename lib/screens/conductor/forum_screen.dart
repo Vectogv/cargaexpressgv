@@ -109,7 +109,7 @@ class _ForumScreenState extends State<ForumScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14), boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
       ]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,7 +118,7 @@ class _ForumScreenState extends State<ForumScreen> {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: _primaryDark.withOpacity(0.15),
+                backgroundColor: _primaryDark.withValues(alpha: 0.15),
                 child: Text(
                   _initials(post['autor']?['nombre'] as String? ?? ''),
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _primaryDark),

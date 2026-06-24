@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -19,7 +18,12 @@ import '../../services/background_location_service.dart';
 import '../../services/fraud_detection_service.dart';
 import '../../services/api/trip_service.dart';
 import 'trip_chat_screen.dart';
+import 'entrega_confirmada_screen.dart';
+import 'resumen_viaje_screen.dart';
+import 'calificar_cliente_screen.dart';
+import 'sos_alert_screen.dart';
 import '../shared/dispute_screen.dart';
+import 'disputa_iniciada_wrapper.dart';
 
 class TripInProgressScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -49,6 +53,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   final MapController _mapController = MapController();
   Timer? _tripStateTimer;
   bool _isCancelling = false;
+  bool _isFinalizing = false;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -110,6 +115,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _gpsSubscription?.cancel();
     _finalizeResponseSub?.cancel();
     _tripStateTimer?.cancel();
+    _cancelCountdown();
     super.dispose();
   }
 
@@ -167,6 +173,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (_locationTimer == null || !_locationTimer!.isActive) {
       _startGpsTimer();
     }
+  }
+
+  Timer? _countdownTimer;
+
+  void _cancelCountdown() {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
   }
 
   void _fitMapBounds() {
@@ -252,7 +265,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                 'latitude': pos.latitude,
                 'longitude': pos.longitude,
                 'speed': pos.speed,
-                'heading': pos.heading ?? 0,
+                'heading': pos.heading,
               });
             }
           } catch (e) {
@@ -300,9 +313,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   void _onFinalizeResponse(Map<String, dynamic> data) {
     try {
+      _cancelCountdown();
       final accepted = data['accepted'] == true;
       if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (!mounted) return;
           Navigator.pop(context);
           if (accepted) {
@@ -311,12 +325,33 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             final motivo = data['motivo'] as String? ?? 'Cliente rechaz\u00f3 confirmaci\u00f3n de entrega';
             _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se abrir\u00e1 una disputa.');
             try {
-              ApiClient.instance.disputeTrip(
+              final disputeResult = await ApiClient.instance.disputeTrip(
                 _trip?['id'],
                 motivo: 'Rechazo de entrega',
                 descripcion: motivo,
               );
-            } catch (_) {}
+              final disputeId = disputeResult['id'] ?? disputeResult['disputeId'];
+              if (mounted) {
+                final trip = _trip;
+                final origenText = (trip?['origen'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
+                final destinoText = (trip?['destino'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DisputaIniciadaWrapper(
+                      tripId: trip?['id'],
+                      disputeId: disputeId,
+                      motivo: motivo,
+                      origen: origenText,
+                      destino: destinoText,
+                    ),
+                  ),
+                );
+              }
+            } catch (e) {
+              LoggerService.instance.error('trip_in_progress: disputeTrip error', e);
+              if (mounted) _snack('Error al abrir disputa.');
+            }
           }
         });
       }
@@ -380,22 +415,23 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
+        _cancelCountdown();
+        _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          timeoutSec--;
+          if (timeoutSec <= 0) {
+            timer.cancel();
+            _countdownTimer = null;
+            Navigator.pop(ctx);
+            if (mounted) {
+              _snack('El cliente no respondi\u00f3. Finalizando viaje.');
+              _finalizeTrip();
+            }
+          } else {
+            setState(() {});
+          }
+        });
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
-            Timer? countdownTimer;
-            countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-              timeoutSec--;
-              if (timeoutSec <= 0) {
-                timer.cancel();
-                Navigator.pop(ctx);
-                if (mounted) {
-                  _snack('El cliente no respondi\u00f3. Finalizando viaje.');
-                  _finalizeTrip();
-                }
-              } else {
-                setDialogState(() {});
-              }
-            });
             return AlertDialog(
               title: const Text('Esperando confirmaci\u00f3n'),
               content: Column(
@@ -414,7 +450,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               actions: [
                 TextButton(
                   onPressed: () {
-                    countdownTimer?.cancel();
+                    _cancelCountdown();
+                    SocketServiceClient.instance.emit('trip:finalize_cancelled', {
+                      'tripId': _trip?['id'],
+                    });
                     Navigator.pop(ctx);
                     if (mounted) {
                       _snack('Finalizaci\u00f3n cancelada.');
@@ -539,19 +578,99 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _finalizeTrip() async {
-    if (_trip == null) return;
+    if (_trip == null || _isFinalizing) return;
+    _isFinalizing = true;
     setState(() => _actionLoading = true);
     try {
       await ApiClient.instance.finalizeTrip(_trip!['id']);
       _trip!['estado'] = 'finalizado';
-      if (mounted) setState(() {});
-      _snack('Viaje finalizado');
       _stopGpsTimer();
+      if (!mounted) return;
+
+      final t = _trip!;
+      final precio = t['precioFinal'] as num? ?? t['precioEstimado'] as num? ?? 0;
+      final precioStr = '\$${precio.toStringAsFixed(0)}';
+      final comisionVal = precio * 0.1;
+      final comisionStr = '- \$${comisionVal.toStringAsFixed(0)}';
+      final totalStr = '\$${(precio - comisionVal).toStringAsFixed(0)}';
+      final cliente = t['cliente'] as Map<String, dynamic>?;
+      final nombreCliente = cliente?['nombre'] as String? ?? '';
+      final rating = cliente?['calificacion'] is num ? (cliente!['calificacion'] as num).toDouble() : 4.0;
+      final origenText = (t['origen'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
+      final destinoText = (t['destino'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EntregaConfirmadaScreen(
+            nombreCliente: nombreCliente,
+            ratingCliente: rating,
+            precioAcordado: precioStr,
+            comision: comisionStr,
+            porcentajeComision: '10%',
+            gananciaTotal: totalStr,
+            onVerResumen: () => _pushResumenViaje(
+              t, precioStr, comisionStr, '10%', totalStr, origenText, destinoText,
+            ),
+            onVolverInicio: () => _pushCalificarCliente(nombreCliente, rating),
+          ),
+        ),
+      );
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
       if (mounted) setState(() => _actionLoading = false);
+      _isFinalizing = false;
     }
+  }
+
+  void _pushResumenViaje(
+    Map<String, dynamic> t,
+    String precioStr, String comisionStr, String pctComision, String totalStr,
+    String origenText, String destinoText,
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ResumenViajeScreen(
+          data: ResumenViajeData(
+            origen: origenText,
+            destino: destinoText,
+            distanciaTotal: '${_haversine(
+              double.tryParse((t['origen'] as Map?)?['lat']?.toString() ?? '') ?? 0,
+              double.tryParse((t['origen'] as Map?)?['lng']?.toString() ?? '') ?? 0,
+              double.tryParse((t['destino'] as Map?)?['lat']?.toString() ?? '') ?? 0,
+              double.tryParse((t['destino'] as Map?)?['lng']?.toString() ?? '') ?? 0,
+            ).toStringAsFixed(1)} km',
+            duracionTotal: _formatElapsed(),
+            precioAcordado: precioStr,
+            comision: comisionStr,
+            porcentajeComision: pctComision,
+            gananciaTotal: totalStr,
+            pagoRecibido: 'Efectivo',
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _pushCalificarCliente(String nombreCliente, double rating) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CalificarClienteScreen(
+          nombreCliente: nombreCliente,
+          ratingActual: rating,
+          onEnviar: (estrellas, comentario) async {
+            try {
+              await ApiClient.instance.rateTrip(_trip?['id'], estrellas, comentario: comentario);
+            } catch (_) {}
+            if (!context.mounted) return;
+            Navigator.popUntil(context, (route) => route.isFirst);
+          },
+        ),
+      ),
+    );
   }
 
   String _formatElapsed() {
@@ -647,7 +766,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: _accentGreen.withOpacity(0.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: _accentGreen.withOpacity(0.4))),
+            decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: _accentGreen.withValues(alpha: 0.4))),
             child: Text(estado == 'aceptado' ? 'Aceptado' : 'En curso', style: TextStyle(color: _accentGreen, fontSize: 11, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -734,12 +853,28 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: _accentGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: _accentGreen.withOpacity(0.3))),
+                    decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: _accentGreen.withValues(alpha: 0.3))),
                     child: Row(children: [
                       Icon(Icons.check_circle, size: 18, color: _accentGreen),
                       const SizedBox(width: 8),
                       const Expanded(child: Text('Has llegado al destino', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
                     ]),
+                  ),
+                ],
+                if (estado == 'en_curso' && _currentLat == null) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _requestFinalization,
+                      icon: const Icon(Icons.location_off, size: 18),
+                      label: const Text('Finalizar sin GPS', style: TextStyle(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange.shade800,
+                        side: BorderSide(color: Colors.orange.shade300),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -748,7 +883,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   _infoChip('Precio', '\$${(t['precioFinal'] as num? ?? t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}'),
                 ]),
                 const SizedBox(height: 12),
-                _clientSection(t['cliente'] as Map<String, dynamic>?),
+                _clientSection(t['cliente'] as Map<String, dynamic>?, t),
                 const SizedBox(height: 12),
                 if (estado == 'aceptado')
                   _actionButton('Iniciar viaje', _startTrip, _primaryDark)
@@ -790,7 +925,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: _primaryBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: _primaryBlue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.timer_outlined, size: 14, color: _primaryBlue),
             const SizedBox(width: 4),
@@ -805,6 +940,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final steps = ['Aceptado', 'En curso', 'Completado', 'Finalizado'];
     final estados = ['aceptado', 'en_curso', 'completado', 'finalizado'];
     final current = estados.indexOf(estado);
+    if (current < 0) return const SizedBox.shrink();
     return Row(
       children: List.generate(steps.length * 2 - 1, (i) {
         if (i.isOdd) {
@@ -844,7 +980,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     ]);
   }
 
-  Widget _clientSection(Map<String, dynamic>? cliente) {
+  Widget _clientSection(Map<String, dynamic>? cliente, Map<String, dynamic> t) {
     if (cliente == null) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(12),
@@ -854,7 +990,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         const SizedBox(width: 10),
         Expanded(child: Text(cliente['nombre'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
         if (cliente['telefono'] != null)
-          IconButton(icon: const Icon(Icons.phone, size: 20), color: _primaryBlue, onPressed: () {}),
+          IconButton(icon: const Icon(Icons.phone, size: 20), color: _primaryBlue, onPressed: () => _showClientPhone(t)),
       ]),
     );
   }
@@ -887,6 +1023,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         _navItem(Icons.info_outline, 'Detalle', () => _showClientDetail(t)),
         _navItem(Icons.gavel_outlined, 'Reportar', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t, role: 'conductor')));
+        }),
+        _navItem(Icons.emergency_outlined, 'SOS', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
         }),
         if (estado == 'aceptado')
           _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
@@ -1136,7 +1275,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       await ApiClient.instance.requestCancellation(t['id'], motivo: motivo);
       if (mounted) {
         _snack('Solicitud de cancelaci\u00f3n enviada. Se notificar\u00e1 al cliente y a soporte.');
-        Navigator.pop(context);
       }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');

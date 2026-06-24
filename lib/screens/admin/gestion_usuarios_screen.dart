@@ -270,19 +270,19 @@ class _UsersScreenState extends State<UsersScreen> {
     Color fg;
     switch (rol) {
       case 'admin':
-        bg = _red.withOpacity(.18);
+        bg = _red.withValues(alpha: .18);
         fg = _red;
         break;
       case 'moderador':
-        bg = _purple.withOpacity(.18);
+        bg = _purple.withValues(alpha: .18);
         fg = _purple;
         break;
       case 'lider':
-        bg = _amber.withOpacity(.18);
+        bg = _amber.withValues(alpha: .18);
         fg = _amber;
         break;
       default:
-        bg = _border.withOpacity(.5);
+        bg = _border.withValues(alpha: .5);
         fg = _textSec;
     }
     return Container(
@@ -308,9 +308,9 @@ class _UsersScreenState extends State<UsersScreen> {
           child: Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: color.withOpacity(.1),
+              color: color.withValues(alpha: .1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(.25)),
+              border: Border.all(color: color.withValues(alpha: .25)),
             ),
             child: Icon(icon, color: color, size: 16),
           ),
@@ -394,7 +394,7 @@ class _UsersScreenState extends State<UsersScreen> {
                 style: const TextStyle(color: _textPri, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Buscar por nombre, email o rol…',
-                  hintStyle: TextStyle(color: _textSec.withOpacity(.7), fontSize: 14),
+                  hintStyle: TextStyle(color: _textSec.withValues(alpha: .7), fontSize: 14),
                   prefixIcon: const Icon(Icons.search_rounded, color: _textSec, size: 18),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
@@ -437,11 +437,11 @@ class _UsersScreenState extends State<UsersScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.search_off_rounded, size: 48, color: _textSec.withOpacity(.4)),
+                            Icon(Icons.search_off_rounded, size: 48, color: _textSec.withValues(alpha: .4)),
                             const SizedBox(height: 12),
                             Text(
                               _searchQuery.isEmpty ? 'No hay usuarios' : 'Sin resultados',
-                              style: TextStyle(color: _textSec.withOpacity(.7), fontSize: 15),
+                              style: TextStyle(color: _textSec.withValues(alpha: .7), fontSize: 15),
                             ),
                           ],
                         ),
@@ -536,11 +536,11 @@ class _UserCard extends StatelessWidget {
         color: _card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: suspendido ? _red.withOpacity(.3) : _border,
+          color: suspendido ? _red.withValues(alpha: .3) : _border,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.25),
+            color: Colors.black.withValues(alpha: .25),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -559,9 +559,9 @@ class _UserCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: avatarColor.withOpacity(.15),
+                    color: avatarColor.withValues(alpha: .15),
                     shape: BoxShape.circle,
-                    border: Border.all(color: avatarColor.withOpacity(.4), width: 1.5),
+                    border: Border.all(color: avatarColor.withValues(alpha: .4), width: 1.5),
                   ),
                   child: Center(
                     child: Text(
@@ -598,9 +598,9 @@ class _UserCard extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: _red.withOpacity(.15),
+                                color: _red.withValues(alpha: .15),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: _red.withOpacity(.3)),
+                                border: Border.all(color: _red.withValues(alpha: .3)),
                               ),
                               child: const Text(
                                 'SUSPENDIDO',
@@ -788,7 +788,7 @@ class _StyledDialog extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(.12),
+                    color: iconColor.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: iconColor, size: 20),

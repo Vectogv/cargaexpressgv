@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/socket_service_client.dart';
-import 'trip_in_progress_screen.dart';
 import 'hacer_oferta_screen.dart';
+import 'oferta_enviada_screen.dart';
 
-enum OfferStatus { none, sending, sent, accepted, rejected }
 
 class ConductorTripDetailScreen extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -17,12 +16,9 @@ class ConductorTripDetailScreen extends StatefulWidget {
 }
 
 class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
-  bool _loading = false;
+  bool _enviandoOferta = false;
   String? _placa;
   String? _tipoVehiculo;
-  OfferStatus _offerStatus = OfferStatus.none;
-  StreamSubscription<Map<String, dynamic>>? _offerAcceptedSub;
-  StreamSubscription<Map<String, dynamic>>? _offerRejectedSub;
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
 
@@ -59,33 +55,24 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   void _setupSocketListeners() {
     final tripId = _tripId?.toString();
 
-    _offerAcceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((data) {
+    _tripAcceptedSub = SocketServiceClient.instance.onTripAccepted.listen((data) {
       if (_matchTripId(data, tripId) && mounted) {
-        setState(() => _offerStatus = OfferStatus.accepted);
-      }
-    });
-
-    _offerRejectedSub = SocketServiceClient.instance.onOfferRejected.listen((data) {
-      if (_matchTripId(data, tripId) && mounted) {
-        setState(() => _offerStatus = OfferStatus.rejected);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Este viaje fue asignado a otro conductor.')),
+        );
+        Navigator.pop(context);
       }
     });
 
     _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
       if (_matchTripId(data, tripId)) {
         final estado = data['estado'] as String?;
-        if (estado == 'aceptado' && mounted) {
-          setState(() => _offerStatus = OfferStatus.accepted);
-        }
         if (estado == 'cancelado' && mounted) {
-          setState(() => _offerStatus = OfferStatus.rejected);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Este viaje ya no está disponible.')),
+          );
+          Navigator.pop(context);
         }
-      }
-    });
-
-    _tripAcceptedSub = SocketServiceClient.instance.onTripAccepted.listen((data) {
-      if (_matchTripId(data, tripId) && mounted) {
-        setState(() => _offerStatus = OfferStatus.accepted);
       }
     });
   }
@@ -113,8 +100,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   @override
   void dispose() {
     _expireTimer?.cancel();
-    _offerAcceptedSub?.cancel();
-    _offerRejectedSub?.cancel();
     _tripStatusSub?.cancel();
     _tripAcceptedSub?.cancel();
     super.dispose();
@@ -129,25 +114,39 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   }
 
   Future<void> _showOfferSheet() async {
-    final precioEstimado = widget.trip['precioEstimado'];
-    final ofertaInicial = _toNum(precioEstimado)?.toDouble() ?? 55000;
-    final precioStr = precioEstimado != null ? '\$${_formatMonto(precioEstimado)}' : '\$50.000';
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => HacerOfertaScreen(
-          tripId: _tripId,
-          precioCliente: precioStr,
-          ofertaInicial: ofertaInicial,
-          placa: _placa,
+    if (_enviandoOferta) return;
+    setState(() => _enviandoOferta = true);
+    try {
+      final precioEstimado = widget.trip['precioEstimado'];
+      final ofertaInicial = _toNum(precioEstimado)?.toDouble() ?? 55000;
+      final precioStr = precioEstimado != null ? '\$${_formatMonto(precioEstimado)}' : '\$50.000';
+      final montoStr = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HacerOfertaScreen(
+            tripId: _tripId,
+            precioCliente: precioStr,
+            ofertaInicial: ofertaInicial,
+            placa: _placa,
+          ),
         ),
-      ),
-    );
-    if (result == true && mounted) {
-      setState(() => _offerStatus = OfferStatus.sent);
-      if (_tripId != null) {
-        DriverLocationService.instance.removeTrip(_tripId.toString());
+      );
+      if (montoStr != null && mounted) {
+        _tripStatusSub?.cancel();
+        _tripAcceptedSub?.cancel();
+        DriverLocationService.instance.markAsOffered(_tripId);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OfertaEnviadaScreen(
+              montoOferta: montoStr,
+              tripId: _tripId,
+            ),
+          ),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _enviandoOferta = false);
     }
   }
 
@@ -198,7 +197,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildOfferStatus(),
                   const SizedBox(height: 16),
                   _buildPriceCard(precio),
                   const SizedBox(height: 20),
@@ -219,112 +217,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildOfferStatus() {
-    switch (_offerStatus) {
-      case OfferStatus.none:
-      case OfferStatus.sending:
-        return const SizedBox.shrink();
-      case OfferStatus.sent:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF7ED),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFFED7AA)),
-          ),
-          child: Row(
-            children: [
-              const SizedBox(
-                width: 22, height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: _orange),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Oferta enviada',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF9A3412)),
-                    ),
-                    Text(
-                      'Esperando respuesta del cliente...',
-                      style: TextStyle(fontSize: 12, color: _textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      case OfferStatus.accepted:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF0FDF4),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFBBF7D0)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.check_circle, color: _green, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '¡Oferta aceptada!',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: _green),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'El cliente aceptó tu oferta. Dirígete al punto de origen.',
-                      style: TextStyle(fontSize: 12, color: _textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      case OfferStatus.rejected:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEF2F2),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFFECACA)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.cancel_outlined, color: Colors.red, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Oferta rechazada',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.red),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'El cliente rechazó tu oferta. Busca otros viajes.',
-                      style: TextStyle(fontSize: 12, color: _textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-    }
   }
 
   Widget _buildPriceCard(String precio) {
@@ -467,65 +359,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   }
 
   Widget _buildBottomButtons() {
-    if (_offerStatus == OfferStatus.accepted) {
-      return Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: _divider)),
-        ),
-        child: SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: widget.trip)),
-              );
-            },
-            icon: const Icon(Icons.map_outlined, size: 20),
-            label: const Text('Ir al mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accentBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (_offerStatus == OfferStatus.sent) {
-      return const SizedBox.shrink();
-    }
-
-    if (_offerStatus == OfferStatus.rejected) {
-      return Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: _divider)),
-        ),
-        child: SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: OutlinedButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: _accentBlue, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text(
-              'Volver a viajes disponibles',
-              style: TextStyle(color: _accentBlue, fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-      );
-    }
-
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       decoration: const BoxDecoration(
@@ -536,13 +369,13 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         width: double.infinity,
         height: 50,
         child: ElevatedButton(
-          onPressed: _loading ? null : _showOfferSheet,
+          onPressed: (_enviandoOferta || _placa == null) ? null : _showOfferSheet,
           style: ElevatedButton.styleFrom(
             backgroundColor: _accentBlue,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             elevation: 0,
           ),
-          child: _loading
+          child: _enviandoOferta
               ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
               : const Text(
                   'Hacer oferta',

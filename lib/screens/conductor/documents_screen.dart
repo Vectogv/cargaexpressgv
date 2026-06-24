@@ -242,7 +242,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (estado == 'aprobado') {
       return Container(
         width: double.infinity,
-        color: _accentGreen.withOpacity(0.12),
+        color: _accentGreen.withValues(alpha: 0.12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
@@ -258,7 +258,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         onTap: _showRejectionNote,
         child: Container(
           width: double.infinity,
-          color: _accentRed.withOpacity(0.08),
+          color: _accentRed.withValues(alpha: 0.08),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
@@ -290,7 +290,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       decoration: BoxDecoration(
         color: _white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         children: [
@@ -298,7 +298,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _primaryDark.withOpacity(0.08),
+              color: _primaryDark.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(doc.icon, color: _primaryDark, size: 22),
@@ -312,7 +312,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 if (estado == 'rechazado' && nota != null && nota.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(nota, style: TextStyle(fontSize: 11, color: _accentRed.withOpacity(0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    child: Text(nota, style: TextStyle(fontSize: 11, color: _accentRed.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ),
                 if (estado != 'no_subido') ...[
                   const SizedBox(height: 6),
@@ -352,7 +352,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       case 'aprobado':
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: _accentGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -368,7 +368,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: _accentRed.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: _accentRed.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20)),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -399,7 +399,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       case 'pendiente':
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: _accentOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(color: _accentOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

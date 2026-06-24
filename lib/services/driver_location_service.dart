@@ -26,6 +26,7 @@ class DriverLocationService {
   DateTime _lastLocationSent = DateTime(2000);
 
   List<Map<String, dynamic>> _nearbyTrips = [];
+  final Set<String> _offeredTripIds = {};
   final _tripStreamController = StreamController<List<Map<String, dynamic>>>.broadcast();
 
   Stream<List<Map<String, dynamic>>> get onTripsUpdated => _tripStreamController.stream;
@@ -152,8 +153,12 @@ class DriverLocationService {
     if (!_online || _lastLat == null || _lastLng == null) return;
     if (!NetworkMonitorService.instance.isOnline) return;
     try {
-      final trips = await ApiClient.instance.getNearbyTrips(_lastLat!, _lastLng!, radio: 20);
+      var trips = await ApiClient.instance.getNearbyTrips(_lastLat!, _lastLng!, radio: 20);
       if (!_online) return;
+      trips = trips.where((t) {
+        final id = (t['_id'] ?? t['id']).toString();
+        return !_offeredTripIds.contains(id);
+      }).toList();
       _nearbyTrips = trips;
       if (!_tripStreamController.isClosed) {
         _tripStreamController.add(List.from(trips));
@@ -220,8 +225,26 @@ class DriverLocationService {
     }
   }
 
+  void markAsOffered(dynamic tripId) {
+    if (tripId == null) return;
+    final idStr = tripId.toString();
+    _offeredTripIds.add(idStr);
+    _nearbyTrips.removeWhere((t) {
+      final id = (t['_id'] ?? t['id']).toString();
+      return id == idStr;
+    });
+    if (!_tripStreamController.isClosed) {
+      _tripStreamController.add(List.from(_nearbyTrips));
+    }
+  }
+
   void removeTrip(dynamic tripId) {
-    _nearbyTrips.removeWhere((t) => t['id'] == tripId);
+    if (tripId == null) return;
+    final idStr = tripId.toString();
+    _nearbyTrips.removeWhere((t) {
+      final id = (t['_id'] ?? t['id']).toString();
+      return id == idStr;
+    });
     if (!_tripStreamController.isClosed) {
       _tripStreamController.add(List.from(_nearbyTrips));
     }

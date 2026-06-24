@@ -170,7 +170,7 @@ class ApiClient {
   Future<void> finalizeTrip(dynamic id) => TripService.finalizeTrip(id);
   Future<void> cancelTrip(dynamic id, {String? motivo}) => TripService.cancelTrip(id, motivo: motivo);
   Future<void> requestCancellation(dynamic id, {String? motivo}) => TripService.requestCancellation(id, motivo: motivo);
-  Future<void> disputeTrip(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeTrip(id, motivo: motivo, descripcion: descripcion);
+  Future<Map<String, dynamic>> disputeTrip(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeTrip(id, motivo: motivo, descripcion: descripcion);
   Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) => TripService.rateTrip(id, puntaje, comentario: comentario);
   Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) => TripService.deliveryPhoto(tripId, bytes, filename);
 
@@ -179,10 +179,11 @@ class ApiClient {
   Future<Map<String, dynamic>> createDispute({required dynamic tripId, required String problema, String? descripcion, List<String>? fotos}) =>
       DisputeService.createDispute(tripId: tripId, problema: problema, descripcion: descripcion, fotos: fotos);
   Future<Map<String, dynamic>> getDispute(dynamic id) => DisputeService.getDispute(id);
+  Future<Map<String, dynamic>> submitVersion(dynamic id, String version) => DisputeService.submitVersion(id, version);
 
   // --- Offers ---
 
-  Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto, {String? placa}) => OfferService.makeOffer(tripId, monto, placa: placa);
+  Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto, {String? placa, String? mensaje}) => OfferService.makeOffer(tripId, monto, placa: placa, mensaje: mensaje);
   Future<List<Map<String, dynamic>>> getOffers(dynamic tripId) => OfferService.getOffers(tripId);
   Future<Map<String, dynamic>> acceptOffer(dynamic tripId, dynamic offerId) => OfferService.acceptOffer(tripId, offerId);
   Future<Map<String, dynamic>> rejectOffer(dynamic tripId, dynamic offerId) => OfferService.rejectOffer(tripId, offerId);

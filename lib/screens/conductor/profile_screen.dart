@@ -121,7 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _infoRow('Placa', placa),
-            _infoRow('Tipo', tipo[0].toUpperCase() + tipo.substring(1)),
+            _infoRow('Tipo', tipo.isEmpty ? tipo : tipo[0].toUpperCase() + tipo.substring(1)),
             _infoRow('Capacidad', capacidad),
           ],
         ),

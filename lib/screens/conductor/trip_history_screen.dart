@@ -10,9 +10,12 @@ class TripHistoryScreen extends StatefulWidget {
 
 class _TripHistoryScreenState extends State<TripHistoryScreen> {
   final List<Map<String, dynamic>> _history = [];
+  final ScrollController _scrollCtrl = ScrollController();
   bool _loading = true;
+  bool _loadingMore = false;
   int _page = 1;
   bool _hasMore = true;
+  static const int _pageSize = 10;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _accentGreen = Color(0xFF4CAF50);
@@ -25,14 +28,35 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   void initState() {
     super.initState();
     _fetchHistory();
+    _scrollCtrl.addListener(_onScroll);
   }
 
-  Future<void> _fetchHistory() async {
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200 && !_loadingMore && _hasMore) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    _page++;
+    await _fetchHistory(isLoadMore: true);
+    if (mounted) setState(() => _loadingMore = false);
+  }
+
+  Future<void> _fetchHistory({bool isLoadMore = false}) async {
+    if (!isLoadMore) setState(() => _loading = true);
     try {
-      final data = await ApiClient.instance.getTripHistory(page: _page);
+      final data = await ApiClient.instance.getTripHistory(page: _page, limit: _pageSize);
       if (mounted) setState(() {
         _history.addAll(data);
-        _hasMore = data.length >= 20;
+        _hasMore = data.length >= _pageSize;
         _loading = false;
       });
     } catch (_) {
@@ -62,10 +86,14 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                   ),
                 )
               : ListView.builder(
+                  controller: _scrollCtrl,
                   padding: const EdgeInsets.all(16),
                   itemCount: _history.length + (_hasMore ? 1 : 0),
                   itemBuilder: (_, i) {
                     if (i == _history.length) {
+                      return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)));
+                    }
+                    if (i == _history.length && _loadingMore) {
                       return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)));
                     }
                     return _buildTripCard(_history[i]);
@@ -121,7 +149,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: c.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
       child: Text(label, style: TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w600)),
     );
   }

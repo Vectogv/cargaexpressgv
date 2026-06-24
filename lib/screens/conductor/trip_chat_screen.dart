@@ -28,6 +28,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
   StreamSubscription<Map<String, dynamic>>? _typingStopSub;
   StreamSubscription<Map<String, dynamic>>? _messageReadSub;
   StreamSubscription<bool>? _connectionSub;
+  StreamSubscription<Map<String, dynamic>>? _tripStateSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _textDark = Color(0xFF1A1A2E);
@@ -54,6 +55,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
     _typingStopSub?.cancel();
     _messageReadSub?.cancel();
     _connectionSub?.cancel();
+    _tripStateSub?.cancel();
     super.dispose();
   }
 
@@ -144,6 +146,15 @@ class _TripChatScreenState extends State<TripChatScreen> {
     _connectionSub = SocketServiceClient.instance.onConnection.listen((connected) {
       if (connected && mounted) _fetchMessages();
     });
+
+    _tripStateSub = SocketServiceClient.instance.onTripStatus.listen((data) {
+      if (data['id']?.toString() == tripId && mounted) {
+        final estado = data['estado'] as String?;
+        if (estado != null) {
+          setState(() => _canChat = estado == 'aceptado' || estado == 'en_curso' || estado == 'completado');
+        }
+      }
+    });
   }
 
   Future<void> _fetchMessages() async {
@@ -151,8 +162,18 @@ class _TripChatScreenState extends State<TripChatScreen> {
     try {
       final msgs = await ApiClient.instance.getTripMessages(_activeTrip!['id']);
       final tripId = _activeTrip!['id']?.toString();
+      final nowIds = msgs.map((m) => m['id']?.toString()).whereType<String>().toSet();
+      final localPending = _messages.where((m) {
+        final id = m['id']?.toString();
+        return id == null || !nowIds.contains(id);
+      }).toList();
       if (tripId != null) CacheService.instance.cacheMessages(tripId, msgs);
-      if (mounted) setState(() { _messages = msgs; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _messages = [...msgs, ...localPending];
+          _loading = false;
+        });
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollDown());
     } catch (_) {
       if (mounted) setState(() => _loading = false);
@@ -223,6 +244,18 @@ class _TripChatScreenState extends State<TripChatScreen> {
     _isTyping = false;
     _typingTimer?.cancel();
     SocketServiceClient.instance.emit('typing:stop', {'tripId': _activeTrip!['id']});
+  }
+
+  void _retryMessage(Map<String, dynamic> msg) {
+    if (_activeTrip == null) return;
+    final text = msg['text'] as String? ?? msg['mensaje'] as String?;
+    if (text == null || text.isEmpty) return;
+    setState(() => msg['status'] = 'sending');
+    ApiClient.instance.sendTripMessage(_activeTrip!['id'], text).then((_) {
+      if (mounted) setState(() => msg['status'] = 'sent');
+    }).catchError((_) {
+      if (mounted) setState(() => msg['status'] = 'failed');
+    });
   }
 
   void _scrollDown() {
@@ -328,7 +361,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
           if (_canChat)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFF4CAF50).withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: const Color(0xFF4CAF50).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
               child: const Text('En curso', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
             ),
         ],
@@ -339,16 +372,19 @@ class _TripChatScreenState extends State<TripChatScreen> {
   Widget _buildMessage(Map<String, dynamic> msg) {
     final bool isSent = msg['isSent'] == true;
     final status = msg['status'] as String?;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: isSent ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+    final isFailed = status == 'failed';
+    return GestureDetector(
+      onTap: isFailed ? () => _retryMessage(msg) : null,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          mainAxisAlignment: isSent ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isSent) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor: _primaryDark.withOpacity(0.2),
+              backgroundColor: _primaryDark.withValues(alpha: 0.2),
               child: Text(
                 _initials(_activeTrip?['cliente']?['nombre'] as String? ?? '?'),
                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
@@ -370,7 +406,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
                     bottomLeft: Radius.circular(isSent ? 16 : 4),
                     bottomRight: Radius.circular(isSent ? 4 : 16),
                   ),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))],
                 ),
                 child: Text(
                   msg['text'] as String? ?? msg['mensaje'] as String? ?? '',
@@ -402,6 +438,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
           if (isSent) const SizedBox(width: 4),
         ],
       ),
+      ),
     );
   }
 
@@ -412,7 +449,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundColor: _primaryDark.withOpacity(0.2),
+            backgroundColor: _primaryDark.withValues(alpha: 0.2),
             child: Text(
               _initials(_activeTrip?['cliente']?['nombre'] as String? ?? '?'),
               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
@@ -424,7 +461,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
             decoration: BoxDecoration(
               color: _bubbleReceived,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               _dot(0), const SizedBox(width: 4), _dot(1), const SizedBox(width: 4), _dot(2),

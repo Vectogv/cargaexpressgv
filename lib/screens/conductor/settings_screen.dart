@@ -1,12 +1,48 @@
 import 'package:flutter/material.dart';
+import '../../services/cache_service.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _sonido = true;
+  bool _vibrar = true;
+  bool _notifViaje = true;
+  bool _ubicacion = true;
+  bool _visible = true;
 
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
   static const Color _bgLight = Color(0xFFF5F7FA);
   static const Color _white = Colors.white;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    setState(() {
+      _sonido = CacheService.instance.getPreference('sonido') as bool? ?? true;
+      _vibrar = CacheService.instance.getPreference('vibrar') as bool? ?? true;
+      _notifViaje = CacheService.instance.getPreference('notifViaje') as bool? ?? true;
+      _ubicacion = CacheService.instance.getPreference('ubicacion') as bool? ?? true;
+      _visible = CacheService.instance.getPreference('visible') as bool? ?? true;
+    });
+  }
+
+  void _save() {
+    CacheService.instance.setPreference('sonido', _sonido);
+    CacheService.instance.setPreference('vibrar', _vibrar);
+    CacheService.instance.setPreference('notifViaje', _notifViaje);
+    CacheService.instance.setPreference('ubicacion', _ubicacion);
+    CacheService.instance.setPreference('visible', _visible);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,14 +56,14 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           _buildSection('Notificaciones', [
-            _buildSwitchItem('Sonido', true),
-            _buildSwitchItem('Vibrar', true),
-            _buildSwitchItem('Notificaciones de viaje', true),
+            _buildSwitchItem('Sonido', _sonido, (v) => setState(() { _sonido = v; _save(); })),
+            _buildSwitchItem('Vibrar', _vibrar, (v) => setState(() { _vibrar = v; _save(); })),
+            _buildSwitchItem('Notificaciones de viaje', _notifViaje, (v) => setState(() { _notifViaje = v; _save(); })),
           ]),
           const SizedBox(height: 12),
           _buildSection('Privacidad', [
-            _buildSwitchItem('Compartir ubicación en vivo', true),
-            _buildSwitchItem('Visible para clientes', true),
+            _buildSwitchItem('Compartir ubicación en vivo', _ubicacion, (v) => setState(() { _ubicacion = v; _save(); })),
+            _buildSwitchItem('Visible para clientes', _visible, (v) => setState(() { _visible = v; _save(); })),
           ]),
           const SizedBox(height: 12),
           _buildSection('General', [
@@ -54,12 +90,13 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSwitchItem(String label, bool value) {
+  Widget _buildSwitchItem(String label, bool value, ValueChanged<bool> onChanged) {
     return SwitchListTile(
       title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
       value: value,
-      onChanged: (_) {},
-      activeColor: const Color(0xFF1565C0),
+      onChanged: onChanged,
+      activeTrackColor: const Color(0xFF1565C0).withValues(alpha: 0.5),
+      activeThumbColor: const Color(0xFF1565C0),
       dense: true,
     );
   }

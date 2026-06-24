@@ -61,6 +61,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
                         const SizedBox(height: 12),
                         _buildStatsRow(),
                         const SizedBox(height: 12),
+                        _buildDeadlineBanner(),
+                        const SizedBox(height: 12),
                         _buildCommissionCard(),
                       ],
                     ),
@@ -115,7 +117,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
       decoration: BoxDecoration(
         color: _white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         children: [
@@ -137,7 +139,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
       decoration: BoxDecoration(
         color: _white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         children: [
@@ -166,6 +168,32 @@ class _EarningsScreenState extends State<EarningsScreen> {
     );
   }
 
+  Widget _buildDeadlineBanner() {
+    final pendiente = _toNum(_commission?['monto'] ?? _commission?['deuda']);
+    if (pendiente <= 0) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFE0B2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: Color(0xFFE65100), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Tienes un plazo de 15 días para pagar tu deuda. Pasado ese plazo tu cuenta podría ser suspendida.',
+              style: TextStyle(fontSize: 12, color: const Color(0xFFBF360C), height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCommissionCard() {
     final pendiente = _toNum(_commission?['monto'] ?? _commission?['deuda']);
     return Container(
@@ -174,7 +202,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
       decoration: BoxDecoration(
         color: _white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Row(
         children: [
