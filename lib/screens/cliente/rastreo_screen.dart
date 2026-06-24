@@ -336,7 +336,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         onProceed: () {
           Navigator.push<Map<String, dynamic>>(
             context,
-            MaterialPageRoute(builder: (_) => const CancelTripScreen(enCurso: false)),
+        MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: _status == 'en_curso')),
           ).then((result) {
             if (result != null) _doCancel();
           });
@@ -371,10 +371,18 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     if (_cancelling) return;
     setState(() => _cancelling = true);
     try {
-      await TripService.cancelTrip(_trip?['id'] ?? '', motivo: 'Cancelado por el usuario');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Viaje cancelado correctamente')),
-      );
+      if (_status == 'en_curso') {
+        await TripService.requestCancellation(_trip?['id'] ?? '', motivo: 'Cancelado por el usuario');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Solicitud de cancelaci\u00f3n enviada. Un administrador la revisar\u00e1.')),
+        );
+      } else {
+        await TripService.cancelTrip(_trip?['id'] ?? '', motivo: 'Cancelado por el usuario');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Viaje cancelado correctamente')),
+        );
+      }
       _safePopUntilFirst();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -404,6 +412,10 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   void _showFinalizeConfirmation() {
     _safeReplace(ConfirmarEntregaScreen(
       onConfirmar: () {
+        SocketServiceClient.instance.emit('trip:finalize_response', {
+          'accepted': true,
+          'tripId': _trip?['id'],
+        });
         final conductor = _trip?['conductor'] as Map<String, dynamic>? ?? {};
         _safeReplace(ViajeFinalizado(
           trip: _trip ?? {},
@@ -423,6 +435,11 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         ));
       },
       onReportar: () {
+        SocketServiceClient.instance.emit('trip:finalize_response', {
+          'accepted': false,
+          'motivo': 'Cliente report\u00f3 un problema',
+          'tripId': _trip?['id'],
+        });
         _safePush(ReportarProblemaScreen(
           trip: _trip,
           role: 'cliente',

@@ -219,7 +219,7 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_tripAcceptedCtrl, Map<String, dynamic>.from(data));
       });
 
-      safeOn('trip:completed', (data) {
+      safeOn('trip:finalized', (data) {
         if (data is Map) safeAdd(_tripCompletedCtrl, Map<String, dynamic>.from(data));
       });
 

@@ -582,12 +582,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _isFinalizing = true;
     setState(() => _actionLoading = true);
     try {
-      await ApiClient.instance.finalizeTrip(_trip!['id']);
-      _trip!['estado'] = 'finalizado';
+      final t = _trip!;
+      final montoFinal = t['precioFinal'] as num? ?? t['precioEstimado'] as num?;
+      await ApiClient.instance.finalizeTrip(t['id'], montoFinal: montoFinal);
+      t['estado'] = 'finalizado';
       _stopGpsTimer();
       if (!mounted) return;
 
-      final t = _trip!;
       final precio = t['precioFinal'] as num? ?? t['precioEstimado'] as num? ?? 0;
       final precioStr = '\$${precio.toStringAsFixed(0)}';
       final comisionVal = precio * 0.1;
@@ -1131,6 +1132,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _cancelTrip(Map<String, dynamic> t) async {
+    final estado = t['estado'] as String?;
+    if (estado == 'en_curso') {
+      _snack('El viaje est\u00e1 en curso. Usa "Solicitar cancelaci\u00f3n" para pedir la cancelaci\u00f3n al administrador.');
+      _requestCancellation(t);
+      return;
+    }
     final motivoCtrl = TextEditingController();
     String? motivoSeleccionado;
 
