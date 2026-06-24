@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/socket_service_client.dart';
+import '../../services/api_client.dart';
 import '../../services/logger_service.dart';
 import 'oferta_aceptada_screen.dart';
 
@@ -39,17 +40,17 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
       return;
     }
 
-    _acceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((data) {
+    _acceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((data) async {
       if (_isNavigating) return;
-      final id = data['tripId']?.toString() ?? data['id']?.toString();
+      final id = data['viajeId']?.toString() ?? data['tripId']?.toString() ?? data['id']?.toString();
       LoggerService.instance.info('offer:accepted received: tripId=$id, expected=$tripIdStr, data=$data');
       if (id != tripIdStr) return;
-      _redirectToAccepted(data);
+      await _redirectToAccepted(data);
     });
 
     _rejectedSub = SocketServiceClient.instance.onOfferRejected.listen((data) {
       if (_isNavigating) return;
-      final id = data['tripId']?.toString() ?? data['id']?.toString();
+      final id = data['viajeId']?.toString() ?? data['tripId']?.toString() ?? data['id']?.toString();
       LoggerService.instance.info('offer:rejected received: tripId=$id, expected=$tripIdStr');
       if (id != tripIdStr) return;
       _isNavigating = true;
@@ -63,15 +64,27 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
     });
   }
 
-  void _redirectToAccepted(Map<String, dynamic> tripData) {
+  Future<void> _redirectToAccepted(Map<String, dynamic> tripData) async {
     if (_isNavigating) return;
-    LoggerService.instance.info('_redirectToAccepted: navigating to OfertaAceptadaScreen');
+    LoggerService.instance.info('_redirectToAccepted: fetching trip detail');
     _isNavigating = true;
-    final clienteMap = tripData['cliente'] as Map<String, dynamic>? ?? {};
-    final origenMap = tripData['origen'] as Map<String, dynamic>?;
-    final destinoMap = tripData['destino'] as Map<String, dynamic>?;
+
+    final viajeId = tripData['viajeId']?.toString() ?? tripData['tripId']?.toString() ?? tripData['id']?.toString();
+
+    Map<String, dynamic> fullTrip;
+    try {
+      fullTrip = await ApiClient.instance.getTripDetail(viajeId);
+    } catch (e) {
+      LoggerService.instance.error('_redirectToAccepted: getTripDetail failed', e);
+      fullTrip = tripData;
+    }
+
+    final clienteMap = fullTrip['cliente'] as Map<String, dynamic>? ?? {};
+    final origenMap = fullTrip['origen'] as Map<String, dynamic>?;
+    final destinoMap = fullTrip['destino'] as Map<String, dynamic>?;
     final monto = tripData['monto'] is num ? '\$${_fmt((tripData['monto'] as num).toInt())}' : widget.montoOferta;
 
+    if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
@@ -86,9 +99,9 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
             ),
             origen: origenMap?['direccion'] as String? ?? 'Origen',
             destino: destinoMap?['direccion'] as String? ?? 'Destino',
-            distancia: tripData['distancia'] != null ? '${tripData['distancia']} km' : '—',
-            descripcionCarga: tripData['descripcion'] as String? ?? 'No especificada',
-            trip: tripData,
+            distancia: fullTrip['distancia'] != null ? '${fullTrip['distancia']} km' : '—',
+            descripcionCarga: fullTrip['descripcion'] as String? ?? 'No especificada',
+            trip: fullTrip,
           ),
         ),
         (route) => route.isFirst,
