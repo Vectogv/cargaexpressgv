@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import 'trip_chat_screen.dart';
 import 'viaje_aceptado_screen.dart';
-import 'viaje_en_camino_screen.dart';
+import 'trip_in_progress_screen.dart';
 
 class ClienteData {
   final String nombre;
@@ -54,66 +54,12 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
       await ApiClient.instance.startTrip(tripId);
       if (!mounted) return;
 
-      final capturedTripId = tripId;
-      final capturedNombre = widget.cliente.nombre;
-      final capturedRating = widget.cliente.rating;
-      final capturedAvatar = widget.cliente.avatarUrl;
-      final capturedDistancia = widget.distancia;
       final capturedTrip = widget.trip;
-      final tiempo = capturedTrip['tiempoEstimado'] != null
-          ? '${(capturedTrip['tiempoEstimado'] as num).toInt()} min'
-          : capturedTrip['eta'] != null
-              ? '${(capturedTrip['eta'] as num).toInt()} min'
-              : '—';
-      final distanciaReal = capturedTrip['distancia'] != null
-          ? '${(capturedTrip['distancia'] as num).toStringAsFixed(1)} km'
-          : capturedDistancia;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (ctx) => ViajeEnCaminoScreen(
-            nombreCliente: capturedNombre,
-            ratingCliente: capturedRating,
-            avatarUrl: capturedAvatar,
-            tiempoEstimado: tiempo,
-            distancia: distanciaReal,
-            onChat: () => Navigator.push(
-              ctx,
-              MaterialPageRoute(builder: (_) => TripChatScreen(trip: capturedTrip)),
-            ),
-            onLlamar: () {
-              final cliente = capturedTrip['cliente'] as Map<String, dynamic>?;
-              final telefono = cliente?['telefono'] as String?;
-              if (telefono == null || telefono.isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('No hay número de teléfono disponible')),
-                );
-                return;
-              }
-              showDialog(
-                context: ctx,
-                builder: (dCtx) => AlertDialog(
-                  title: Text(capturedNombre),
-                  content: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.phone, size: 48, color: Color(0xFF2563EB)),
-                    const SizedBox(height: 12),
-                    Text(telefono, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                  ]),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cerrar')),
-                  ],
-                ),
-              );
-            },
-            onCancelarViaje: () async {
-              try {
-                await ApiClient.instance.cancelTrip(capturedTripId, motivo: 'Cancelado por el conductor');
-              } catch (_) {}
-              if (ctx.mounted) Navigator.of(ctx).popUntil((route) => route.isFirst);
-            },
-            onBack: () {
-              if (ctx.mounted) Navigator.of(ctx).maybePop();
-            },
+          builder: (ctx) => TripInProgressScreen(
+            trip: capturedTrip,
           ),
         ),
       );
