@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/socket_service_client.dart';
+import '../../services/logger_service.dart';
 import 'oferta_aceptada_screen.dart';
 
 class OfertaEnviadaScreen extends StatefulWidget {
@@ -41,6 +42,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
     _acceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((data) {
       if (_isNavigating) return;
       final id = data['tripId']?.toString() ?? data['id']?.toString();
+      LoggerService.instance.info('offer:accepted received: tripId=$id, expected=$tripIdStr, data=$data');
       if (id != tripIdStr) return;
       _redirectToAccepted(data);
     });
@@ -48,6 +50,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
     _rejectedSub = SocketServiceClient.instance.onOfferRejected.listen((data) {
       if (_isNavigating) return;
       final id = data['tripId']?.toString() ?? data['id']?.toString();
+      LoggerService.instance.info('offer:rejected received: tripId=$id, expected=$tripIdStr');
       if (id != tripIdStr) return;
       _isNavigating = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,6 +65,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
 
   void _redirectToAccepted(Map<String, dynamic> tripData) {
     if (_isNavigating) return;
+    LoggerService.instance.info('_redirectToAccepted: navigating to OfertaAceptadaScreen');
     _isNavigating = true;
     final clienteMap = tripData['cliente'] as Map<String, dynamic>? ?? {};
     final origenMap = tripData['origen'] as Map<String, dynamic>?;
