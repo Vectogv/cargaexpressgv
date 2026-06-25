@@ -190,11 +190,11 @@ class _DisputaEnRevisionScreenState extends State<DisputaEnRevisionScreen> {
                 child: OutlinedButton(
                   onPressed: _navigating
                       ? null
-                      : () {
+                      : () async {
                           setState(() => _navigating = true);
                           try {
                             if (esResuelta) {
-                              Navigator.pushReplacement(
+                              await Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => ResolucionScreen(
@@ -206,7 +206,7 @@ class _DisputaEnRevisionScreenState extends State<DisputaEnRevisionScreen> {
                             } else {
                               Navigator.of(context).popUntil((route) => route.isFirst);
                             }
-                          } catch (_) {
+                          } finally {
                             if (mounted) setState(() => _navigating = false);
                           }
                         },

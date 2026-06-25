@@ -26,6 +26,7 @@ class SocketServiceClient {
   final _messageCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _notificationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripStartedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCompletedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeRequestCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -53,6 +54,7 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onMessage => _messageCtrl.stream;
   Stream<Map<String, dynamic>> get onNotification => _notificationCtrl.stream;
   Stream<Map<String, dynamic>> get onTripAccepted => _tripAcceptedCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripStarted => _tripStartedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCompleted => _tripCompletedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCancelled => _tripCancelledCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeRequest => _finalizeRequestCtrl.stream;
@@ -215,8 +217,20 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_notificationCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn('trip:nearby', (data) {
+        if (data is Map) {
+          final notification = Map<String, dynamic>.from(data);
+          notification['__event'] = 'trip:nearby';
+          safeAdd(_notificationCtrl, notification);
+        }
+      });
+
       safeOn('trip:accepted', (data) {
         if (data is Map) safeAdd(_tripAcceptedCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('trip:started', (data) {
+        if (data is Map) safeAdd(_tripStartedCtrl, Map<String, dynamic>.from(data));
       });
 
       safeOn('trip:finalized', (data) {
@@ -340,6 +354,7 @@ class SocketServiceClient {
     _messageCtrl.close();
     _notificationCtrl.close();
     _tripAcceptedCtrl.close();
+    _tripStartedCtrl.close();
     _tripCompletedCtrl.close();
     _tripCancelledCtrl.close();
     _finalizeRequestCtrl.close();

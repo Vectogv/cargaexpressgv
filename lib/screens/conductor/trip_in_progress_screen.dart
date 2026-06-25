@@ -17,7 +17,10 @@ import '../../services/cache_service.dart';
 import '../../services/background_location_service.dart';
 import '../../services/fraud_detection_service.dart';
 import '../../services/api/trip_service.dart';
+import '../../services/driver_location_service.dart';
 import 'trip_chat_screen.dart';
+import 'viaje_en_camino_screen.dart';
+import 'viaje_llegada_destino_screen.dart';
 import 'entrega_confirmada_screen.dart';
 import 'resumen_viaje_screen.dart';
 import 'calificar_cliente_screen.dart';
@@ -259,15 +262,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               _currentLng = pos.longitude;
               _currentSpeed = pos.speed;
             });
-            if (_trip != null) {
-              SocketServiceClient.instance.emit('driver:location', {
-                'tripId': _trip!['id'],
-                'latitude': pos.latitude,
-                'longitude': pos.longitude,
-                'speed': pos.speed,
-                'heading': pos.heading,
-              });
-            }
           } catch (e) {
             LoggerService.instance.error('trip_in_progress: GPS data handler error', e);
           }
@@ -491,6 +485,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final granted = await _requestLocationPermission();
     if (!granted) return;
 
+    DriverLocationService.instance.pause(); // evitar triple GPS
+
     _locationTimer = Timer.periodic(const Duration(seconds: 10), (_) => _sendLocation());
     _sendLocation();
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -547,17 +543,26 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _sendLocation() async {
+    if (_currentLat == null || _currentLng == null) return;
+    if (!NetworkMonitorService.instance.isOnline) return;
+
+    // Socket para el cliente (tiempo real)
+    if (_trip != null && SocketServiceClient.instance.isConnected) {
+      SocketServiceClient.instance.emit('driver:location', {
+        'tripId': _trip!['id'] ?? _trip!['_id'],
+        'latitude': _currentLat,
+        'longitude': _currentLng,
+        'speed': _currentSpeed ?? 0,
+      });
+    }
+
+    // HTTP para persistencia backend
     try {
-      if (!NetworkMonitorService.instance.isOnline) return;
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-      if (mounted) setState(() { _currentLat = pos.latitude; _currentLng = pos.longitude; });
-      await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+      await ApiClient.instance.updateLocation(_currentLat!, _currentLng!);
     } catch (e) {
       final msg = e.toString();
       if (msg.contains('429') || msg.contains('RateLimited')) return;
-      LoggerService.instance.error('trip_in_progress._sendLocation error', e);
+      LoggerService.instance.error('_sendLocation error', e);
     }
   }
 
@@ -637,12 +642,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           data: ResumenViajeData(
             origen: origenText,
             destino: destinoText,
-            distanciaTotal: '${_haversine(
+            distanciaTotal: t['distancia'] != null
+                ? '${t['distancia']} km'
+                : '${_haversine(
               double.tryParse((t['origen'] as Map?)?['lat']?.toString() ?? '') ?? 0,
               double.tryParse((t['origen'] as Map?)?['lng']?.toString() ?? '') ?? 0,
               double.tryParse((t['destino'] as Map?)?['lat']?.toString() ?? '') ?? 0,
               double.tryParse((t['destino'] as Map?)?['lng']?.toString() ?? '') ?? 0,
-            ).toStringAsFixed(1)} km',
+            ).toStringAsFixed(1)} km (aprox.)',
             duracionTotal: _formatElapsed(),
             precioAcordado: precioStr,
             comision: comisionStr,
@@ -775,6 +782,141 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
+  Widget _buildEnCaminoPanel(Map<String, dynamic> t) {
+    final cliente = t['cliente'] as Map<String, dynamic>?;
+    final origen = t['origen'] as Map<String, dynamic>?;
+    final oLat = double.tryParse(origen?['lat']?.toString() ?? '') ?? 0;
+    final oLng = double.tryParse(origen?['lng']?.toString() ?? '') ?? 0;
+    final distOrigen = (_currentLat != null && _currentLng != null && oLat != 0)
+        ? _haversine(_currentLat!, _currentLng!, oLat, oLng)
+        : 0.0;
+    final etaMin = distOrigen > 0 ? (distOrigen / 30 * 60).round() : 0;
+
+    return ViajeEnCaminoScreen(
+      nombreCliente: cliente?['nombre'] as String? ?? 'Cliente',
+      ratingCliente: (cliente?['calificacion'] as num?)?.toDouble() ?? 5.0,
+      tiempoEstimado: etaMin > 0 ? '~$etaMin min' : '--',
+      distancia: distOrigen > 0 ? '${distOrigen.toStringAsFixed(1)} km' : '--',
+      onChat: () => Navigator.push(context, MaterialPageRoute(
+        builder: (_) => TripChatScreen(trip: t))),
+      onLlamar: () => _showClientPhone(t),
+      onCancelarViaje: () => _cancelTrip(t),
+    );
+  }
+
+  Widget _buildLlegadaDestinoPanel(Map<String, dynamic> t) {
+    final cliente = t['cliente'] as Map<String, dynamic>?;
+    return LlegadaDestinoScreen(
+      nombreCliente: cliente?['nombre'] as String? ?? 'Cliente',
+      ratingCliente: (cliente?['calificacion'] as num?)?.toDouble() ?? 5.0,
+      isFinalizando: _actionLoading,
+      onChat: () => Navigator.push(context, MaterialPageRoute(
+        builder: (_) => TripChatScreen(trip: t))),
+      onLlamar: () => _showClientPhone(t),
+      onHeLlegado: _requestFinalization,
+      onSubirFoto: () async {
+        final url = await _takeDeliveryPhoto();
+        if (url != null && mounted) {
+          setState(() => _deliveryPhotoUrl = url);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Foto de evidencia subida correctamente')),
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildTripPanel(Map<String, dynamic> t, Map<String, dynamic>? origen, Map<String, dynamic>? destino, String estado) {
+    final oLat = double.tryParse(origen?['lat']?.toString() ?? '') ?? 0;
+    final oLng = double.tryParse(origen?['lng']?.toString() ?? '') ?? 0;
+    final dLat = double.tryParse(destino?['lat']?.toString() ?? '') ?? 0;
+    final dLng = double.tryParse(destino?['lng']?.toString() ?? '') ?? 0;
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(color: _white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      padding: const EdgeInsets.all(16),
+      child: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (_currentLat != null)
+            _buildTripInfoBar(oLat, oLng, dLat, dLng),
+          const SizedBox(height: 12),
+          _buildStepper(estado),
+          const SizedBox(height: 12),
+          _routeRow(Icons.trip_origin, 'Origen', origen?['direccion'] as String? ?? '', Colors.green),
+          const SizedBox(height: 6),
+          _routeRow(Icons.location_on, 'Destino', destino?['direccion'] as String? ?? '', Colors.red),
+          if (estado == 'en_curso' && _isNearDestination) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: _accentGreen.withValues(alpha: 0.3))),
+              child: Row(children: [
+                Icon(Icons.check_circle, size: 18, color: _accentGreen),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Has llegado al destino', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+              ]),
+            ),
+          ],
+          if (estado == 'en_curso' && _currentLat == null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _requestFinalization,
+                icon: const Icon(Icons.location_off, size: 18),
+                label: const Text('Finalizar sin GPS', style: TextStyle(fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade800,
+                  side: BorderSide(color: Colors.orange.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            _infoChip('Carga', t['carga'] as String? ?? 'N/A'),
+            _infoChip('Precio', '\$${(t['precioFinal'] as num? ?? t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}'),
+          ]),
+          const SizedBox(height: 12),
+          _clientSection(t['cliente'] as Map<String, dynamic>?, t),
+          const SizedBox(height: 12),
+          if (estado == 'aceptado')
+            _actionButton('Iniciar viaje', _startTrip, _primaryDark)
+          else if (estado == 'en_curso') ...[
+            if (_isNearDestination)
+              _actionButton('Finalizar viaje ✓', _requestFinalization, _accentGreen)
+            else ...[
+              _actionButton('Finalizar viaje', _requestFinalization, _primaryBlue),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.amber.shade800),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'Finaliza cuando estés en el punto de destino',
+                    style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                  )),
+                ]),
+              ),
+            ],
+          ]
+          else if (estado == 'completado')
+            _actionButton('Confirmar finalización', _finalizeTrip, _primaryBlue),
+        ]),
+      ),
+    );
+  }
+
   Widget _buildMapWithContent(Map<String, dynamic> t, Map<String, dynamic>? origen, Map<String, dynamic>? destino, String estado) {
     final oLat = double.tryParse(origen?['lat']?.toString() ?? '') ?? 0;
     final oLng = double.tryParse(origen?['lng']?.toString() ?? '') ?? 0;
@@ -807,94 +949,36 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       ));
     }
 
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          flex: 3,
-          child: FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: LatLng(centerLat, centerLng),
-              initialZoom: 13,
-              onMapReady: _fitMapBounds,
-            ),
-            children: [
-              TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app', errorImage: const AssetImage('')),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: [LatLng(oLat, oLng), LatLng(dLat, dLng)],
-                    color: _primaryBlue.withValues(alpha: 0.5),
-                    strokeWidth: 3,
-                  ),
-                ],
-              ),
-              MarkerLayer(markers: markers),
-            ],
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: LatLng(centerLat, centerLng),
+            initialZoom: 13,
+            onMapReady: _fitMapBounds,
           ),
+          children: [
+            TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app', errorImage: const AssetImage('')),
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: [LatLng(oLat, oLng), LatLng(dLat, dLng)],
+                  color: _primaryBlue.withValues(alpha: 0.5),
+                  strokeWidth: 3,
+                ),
+              ],
+            ),
+            MarkerLayer(markers: markers),
+          ],
         ),
-        Expanded(
-          flex: 2,
-          child: Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(color: _white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-            padding: const EdgeInsets.all(16),
-            child: SingleChildScrollView(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (_currentLat != null)
-                  _buildTripInfoBar(oLat, oLng, dLat, dLng),
-                const SizedBox(height: 12),
-                _buildStepper(estado),
-                const SizedBox(height: 12),
-                _routeRow(Icons.trip_origin, 'Origen', origen?['direccion'] as String? ?? '', Colors.green),
-                const SizedBox(height: 6),
-                _routeRow(Icons.location_on, 'Destino', destino?['direccion'] as String? ?? '', Colors.red),
-                if (estado == 'en_curso' && _isNearDestination) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: _accentGreen.withValues(alpha: 0.3))),
-                    child: Row(children: [
-                      Icon(Icons.check_circle, size: 18, color: _accentGreen),
-                      const SizedBox(width: 8),
-                      const Expanded(child: Text('Has llegado al destino', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-                    ]),
-                  ),
-                ],
-                if (estado == 'en_curso' && _currentLat == null) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _requestFinalization,
-                      icon: const Icon(Icons.location_off, size: 18),
-                      label: const Text('Finalizar sin GPS', style: TextStyle(fontSize: 13)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.orange.shade800,
-                        side: BorderSide(color: Colors.orange.shade300),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  _infoChip('Carga', t['carga'] as String? ?? 'N/A'),
-                  _infoChip('Precio', '\$${(t['precioFinal'] as num? ?? t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}'),
-                ]),
-                const SizedBox(height: 12),
-                _clientSection(t['cliente'] as Map<String, dynamic>?, t),
-                const SizedBox(height: 12),
-                if (estado == 'aceptado')
-                  _actionButton('Iniciar viaje', _startTrip, _primaryDark)
-                else if (estado == 'en_curso' && _isNearDestination)
-                  _actionButton('Finalizar viaje', _requestFinalization, _accentGreen)
-                else if (estado == 'completado')
-                  _actionButton('Finalizar viaje', _finalizeTrip, _primaryBlue),
-              ]),
-            ),
-          ),
+        Positioned(
+          left: 0, right: 0, bottom: 0,
+          child: estado == 'aceptado'
+              ? _buildEnCaminoPanel(t)
+              : (estado == 'en_curso' && _isNearDestination)
+                  ? _buildLlegadaDestinoPanel(t)
+                  : _buildTripPanel(t, origen, destino, estado),
         ),
       ],
     );

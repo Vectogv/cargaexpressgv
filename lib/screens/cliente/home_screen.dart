@@ -31,6 +31,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   Map<String, dynamic>? _activeTrip;
   bool _loading = true;
   int _notifUnread = 0;
+  bool _redirected = false;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
 
   final List<_NavItem> _navItems = [
@@ -46,15 +47,27 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
     _socketSub = NotificationService.instance.onNotification.listen((event) {
       final tipo = event['__event'] as String?;
+
       if (tipo == 'trip:status' || tipo == 'trip:cancelled') {
         _loadActiveTrip();
       }
+
       if (tipo == 'trip:cancelled' && mounted) {
         CacheService.instance.clearDriverPosition();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('El viaje ha sido cancelado por el conductor')),
         );
       }
+
+      // Redirigir a RastreoScreen cuando llegan ofertas
+      if (tipo == 'new:offer' && mounted && _activeTrip != null) {
+        // Solo redirigir si estamos en la pantalla raíz (evitar push duplicado)
+        final route = ModalRoute.of(context);
+        if (route?.isFirst == true) {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const RastreoScreen()));
+        }
+      }
+
       if (mounted) setState(() => _notifUnread = NotificationService.instance.unreadCount);
     });
 
@@ -73,9 +86,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
         CacheService.instance.cacheActiveTrip(trip);
         if (mounted) {
           setState(() { _activeTrip = trip; _loading = false; });
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _redirectToTracking();
-          });
+          if (!_redirected) {
+            _redirected = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _redirectToTracking();
+            });
+          }
         }
       } else {
         CacheService.instance.clearActiveTrip();
@@ -88,12 +104,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
   void _redirectToTracking() {
     if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const RastreoScreen()),
-      );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RastreoScreen()),
+    ).then((_) {
+      _redirected = false;
+      _loadActiveTrip();
     });
   }
 

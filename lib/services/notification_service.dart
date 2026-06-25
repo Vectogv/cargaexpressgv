@@ -1,69 +1,81 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
-import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'api_client.dart';
+import 'socket_service_client.dart';
 import 'logger_service.dart';
-import 'network_monitor_service.dart';
 
 class NotificationService {
   static final NotificationService instance = NotificationService._();
   NotificationService._();
 
-  IO.Socket? _socket;
   final List<Map<String, dynamic>> _notifications = [];
   final _controller = StreamController<Map<String, dynamic>>.broadcast();
   bool _initialized = false;
   String? _fcmToken;
   final Set<String> _processedTripIds = {};
 
-  int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 50;
-  Timer? _reconnectTimer;
-  StreamSubscription<bool>? _networkSub;
+  // Subscripciones a SocketServiceClient (reemplaza el socket propio)
+  StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
+  StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
+  StreamSubscription<Map<String, dynamic>>? _tripCancelledSub;
+  StreamSubscription<Map<String, dynamic>>? _notificationSub;
 
   List<Map<String, dynamic>> get notifications => List.unmodifiable(_notifications);
-
   int get unreadCount => _notifications.where((n) => n['read'] != true).length;
-
   Stream<Map<String, dynamic>> get onNotification => _controller.stream;
-
   String? get fcmToken => _fcmToken;
 
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
 
-    _networkSub = NetworkMonitorService.instance.onConnectionChanged.listen((online) {
-      if (online && _socket != null && !(_socket!.connected)) {
-        LoggerService.instance.info('NotificationService: network restored, reconnecting socket');
-        _scheduleReconnect();
-      }
+    await _initFcm();
+    _subscribeToSocketService();
+  }
+
+  // En lugar de abrir un socket propio, escuchar del SocketServiceClient existente
+  void _subscribeToSocketService() {
+    _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
+      _addNotification({...data, '__event': 'trip:status'});
     });
 
-    await _initFcm();
-    _initSocket();
+    _tripAcceptedSub = SocketServiceClient.instance.onTripAccepted.listen((data) {
+      _addNotification({...data, '__event': 'trip:accepted'});
+    });
+
+    _tripCancelledSub = SocketServiceClient.instance.onTripCancelled.listen((data) {
+      _addNotification({...data, '__event': 'trip:cancelled'});
+    });
+
+    _notificationSub = SocketServiceClient.instance.onNotification.listen((data) {
+      final event = data['__event'] as String? ?? '';
+
+      if (event == 'trip:nearby') {
+        final tripId = (data['tripId'] ?? data['id'])?.toString();
+        if (tripId != null && _processedTripIds.contains(tripId)) return;
+        if (tripId != null) _processedTripIds.add(tripId);
+      }
+
+      _addNotification(data);
+    });
+  }
+
+  void _addNotification(Map<String, dynamic> data) {
+    _notifications.insert(0, data);
+    if (!_controller.isClosed) _controller.add(data);
   }
 
   Future<void> _initFcm() async {
     if (kIsWeb) return;
     try {
       final messaging = FirebaseMessaging.instance;
-
-      await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
 
       _fcmToken = await messaging.getToken();
-
-      if (_fcmToken != null) {
-        await _registerToken(_fcmToken!);
-      }
+      if (_fcmToken != null) await _registerToken(_fcmToken!);
 
       messaging.onTokenRefresh.listen((newToken) {
         _fcmToken = newToken;
@@ -71,13 +83,10 @@ class NotificationService {
       });
 
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
       FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
       final initialMessage = await messaging.getInitialMessage();
-      if (initialMessage != null) {
-        _handleNotificationTap(initialMessage);
-      }
+      if (initialMessage != null) _handleNotificationTap(initialMessage);
     } catch (e) {
       LoggerService.instance.error('NotificationService._initFcm error', e);
     }
@@ -87,13 +96,9 @@ class NotificationService {
     try {
       final authToken = ApiClient.instance.token;
       if (authToken == null) return;
-
       await http.put(
         Uri.parse('${ApiClient.baseUrl}/api/users/fcm-token'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $authToken'},
         body: jsonEncode({'fcmToken': token}),
       );
     } catch (e) {
@@ -102,163 +107,37 @@ class NotificationService {
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    final notif = message.notification;
     final data = message.data;
-
     if (data['type'] == 'new_trip' || data['event'] == 'trip:nearby') {
       final tripId = data['tripId'] ?? data['id'];
       if (tripId != null && _processedTripIds.contains(tripId.toString())) return;
       if (tripId != null) _processedTripIds.add(tripId.toString());
     }
-
     final entry = <String, dynamic>{
-      if (notif?.title != null) 'title': notif!.title,
-      if (notif?.body != null) 'body': notif!.body,
+      if (message.notification?.title != null) 'title': message.notification!.title,
+      if (message.notification?.body != null) 'body': message.notification!.body,
       if (data.isNotEmpty) ...data,
       '__source': 'fcm',
     };
-    _notifications.insert(0, entry);
-    _controller.add(entry);
+    _addNotification(entry);
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    final notif = message.notification;
     final data = message.data;
-
     final entry = <String, dynamic>{
-      if (notif?.title != null) 'title': notif!.title,
-      if (notif?.body != null) 'body': notif!.body,
+      if (message.notification?.title != null) 'title': message.notification!.title,
+      if (message.notification?.body != null) 'body': message.notification!.body,
       if (data.isNotEmpty) ...data,
       '__source': 'fcm',
       '__tap': true,
     };
-
     if (data['type'] == 'new_trip' || data['event'] == 'trip:nearby') {
       entry['__navigate'] = 'offers';
     }
-
-    _controller.add(entry);
+    _addNotification(entry);
   }
 
-  void _initSocket() {
-    final token = ApiClient.instance.token;
-    final baseUrl = ApiClient.baseUrl;
-
-    if (token == null) return;
-
-    try {
-      _socket?.dispose();
-      _socket = IO.io(baseUrl, <String, dynamic>{
-        'transports': ['websocket'],
-        'query': {'token': token},
-        'forceNew': true,
-        'reconnection': false,
-      });
-
-      _socket!.on('connect', (_) {
-        _reconnectAttempts = 0;
-        LoggerService.instance.info('NotificationService socket connected');
-        final userId = ApiClient.instance.userId;
-        if (userId != null) {
-          _socket!.emit('join:client', {'userId': userId});
-        }
-      });
-
-      _socket!.on('disconnect', (_) {
-        LoggerService.instance.warning('NotificationService socket disconnected');
-        _scheduleReconnect();
-      });
-
-      _socket!.on('connect_error', (error) {
-        LoggerService.instance.error('NotificationService socket connect_error', error);
-        _scheduleReconnect();
-      });
-
-      final adminEvents = [
-        'admin:new_user',
-        'admin:new_driver',
-        'admin:new_trip',
-        'admin:trip_completed',
-        'admin:payment_received',
-        'admin:user_banned',
-        'admin:driver_approved',
-        'admin:report',
-      ];
-
-      final driverEvents = [
-        'trip:accepted',
-        'trip:nearby',
-        'trip:cancelled',
-        'driver:stop_gps',
-      ];
-
-      void handleEvent(Map<String, dynamic> data, String event) {
-        final notification = Map<String, dynamic>.from(data);
-        notification['__event'] = event;
-        notification['__source'] = 'socket';
-
-        if (event == 'trip:nearby') {
-          final tripId = data['tripId'] ?? data['id'];
-          if (tripId != null && _processedTripIds.contains(tripId.toString())) return;
-          if (tripId != null) _processedTripIds.add(tripId.toString());
-          _notifications.insert(0, notification);
-          _controller.add(notification);
-        } else if (event == 'trip:accepted') {
-          _notifications.insert(0, notification);
-          _controller.add(notification);
-        } else {
-          _notifications.insert(0, notification);
-          _controller.add(notification);
-        }
-      }
-
-      void safeOn(String event, void Function(dynamic) handler) {
-        _socket!.on(event, (data) {
-          try {
-            handler(data);
-          } catch (e, s) {
-            LoggerService.instance.error('NotificationService socket event "$event" error', e, s);
-          }
-        });
-      }
-
-      for (final ev in [...adminEvents, ...driverEvents]) {
-        safeOn(ev, (data) {
-          if (data is Map) {
-            handleEvent(Map<String, dynamic>.from(data), ev);
-          }
-        });
-      }
-    } catch (e) {
-      LoggerService.instance.error('NotificationService._initSocket error', e);
-      _scheduleReconnect();
-    }
-  }
-
-  void _scheduleReconnect() {
-    _reconnectTimer?.cancel();
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
-      LoggerService.instance.warning('NotificationService: max reconnect attempts reached');
-      return;
-    }
-
-    if (!NetworkMonitorService.instance.isOnline) {
-      return;
-    }
-
-    _reconnectAttempts++;
-    final delay = Duration(milliseconds: min(1000 * pow(2, _reconnectAttempts).toInt(), 30000));
-
-    _reconnectTimer = Timer(delay, () {
-      if (ApiClient.instance.token != null) {
-        _initSocket();
-      }
-    });
-  }
-
-  void clearDuplicateTracking() {
-    _processedTripIds.clear();
-  }
+  void clearDuplicateTracking() => _processedTripIds.clear();
 
   void markAllRead() {
     for (int i = 0; i < _notifications.length; i++) {
@@ -267,10 +146,10 @@ class NotificationService {
   }
 
   void dispose() {
-    _reconnectTimer?.cancel();
-    _networkSub?.cancel();
-    _socket?.disconnect();
-    _socket?.dispose();
+    _tripStatusSub?.cancel();
+    _tripAcceptedSub?.cancel();
+    _tripCancelledSub?.cancel();
+    _notificationSub?.cancel();
     _controller.close();
   }
 }

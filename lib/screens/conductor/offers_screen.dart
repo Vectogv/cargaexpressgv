@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/socket_service_client.dart';
 import 'trip_in_progress_screen.dart';
 
 class OffersScreen extends StatefulWidget {
@@ -16,6 +18,8 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
   bool _loadingActive = true;
   bool _loadingHistory = true;
 
+  StreamSubscription<Map<String, dynamic>>? _offerAcceptedSub;
+
   static const Color _primaryBlue = Color(0xFF1565C0);
   static const Color _accentGreen = Color(0xFF4CAF50);
   static const Color _textDark = Color(0xFF1A1A2E);
@@ -27,11 +31,15 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _fetchData();
+    _offerAcceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((_) {
+      if (mounted) _fetchData();
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _offerAcceptedSub?.cancel();
     super.dispose();
   }
 

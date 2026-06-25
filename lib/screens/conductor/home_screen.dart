@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
   int _knownNearbyCount = 0;
   final Set<String> _offeredTripIds = {};
+  final Set<String> _activeBannerIds = {};
 
   static const Color _primaryBlue = Color(0xFF1A3C6E);
   static const Color _accentBlue = Color(0xFF2563EB);
@@ -123,21 +124,29 @@ class _HomeScreenState extends State<HomeScreen> {
       _redirectToActiveTrip();
       return;
     }
-    if (_online && _verificacionEstado == 'aprobado') {
-      try {
-        await ApiClient.instance.setDriverStatus(true);
-      } catch (_) {}
+    if (_online) {
+      final estado = _verificacionEstado;
+      if (estado == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudo verificar tu estado. Revisa tu conexión e intenta de nuevo.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 6),
+            ),
+          );
+          setState(() => _online = false);
+        }
+        return;
+      }
+      if (estado != 'aprobado') return;
+      try { await ApiClient.instance.setDriverStatus(true); } catch (_) {}
       if (!await DriverLocationService.instance.start()) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Permiso de ubicación denegado. Actívalo en Ajustes.'),
-              action: SnackBarAction(
-                label: 'Abrir',
-                textColor: Colors.yellow,
-                onPressed: () => openAppSettings(),
-              ),
-              duration: const Duration(seconds: 8),
+            const SnackBar(
+              content: Text('Permiso de ubicación denegado. Actívalo en Ajustes.'),
+              backgroundColor: Colors.red,
             ),
           );
         }
@@ -181,33 +190,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _toggleStatus() async {
-    setState(() => _statusLoading = true);
+    if (mounted) setState(() => _statusLoading = true);
     try {
-      await ApiClient.instance.setDriverStatus(!_online);
-      if (mounted) {
-        setState(() => _online = !_online);
-        if (_online) {
-          if (!await DriverLocationService.instance.start()) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Permiso de ubicación denegado. Actívalo en Ajustes.'),
-                  action: SnackBarAction(
-                    label: 'Abrir',
-                    textColor: Colors.yellow,
-                    onPressed: () => openAppSettings(),
-                  ),
-                  duration: const Duration(seconds: 8),
-                ),
-              );
-            }
-          }
-        } else {
-          DriverLocationService.instance.pause();
+      if (!_online) {
+        // Verificar estado primero
+        final estado = _verificacionEstado;
+        if (estado == null) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cargando tu perfil... intenta en un momento'), backgroundColor: Colors.orange),
+          );
+          return;
         }
+        if (estado != 'aprobado') {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tu cuenta no está aprobada para recibir viajes'), backgroundColor: Colors.orange),
+          );
+          return;
+        }
+        // Intentar GPS primero
+        final gpsOk = await DriverLocationService.instance.start();
+        if (!gpsOk) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Permiso de ubicación denegado. Actívalo en Ajustes.'), backgroundColor: Colors.red),
+          );
+          return; // NO marcar online si GPS falló
+        }
+        try { await ApiClient.instance.setDriverStatus(true); } catch (_) {}
+        if (mounted) setState(() => _online = true); // Solo aquí
+      } else {
+        DriverLocationService.instance.pause();
+        try { await ApiClient.instance.setDriverStatus(false); } catch (_) {}
+        if (mounted) setState(() => _online = false);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
+      );
     } finally {
       if (mounted) setState(() => _statusLoading = false);
     }
@@ -215,31 +233,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showNewTripBanner(Map<String, dynamic> event) {
     if (!mounted) return;
-    final origen = event['origen'] as Map<String, dynamic>?;
-    final dir = origen?['direccion'] as String? ?? 'tu zona';
-    final precio = event['precio'] ?? event['precioEstimado'];
-    final msg = 'Nuevo viaje disponible cerca de $dir${precio != null ? ' \u2014 \$${precio}' : ''}';
+    final tripId = (event['id'] ?? event['_id'])?.toString();
+    if (tripId == null) return;
+    if (_activeBannerIds.contains(tripId)) return; // deduplicar
+    _activeBannerIds.add(tripId);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(children: [
-          const Icon(Icons.local_shipping, color: Colors.white, size: 18),
-          const SizedBox(width: 10),
-          Expanded(child: Text(msg, style: const TextStyle(color: Colors.white))),
-        ]),
-        backgroundColor: const Color(0xFF1565C0),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 6),
-          action: SnackBarAction(
-            label: 'Ver',
-            textColor: Colors.yellow,
-            onPressed: () async {
-              if (event['id'] == null && event['_id'] == null) return;
-              final tripId = (event['id'] ?? event['_id']).toString();
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => ConductorTripDetailScreen(trip: event)));
-              _offeredTripIds.add(tripId);
-              _resetNearbyNotificationState();
-            },
-          ),
+        content: Text('Nueva solicitud de viaje cerca de ti'),
+        duration: const Duration(seconds: 25),
+        action: SnackBarAction(
+          label: 'Ver',
+          onPressed: () async {
+            _offeredTripIds.add(tripId);       // antes de navegar
+            _activeBannerIds.remove(tripId);
+            _resetNearbyNotificationState();
+            await Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ConductorTripDetailScreen(trip: event),
+            ));
+          },
+        ),
       ),
     );
   }

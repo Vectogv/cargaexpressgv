@@ -44,7 +44,10 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
   bool _cancelling = false;
 
   Future<void> _iniciarViaje() async {
-    final tripId = widget.trip['viajeId']?.toString() ?? widget.trip['tripId']?.toString() ?? widget.trip['id']?.toString();
+    final tripId = widget.trip['viajeId']?.toString()
+        ?? widget.trip['tripId']?.toString()
+        ?? widget.trip['id']?.toString()
+        ?? widget.trip['_id']?.toString();
     if (tripId == null || tripId.isEmpty) {
       _snack('Error: ID del viaje no disponible');
       return;
@@ -75,7 +78,10 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
   }
 
   Future<void> _cancelarViaje() async {
-    final tripId = widget.trip['viajeId']?.toString() ?? widget.trip['tripId']?.toString() ?? widget.trip['id']?.toString();
+    final tripId = widget.trip['viajeId']?.toString()
+        ?? widget.trip['tripId']?.toString()
+        ?? widget.trip['id']?.toString()
+        ?? widget.trip['_id']?.toString();
     if (tripId == null || tripId.isEmpty) {
       _snack('Error: ID del viaje no disponible');
       return;

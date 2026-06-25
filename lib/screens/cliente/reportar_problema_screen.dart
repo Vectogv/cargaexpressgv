@@ -252,7 +252,7 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                         descripcion: _descController.text.trim(),
                       );
                       final numero = result['numero_disputa'] as String? ?? 'DSP-00001';
-                      final disputeId = result['id'];
+                      final disputeId = result['id']?.toString() ?? result['_id']?.toString() ?? '';
                       if (!mounted) return;
                       widget.onSubmitted();
                       Navigator.pushReplacement(

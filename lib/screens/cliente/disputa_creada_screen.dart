@@ -115,18 +115,18 @@ class DisputaCreadaScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               height: 52,
-            child: OutlinedButton(
-                    onPressed: () {
-                    if (!context.mounted) return;
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DisputaEnRevisionScreen(
-                          disputeId: disputeId,
-                        ),
+              child: OutlinedButton(
+                onPressed: () {
+                  if (!context.mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DisputaEnRevisionScreen(
+                        disputeId: disputeId,
                       ),
-                    );
-                  },
+                    ),
+                  );
+                },
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
                   shape: RoundedRectangleBorder(
@@ -139,6 +139,30 @@ class DisputaCreadaScreen extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF2563EB),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF9CA3AF), width: 1.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Volver al inicio',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
                   ),
                 ),
               ),

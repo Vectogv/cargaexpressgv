@@ -24,6 +24,8 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
   StreamSubscription<Map<String, dynamic>>? _rejectedSub;
   bool _isNavigating = false;
   bool _hasError = false;
+  Timer? _pollTimer;
+  Timer? _timeoutTimer;
 
   static const Color _accentBlue = Color(0xFF2563EB);
   static const Color _lightBlue = Color(0xFFEFF6FF);
@@ -61,6 +63,39 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
           const SnackBar(content: Text('El cliente rechazó tu oferta')),
         );
       });
+    });
+
+    // Polling de respaldo cada 30 segundos (por si el socket falla)
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (_isNavigating || !mounted) return;
+      try {
+        final tripId = widget.tripId?.toString();
+        if (tripId == null || tripId.isEmpty) return;
+        final detail = await ApiClient.instance.getTripDetail(tripId);
+        final estado = detail['estado'] as String?;
+        if (estado == 'aceptado' && !_isNavigating && mounted) {
+          _isNavigating = true;
+          Navigator.pushReplacement(context, MaterialPageRoute(
+            builder: (_) => OfertaAceptadaScreen(trip: detail),
+          ));
+        } else if ((estado == 'cancelado' || estado == 'expirado') && !_isNavigating && mounted) {
+          _isNavigating = true;
+          Navigator.maybePop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('El viaje ya no está disponible')),
+          );
+        }
+      } catch (_) {}
+    });
+
+    // Timeout de 10 minutos sin respuesta
+    _timeoutTimer = Timer(const Duration(minutes: 10), () {
+      if (_isNavigating || !mounted) return;
+      _isNavigating = true;
+      Navigator.maybePop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La oferta expiró sin respuesta del cliente')),
+      );
     });
   }
 
@@ -123,6 +158,8 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
   void dispose() {
     _acceptedSub?.cancel();
     _rejectedSub?.cancel();
+    _pollTimer?.cancel();
+    _timeoutTimer?.cancel();
     super.dispose();
   }
 

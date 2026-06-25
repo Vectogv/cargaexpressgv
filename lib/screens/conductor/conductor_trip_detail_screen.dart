@@ -369,17 +369,42 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         width: double.infinity,
         height: 50,
         child: ElevatedButton(
-          onPressed: (_enviandoOferta || _placa == null) ? null : _showOfferSheet,
+          onPressed: _enviandoOferta ? null : () {
+            if (_placa == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Cargando datos de tu vehículo, intenta en un momento...'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+              return;
+            }
+            _showOfferSheet();
+          },
           style: ElevatedButton.styleFrom(
-            backgroundColor: _accentBlue,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            backgroundColor: const Color(0xFF2563EB),
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             elevation: 0,
           ),
           child: _enviandoOferta
-              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-              : const Text(
-                  'Hacer oferta',
-                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+              ? const SizedBox(width: 22, height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_placa == null) ...[
+                      const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      _placa == null ? 'Cargando...' : 'Hacer oferta',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
         ),
       ),
