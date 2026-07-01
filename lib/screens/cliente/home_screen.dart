@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../contracts/trip_status.dart';
+import '../../contracts/socket_events.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
@@ -48,11 +50,11 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     _socketSub = NotificationService.instance.onNotification.listen((event) {
       final tipo = event['__event'] as String?;
 
-      if (tipo == 'trip:status' || tipo == 'trip:cancelled') {
+      if (tipo == SocketEvents.tripStatusChanged || tipo == SocketEvents.tripCancelled) {
         _loadActiveTrip();
       }
 
-      if (tipo == 'trip:cancelled' && mounted) {
+      if (tipo == SocketEvents.tripCancelled && mounted) {
         CacheService.instance.clearDriverPosition();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('El viaje ha sido cancelado por el conductor')),
@@ -60,7 +62,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       }
 
       // Redirigir a RastreoScreen cuando llegan ofertas
-      if (tipo == 'new:offer' && mounted && _activeTrip != null) {
+      if (tipo == SocketEvents.newOffer && mounted && _activeTrip != null) {
         // Solo redirigir si estamos en la pantalla raíz (evitar push duplicado)
         final route = ModalRoute.of(context);
         if (route?.isFirst == true) {
@@ -115,12 +117,14 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
 
   String _estadoLabel(String? estado) {
     switch (estado) {
-      case 'buscando_conductor': return 'Buscando conductor';
-      case 'aceptado': return 'Conductor asignado';
-      case 'en_curso': return 'En camino a destino';
-      case 'esperando_confirmacion': return 'Entrega completada';
-      case 'finalizado': return 'Finalizado';
-      case 'cancelado': return 'Cancelado';
+      case TripStatus.buscando: return 'Buscando conductor';
+      case TripStatus.aceptado: return 'Conductor asignado';
+      case TripStatus.enCamino: return 'Conductor en camino';
+      case TripStatus.llegada: return 'Conductor llegó';
+      case TripStatus.enCurso: return 'En camino a destino';
+      case TripStatus.esperaConfirmacion: return 'Entrega completada';
+      case TripStatus.finalizado: return 'Finalizado';
+      case TripStatus.cancelado: return 'Cancelado';
       default: return estado ?? '';
     }
   }

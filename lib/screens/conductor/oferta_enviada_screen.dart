@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../contracts/trip_status.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/api_client.dart';
 import '../../services/logger_service.dart';
@@ -73,12 +74,12 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
         if (tripId == null || tripId.isEmpty) return;
         final detail = await ApiClient.instance.getTripDetail(tripId);
         final estado = detail['estado'] as String?;
-        if (estado == 'aceptado' && !_isNavigating && mounted) {
+        if ((estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso) && !_isNavigating && mounted) {
           _isNavigating = true;
           Navigator.pushReplacement(context, MaterialPageRoute(
             builder: (_) => OfertaAceptadaScreen(trip: detail),
           ));
-        } else if ((estado == 'cancelado' || estado == 'expirado') && !_isNavigating && mounted) {
+        } else if ((estado == TripStatus.cancelado || estado == 'expirado') && !_isNavigating && mounted) {
           _isNavigating = true;
           Navigator.maybePop(context);
           ScaffoldMessenger.of(context).showSnackBar(

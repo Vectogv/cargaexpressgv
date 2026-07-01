@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/socket_service_client.dart';
@@ -34,7 +35,23 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _secondsLeft = (widget.trip['expiresIn'] as int?) ?? 30;
+    final expiresIn = widget.trip['expiresIn'] as int?;
+    if (expiresIn != null) {
+      _secondsLeft = expiresIn;
+    } else {
+      final createdAt = widget.trip['created_at'] as String?;
+      if (createdAt != null) {
+        try {
+          final created = DateTime.parse(createdAt);
+          final elapsed = DateTime.now().difference(created).inSeconds;
+          _secondsLeft = (28 - elapsed).clamp(0, 28);
+        } catch (_) {
+          _secondsLeft = 28;
+        }
+      } else {
+        _secondsLeft = 28;
+      }
+    }
     _expireTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_secondsLeft <= 0) {
         t.cancel();
@@ -67,7 +84,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
       if (_matchTripId(data, tripId)) {
         final estado = data['estado'] as String?;
-        if (estado == 'cancelado' && mounted) {
+        if (estado == TripStatus.cancelado && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Este viaje ya no está disponible.')),
           );

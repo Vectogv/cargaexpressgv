@@ -12,6 +12,10 @@ class ViajeEnCaminoScreen extends StatelessWidget {
   final VoidCallback? onLlamar;
   final VoidCallback? onCancelarViaje;
   final VoidCallback? onBack;
+  final String? actionLabel;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
+  final String? bannerMessage;
 
   const ViajeEnCaminoScreen({
     super.key,
@@ -25,6 +29,10 @@ class ViajeEnCaminoScreen extends StatelessWidget {
     this.onLlamar,
     this.onCancelarViaje,
     this.onBack,
+    this.actionLabel,
+    this.actionIcon,
+    this.onAction,
+    this.bannerMessage,
   });
 
   static const Color _primaryBlue = Color(0xFF1A3C6E);
@@ -95,20 +103,20 @@ class ViajeEnCaminoScreen extends StatelessWidget {
                     color: _primaryBlue,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'En camino al punto de recogida',
-                        style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'A $distancia de distancia',
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
-                    ],
-                  ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bannerMessage ?? 'En camino al punto de recogida',
+                          style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          bannerMessage != null ? distancia : 'A $distancia de distancia',
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      ],
+                    ),
                 ),
               ),
             ),
@@ -186,6 +194,38 @@ class ViajeEnCaminoScreen extends StatelessWidget {
   }
 
   Widget _buildBottomBar() {
+    if (onAction != null && actionLabel != null) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: _divider)),
+        ),
+        child: Row(
+          children: [
+            Expanded(child: _buildTextBtn(Icons.chat_bubble_outline_rounded, 'Chat', onChat)),
+            Expanded(child: _buildTextBtn(Icons.phone_outlined, 'Llamar', onLlamar)),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: ElevatedButton.icon(
+                onPressed: onAction,
+                icon: Icon(actionIcon ?? Icons.play_arrow_rounded, size: 20),
+                label: Text(actionLabel!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       decoration: const BoxDecoration(

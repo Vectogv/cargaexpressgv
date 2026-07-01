@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'api_client.dart';
+import '../contracts/socket_events.dart';
 import 'socket_service_client.dart';
 import 'logger_service.dart';
 
@@ -39,7 +40,7 @@ class NotificationService {
   // En lugar de abrir un socket propio, escuchar del SocketServiceClient existente
   void _subscribeToSocketService() {
     _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
-      _addNotification({...data, '__event': 'trip:status'});
+      _addNotification({...data, '__event': SocketEvents.tripStatusChanged});
     });
 
     _tripAcceptedSub = SocketServiceClient.instance.onTripAccepted.listen((data) {

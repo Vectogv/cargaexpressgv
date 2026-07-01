@@ -3,10 +3,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 
+import '../../contracts/trip_status.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/api/offer_service.dart';
+import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
+import '../../services/network_monitor_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
 import 'cancel_trip_screen.dart';
 import 'ofertas_recibidas_screen.dart';
@@ -27,10 +32,12 @@ class RastreoScreen extends StatefulWidget {
 }
 
 class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProviderStateMixin {
+  static const double _proximidadKm = 1.0;
+  static const double _zonaKm = 0.05;
   late final AnimationController _pulseCtrl;
   Map<String, dynamic>? _trip;
   List<Map<String, dynamic>> _ofertas = [];
-  String _status = 'buscando_conductor';
+  String _status = TripStatus.buscando;
   bool _loading = false;
   bool _cancelling = false;
   bool _hasOffers = false;
@@ -50,6 +57,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   StreamSubscription<Map<String, dynamic>>? _tripFinalizedSub;
 
   Timer? _pollingTimer;
+  Timer? _fallbackPollingTimer;
   Timer? _proximityTimer;
   bool _proximityAlertShown = false;
   bool _conductorEnLaZonaShown = false;
@@ -89,15 +97,25 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         _socketListenersSetUp = true;
       }
 
-      if (_trip != null && _status != 'buscando_conductor') {
+      if (_trip != null && _status != TripStatus.buscando) {
         await _startLocationUpdates();
       }
 
-      if (_status == 'buscando_conductor' && mounted) {
+      if (_status == TripStatus.buscando && mounted) {
         _startPolling();
       }
+
+      _startFallbackPolling();
     } catch (e) {
       debugPrint('Error en _load: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error al cargar el viaje. Verifica tu conexión.'),
+            action: SnackBarAction(label: 'Reintentar', onPressed: _load),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -152,11 +170,14 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   void _setupSocketListeners() {
     _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
       final newStatus = (data['estado'] ?? data['status']) as String?;
-      if (newStatus != null && mounted) {
+      if (newStatus != null && newStatus != _status && mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          setState(() => _status = newStatus);
-          if (newStatus == 'aceptado' || newStatus == 'en_curso') {
+          setState(() {
+            _status = newStatus;
+            _trip = data;
+          });
+          if (newStatus == TripStatus.aceptado || newStatus == TripStatus.enCamino || newStatus == TripStatus.llegada || newStatus == TripStatus.enCurso) {
             _startLocationUpdates();
           }
         });
@@ -208,7 +229,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     _tripAcceptedSub = SocketServiceClient.instance.onTripAccepted.listen((data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() => _status = 'aceptado');
+        setState(() => _status = TripStatus.aceptado);
         _startLocationUpdates();
       });
     });
@@ -216,7 +237,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     _tripStartedSub = SocketServiceClient.instance.onTripStarted.listen((data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() => _status = 'en_curso');
+        setState(() => _status = TripStatus.enCurso);
         _startLocationUpdates();
       });
     });
@@ -257,7 +278,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   void _startPolling() {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (!mounted || _status != 'buscando_conductor') {
+      if (!mounted || _status != TripStatus.buscando) {
         _pollingTimer?.cancel();
         return;
       }
@@ -267,7 +288,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
           setState(() {
             _trip = trip;
             final estado = trip['estado'] as String?;
-            if (estado == 'aceptado' || estado == 'en_curso') {
+            if (estado == TripStatus.aceptado || estado == TripStatus.enCurso) {
               _status = estado!;
               _pollingTimer?.cancel();
             }
@@ -277,11 +298,42 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     });
   }
 
+  void _startFallbackPolling() {
+    _fallbackPollingTimer?.cancel();
+    _fallbackPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!mounted) { _fallbackPollingTimer?.cancel(); return; }
+      if (SocketServiceClient.instance.isConnected) return;
+      try {
+        final trip = await TripService.getActiveTrip();
+        if (trip != null && mounted) {
+          final estado = trip['estado'] as String?;
+          if (estado != null && estado != _status) {
+            setState(() {
+              _trip = trip;
+              _status = estado;
+            });
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
   Future<void> _startLocationUpdates() async {
-    // El stream GPS del cliente no necesita hacer nada activamente.
-    // El conductor emite su posición por socket; el cliente solo la recibe.
     _positionSub?.cancel();
-    _positionSub = null;
+    var status = await Permission.location.status;
+    if (!status.isGranted) {
+      status = await Permission.location.request();
+      if (!status.isGranted) return;
+    }
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+    } catch (_) {}
   }
 
   double _distanceToPickup() {
@@ -316,11 +368,11 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
 
   void _checkProximity() {
     final dist = _distanceToPickup();
-    if (dist < 1.0 && !_proximityAlertShown && _status == 'aceptado') {
+    if (dist < _proximidadKm && !_proximityAlertShown && _status == TripStatus.aceptado) {
       _proximityAlertShown = true;
       _showProximityAlert();
     }
-    if (dist < 0.05 && !_conductorEnLaZonaShown) {
+    if (dist < _zonaKm && !_conductorEnLaZonaShown) {
       _conductorEnLaZonaShown = true;
       _showConductorEnLaZona();
     }
@@ -364,7 +416,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     if (_cancelling) return;
     setState(() => _cancelling = true);
     try {
-      if (_status == 'en_curso') {
+      if (_status == TripStatus.enCurso) {
         await TripService.requestCancellation(_trip?['id'] ?? '', motivo: 'Cancelado por el usuario');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -389,7 +441,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   void _cancelar() {
     Navigator.push<Map<String, dynamic>>(
       context,
-      MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: _status == 'en_curso')),
+      MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: _status == TripStatus.enCurso)),
     ).then((result) {
       if (result != null) {
         _doCancel();
@@ -457,6 +509,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _fallbackPollingTimer?.cancel();
     _proximityTimer?.cancel();
     _positionSub?.cancel();
     _tripStatusSub?.cancel();
@@ -497,15 +550,19 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
 
   String _getAppBarTitle() {
     switch (_status) {
-      case 'buscando_conductor':
+      case TripStatus.buscando:
         return 'Buscando conductor';
-      case 'aceptado':
+      case TripStatus.aceptado:
         return 'Conductor asignado';
-      case 'en_curso':
+      case TripStatus.enCamino:
+        return 'Conductor en camino';
+      case TripStatus.llegada:
+        return 'Conductor llegó';
+      case TripStatus.enCurso:
         return 'Viaje en curso';
-      case 'entregado':
+      case TripStatus.entregado:
         return 'Viaje entregado';
-      case 'esperando_confirmacion':
+      case TripStatus.esperaConfirmacion:
         return 'Viaje completado';
       default:
         return 'Rastreo';
@@ -513,7 +570,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   }
 
   List<Widget> _buildAppBarActions() {
-    if (_hasOffers && _status == 'buscando_conductor') {
+    if (_hasOffers && _status == TripStatus.buscando) {
       return [
         Stack(
           children: [
@@ -564,14 +621,83 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     }
 
     switch (_status) {
-      case 'buscando_conductor':
+      case TripStatus.buscando:
         return _buildSearchContent();
-      case 'aceptado':
-      case 'en_curso':
+      case TripStatus.aceptado:
+      case TripStatus.enCamino:
+      case TripStatus.llegada:
+      case TripStatus.enCurso:
         return _buildTrackingContent();
+      case TripStatus.entregado:
+      case TripStatus.esperaConfirmacion:
+        return _buildDeliveryContent();
       default:
         return _buildSearchContent();
     }
+  }
+
+  Widget _buildDeliveryContent() {
+    if (_status == TripStatus.esperaConfirmacion) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.hourglass_top, size: 80, color: Color(0xFFF59E0B)),
+              const SizedBox(height: 24),
+              const Text(
+                'Esperando confirmación',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'El conductor ha solicitado la confirmación de entrega.\nRevisa la carga y confirma en la pantalla de confirmación.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showFinalizeConfirmation(),
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Ir a confirmación'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle_outline, size: 80, color: Color(0xFF2563EB)),
+            const SizedBox(height: 24),
+            const Text(
+              'Viaje completado',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Estado: ${_getAppBarTitle()}',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildSearchContent() {

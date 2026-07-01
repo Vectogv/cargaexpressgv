@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../contracts/trip_status.dart';
+import '../../contracts/socket_events.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
@@ -73,9 +75,9 @@ class _HomeScreenState extends State<HomeScreen> {
           CacheService.instance.cacheActiveTrip(_activeTrip!);
           _redirectToActiveTrip();
         }
-      } else if (tipo == 'trip:status') {
+      } else if (tipo == SocketEvents.tripStatusChanged) {
         final estado = event['estado'] as String?;
-        if (estado == 'esperando_confirmacion' || estado == 'finalizado' || estado == 'cancelado') {
+        if (estado == TripStatus.esperaConfirmacion || estado == TripStatus.finalizado || estado == TripStatus.cancelado) {
           if (mounted) setState(() => _activeTrip = null);
         } else {
           _fetchActiveTrip();
@@ -112,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final cachedTrip = CacheService.instance.getCachedActiveTrip();
     if (cachedTrip != null) {
       final estado = cachedTrip['estado'] as String?;
-      if (estado == 'aceptado' || estado == 'en_curso') {
+      if (estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso || estado == TripStatus.entregado || estado == TripStatus.esperaConfirmacion) {
         if (mounted) setState(() => _activeTrip = cachedTrip);
         _redirectToActiveTrip();
         return;
@@ -167,7 +169,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final trip = await ApiClient.instance.getActiveTrip();
       if (trip != null) {
         final estado = trip['estado'] as String?;
-        if (estado == 'aceptado' || estado == 'en_curso') {
+        final activeStates = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion];
+        if (activeStates.contains(estado)) {
           CacheService.instance.cacheActiveTrip(trip);
           if (mounted) setState(() => _activeTrip = trip);
           return;
@@ -588,7 +591,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final cliente = t['cliente'] as Map<String, dynamic>?;
     final nombre = cliente?['nombre'] as String? ?? 'Cliente';
     final estado = t['estado'] as String? ?? '';
-    final estadoLabel = estado == 'aceptado' ? 'Aceptado' : 'En curso';
+    String estadoLabel;
+    switch (estado) {
+      case TripStatus.aceptado: estadoLabel = 'Aceptado'; break;
+      case TripStatus.enCamino: estadoLabel = 'En camino'; break;
+      case TripStatus.llegada: estadoLabel = 'Llegada al origen'; break;
+      case TripStatus.enCurso: estadoLabel = 'En curso'; break;
+      case TripStatus.entregado: estadoLabel = 'Entregado'; break;
+      case TripStatus.esperaConfirmacion: estadoLabel = 'Esperando confirmación'; break;
+      default: estadoLabel = 'Activo';
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16),

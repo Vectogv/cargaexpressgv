@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
 import 'trip_in_progress_screen.dart';
@@ -165,9 +166,13 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     Color c;
     String label;
     switch (estado) {
-      case 'aceptado': c = const Color(0xFFFF8F00); label = 'Aceptado — Dirígete al origen'; break;
-      case 'en_curso': c = _primaryBlue; label = 'En curso — Realizando entrega'; break;
-      case 'esperando_confirmacion': c = _accentGreen; label = 'Esperando confirmación'; break;
+      case TripStatus.aceptado: c = const Color(0xFFFF8F00); label = 'Aceptado — Dirígete al origen'; break;
+      case TripStatus.enCamino: c = const Color(0xFFFF8F00); label = 'En camino al origen'; break;
+      case TripStatus.llegada: c = _accentGreen; label = 'Llegada al origen'; break;
+      case TripStatus.enCurso: c = _primaryBlue; label = 'En curso — Realizando entrega'; break;
+      case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
+      case TripStatus.esperaConfirmacion: c = _accentGreen; label = 'Esperando confirmación'; break;
+      case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
       default: c = Colors.grey; label = estado; break;
     }
     return Container(
@@ -227,9 +232,14 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     Color c;
     String label;
     switch (estado) {
-      case 'finalizado': c = _accentGreen; label = 'Finalizado'; break;
-      case 'esperando_confirmacion': c = _primaryBlue; label = 'Esperando confirmación'; break;
-      case 'cancelado': c = Colors.red; label = 'Cancelado'; break;
+      case TripStatus.aceptado: c = const Color(0xFFFF8F00); label = 'Aceptado'; break;
+      case TripStatus.enCamino: c = const Color(0xFFFF8F00); label = 'En camino'; break;
+      case TripStatus.llegada: c = _accentGreen; label = 'Llegada'; break;
+      case TripStatus.enCurso: c = _primaryBlue; label = 'En curso'; break;
+      case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
+      case TripStatus.esperaConfirmacion: c = _primaryBlue; label = 'Esperando confirmación'; break;
+      case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
+      case TripStatus.cancelado: c = Colors.red; label = 'Cancelado'; break;
       default: c = _textGrey; label = estado; break;
     }
     return Container(
