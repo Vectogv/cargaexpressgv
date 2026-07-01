@@ -113,9 +113,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (cachedTrip != null) {
       final estado = cachedTrip['estado'] as String?;
       if (estado == 'aceptado' || estado == 'en_curso') {
-        if (mounted) setState(() => _activeTrip = cachedTrip);
-        _redirectToActiveTrip();
-        return;
+        try {
+          final active = await ApiClient.instance.getActiveTrip();
+          if (active != null) {
+            if (mounted) setState(() => _activeTrip = active);
+            CacheService.instance.cacheActiveTrip(active);
+            _redirectToActiveTrip();
+            return;
+          }
+        } catch (_) {}
+        CacheService.instance.clearActiveTrip();
       }
     }
     await _fetchActiveTrip();

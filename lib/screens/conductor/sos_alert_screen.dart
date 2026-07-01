@@ -15,9 +15,20 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
   late Animation<double> _pulseAnimation;
   bool _sending = false;
   bool _sent = false;
+  String? _selectedMotivo;
+  final _detalleCtrl = TextEditingController();
+  bool _showForm = true;
 
   static const Color _white = Colors.white;
   static const Color _bgDark = Color(0xFF0D1B2E);
+  static const Color _inputFill = Color(0xFF1B2D44);
+
+  static const List<String> _motivos = [
+    'Robo/Amenaza',
+    'Accidente',
+    'Cliente agresivo',
+    'Otro',
+  ];
 
   @override
   void initState() {
@@ -34,15 +45,25 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
   @override
   void dispose() {
     _pulseController.dispose();
+    _detalleCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _activateSOS() async {
+    if (_selectedMotivo == null) return;
     setState(() => _sending = true);
     try {
-      await SosService.sendAlert(tripId: widget.tripId);
+      final detalles = _detalleCtrl.text.trim();
+      await SosService.sendAlert(
+        tripId: widget.tripId,
+        motivo: _selectedMotivo,
+        detalles: detalles.isNotEmpty ? detalles : null,
+      );
       if (mounted) {
-        setState(() => _sent = true);
+        setState(() {
+          _sent = true;
+          _showForm = false;
+        });
         _snack('Alerta SOS enviada. Notificando a soporte...');
       }
     } catch (e) {
@@ -68,32 +89,128 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
         children: [
           _buildHeader(context),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildSOSButton(),
-                const SizedBox(height: 32),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: Text(
-                    _sent
-                        ? 'Alerta enviada.\nSoporte está siendo notificado.'
-                        : 'Se enviará tu ubicación\na contactos y soporte.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: _white.withValues(alpha: 0.85),
-                      height: 1.5,
-                      fontWeight: FontWeight.w500,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  if (_showForm) ...[
+                    _buildMotivoSelection(),
+                    const SizedBox(height: 16),
+                    _buildDetalleField(),
+                    const SizedBox(height: 24),
+                    _buildSOSButton(),
+                  ] else ...[
+                    const SizedBox(height: 60),
+                    _buildSOSButton(),
+                  ],
+                  const SizedBox(height: 32),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Text(
+                      _sent
+                          ? 'Alerta enviada.\nSoporte está siendo notificado.'
+                          : 'Selecciona el tipo de emergencia\ny activa la alerta.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _white.withValues(alpha: 0.85),
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           _buildActivateButton(),
           const SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMotivoSelection() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tipo de emergencia',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ..._motivos.map((m) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => setState(() => _selectedMotivo = m),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _selectedMotivo == m
+                      ? Colors.red.withValues(alpha: 0.2)
+                      : _inputFill,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _selectedMotivo == m
+                        ? Colors.red.shade400
+                        : Colors.transparent,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _selectedMotivo == m
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: _selectedMotivo == m
+                          ? Colors.red.shade400
+                          : Colors.white54,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      m,
+                      style: TextStyle(
+                        color: _selectedMotivo == m ? Colors.white : Colors.white70,
+                        fontWeight: _selectedMotivo == m ? FontWeight.w600 : FontWeight.w400,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetalleField() {
+    if (_selectedMotivo == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: TextField(
+        controller: _detalleCtrl,
+        maxLines: 3,
+        style: const TextStyle(color: Colors.white, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Describe la situación (opcional)',
+          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+          filled: true,
+          fillColor: _inputFill,
+          contentPadding: const EdgeInsets.all(14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
       ),
     );
   }
@@ -210,7 +327,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: _sending ? null : _activateSOS,
+          onPressed: (_sending || _selectedMotivo == null) ? null : _activateSOS,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.red.shade600,
             foregroundColor: _white,

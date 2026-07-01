@@ -17,6 +17,7 @@ class SocketServiceClient {
   static const int _maxReconnectAttempts = 50;
   Timer? _reconnectTimer;
   StreamSubscription<bool>? _networkSub;
+  final List<_PendingEmit> _pendingEmits = [];
 
   final _tripStatusCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverLocationCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -29,6 +30,8 @@ class SocketServiceClient {
   final _tripStartedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCompletedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripDeliveredCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _sosActivatedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeRequestCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeResponseCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _typingStartCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -57,6 +60,8 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onTripStarted => _tripStartedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCompleted => _tripCompletedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCancelled => _tripCancelledCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripDelivered => _tripDeliveredCtrl.stream;
+  Stream<Map<String, dynamic>> get onSosActivated => _sosActivatedCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeRequest => _finalizeRequestCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeResponse => _finalizeResponseCtrl.stream;
   Stream<Map<String, dynamic>> get onTypingStart => _typingStartCtrl.stream;
@@ -111,7 +116,8 @@ class SocketServiceClient {
     final baseUrl = ApiClient.baseUrl;
 
     if (token == null) {
-      LoggerService.instance.warning('SocketServiceClient: no token available');
+      LoggerService.instance.warning('SocketServiceClient: no token available, will retry');
+      _scheduleReconnect();
       return;
     }
 
@@ -149,6 +155,7 @@ class SocketServiceClient {
         _reconnectAttempts = 0;
         safeAdd(_connectionCtrl, true);
         LoggerService.instance.info('SocketServiceClient connected');
+        _flushPendingEmits();
         if (userId != null) {
           _socket!.emit('join:client', {'userId': userId});
         }
@@ -175,7 +182,7 @@ class SocketServiceClient {
         LoggerService.instance.debug('SocketServiceClient reconnect_attempt');
       });
 
-      safeOn('trip:status', (data) {
+      safeOn('trip:status_changed', (data) {
         if (data is Map) safeAdd(_tripStatusCtrl, Map<String, dynamic>.from(data));
       });
 
@@ -195,7 +202,7 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_offerRejectedCtrl, Map<String, dynamic>.from(data));
       });
 
-      safeOn('message:new', (data) {
+      safeOn('chat:message', (data) {
         if (data is Map) {
           safeAdd(_messageCtrl, Map<String, dynamic>.from(data));
           final senderId = (data as Map)['senderId']?.toString();
@@ -292,6 +299,14 @@ class SocketServiceClient {
       safeOn('dispute:resolved', (data) {
         if (data is Map) safeAdd(_disputeResolvedCtrl, Map<String, dynamic>.from(data));
       });
+
+      safeOn('trip:delivered', (data) {
+        if (data is Map) safeAdd(_tripDeliveredCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('sos:activated', (data) {
+        if (data is Map) safeAdd(_sosActivatedCtrl, Map<String, dynamic>.from(data));
+      });
     } catch (e) {
       LoggerService.instance.error('SocketServiceClient._connect error', e);
       _scheduleReconnect();
@@ -315,9 +330,7 @@ class SocketServiceClient {
     LoggerService.instance.debug('SocketServiceClient: scheduling reconnect #$_reconnectAttempts in ${delay.inSeconds}s');
 
     _reconnectTimer = Timer(delay, () {
-      if (ApiClient.instance.token != null) {
-        _connect();
-      }
+      _connect();
     });
   }
 
@@ -325,7 +338,20 @@ class SocketServiceClient {
     if (_socket != null && _connected) {
       _socket!.emit(event, data);
     } else {
-      LoggerService.instance.warning('SocketServiceClient: cannot emit $event, not connected');
+      _pendingEmits.add(_PendingEmit(event, Map<String, dynamic>.from(data)));
+      LoggerService.instance.warning('SocketServiceClient: queued $event for later (not connected)');
+    }
+  }
+
+  void _flushPendingEmits() {
+    if (_socket == null || !_connected) return;
+    while (_pendingEmits.isNotEmpty) {
+      final pending = _pendingEmits.removeAt(0);
+      try {
+        _socket!.emit(pending.event, pending.data);
+      } catch (e) {
+        LoggerService.instance.error('SocketServiceClient: error flushing $pending.event', e);
+      }
     }
   }
 
@@ -357,6 +383,8 @@ class SocketServiceClient {
     _tripStartedCtrl.close();
     _tripCompletedCtrl.close();
     _tripCancelledCtrl.close();
+    _tripDeliveredCtrl.close();
+    _sosActivatedCtrl.close();
     _finalizeRequestCtrl.close();
     _finalizeResponseCtrl.close();
     _typingStartCtrl.close();
@@ -373,4 +401,10 @@ class SocketServiceClient {
     _disputeResolvedCtrl.close();
     _connectionCtrl.close();
   }
+}
+
+class _PendingEmit {
+  final String event;
+  final Map<String, dynamic> data;
+  _PendingEmit(this.event, this.data);
 }

@@ -54,7 +54,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
     }
     setState(() => _starting = true);
     try {
-      await ApiClient.instance.startTrip(tripId);
+      await ApiClient.instance.confirmArrival(tripId);
       if (!mounted) return;
 
       final capturedTrip = widget.trip;

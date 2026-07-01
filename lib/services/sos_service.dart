@@ -4,7 +4,7 @@ import '../models/sos_alert_model.dart';
 import 'logger_service.dart';
 
 class SosService {
-  static Future<SosAlertModel> sendAlert({String? tripId}) async {
+  static Future<SosAlertModel> sendAlert({String? tripId, String? motivo, String? detalles}) async {
     Position pos;
     try {
       pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
@@ -17,6 +17,8 @@ class SosService {
       'viajeId': tripId,
       'lat': pos.latitude,
       'lng': pos.longitude,
+      'motivo': motivo,
+      if (detalles != null) 'detalles': detalles,
     };
 
     try {

@@ -8,8 +8,8 @@ class EntregaConfirmadaScreen extends StatelessWidget {
   final String comision;
   final String porcentajeComision;
   final String gananciaTotal;
-  final VoidCallback? onVerResumen;
-  final VoidCallback? onVolverInicio;
+  final void Function(BuildContext)? onVerResumen;
+  final void Function(BuildContext)? onVolverInicio;
 
   const EntregaConfirmadaScreen({
     super.key,
@@ -51,7 +51,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
               ),
             ),
           ),
-          _buildBottomButtons(),
+          _buildBottomButtons(context),
         ],
       ),
     );
@@ -227,7 +227,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomButtons() {
+  Widget _buildBottomButtons(BuildContext ctx) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       decoration: const BoxDecoration(
@@ -239,7 +239,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: onVerResumen,
+              onPressed: onVerResumen != null ? () => onVerResumen!(ctx) : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _green,
                 disabledBackgroundColor: _divider,
@@ -262,7 +262,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: onVolverInicio,
+              onPressed: onVolverInicio != null ? () => onVolverInicio!(ctx) : null,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 side: const BorderSide(color: _divider, width: 1.5),

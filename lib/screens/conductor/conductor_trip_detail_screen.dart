@@ -34,7 +34,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _secondsLeft = (widget.trip['expiresIn'] as int?) ?? 30;
+    _secondsLeft = (widget.trip['expiresIn'] as int?) ?? 28;
     _expireTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_secondsLeft <= 0) {
         t.cancel();

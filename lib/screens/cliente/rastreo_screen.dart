@@ -18,6 +18,7 @@ import 'reportar_problema_screen.dart';
 import 'conductor_en_la_zona_screen.dart';
 import 'llegada_al_destino_screen.dart';
 import 'chat_screen.dart';
+import '../conductor/sos_alert_screen.dart';
 
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
@@ -26,7 +27,7 @@ class RastreoScreen extends StatefulWidget {
   State<RastreoScreen> createState() => _RastreoScreenState();
 }
 
-class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProviderStateMixin {
+class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _pulseCtrl;
   Map<String, dynamic>? _trip;
   List<Map<String, dynamic>> _ofertas = [];
@@ -48,13 +49,18 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   StreamSubscription<Map<String, dynamic>>? _driverLocationSub;
   StreamSubscription<Map<String, dynamic>>? _finalizeRequestSub;
   StreamSubscription<Map<String, dynamic>>? _tripFinalizedSub;
+  StreamSubscription<Map<String, dynamic>>? _sosActivatedSub;
 
   Timer? _pollingTimer;
   Timer? _proximityTimer;
   bool _proximityAlertShown = false;
   bool _conductorEnLaZonaShown = false;
+  bool _finalizeShown = false;
   double _driverLat = 0;
   double _driverLng = 0;
+
+  bool get _cancelarDeshabilitado =>
+      _status == 'aceptado' && _distanceToPickup() < 1.0;
 
   @override
   void initState() {
@@ -66,6 +72,16 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _load();
     });
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -73,15 +89,32 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     setState(() => _loading = true);
 
     try {
-      if (_trip == null) {
-        final active = await TripService.getActiveTrip();
-        if (active != null && mounted) {
+      final active = await TripService.getActiveTrip();
+      if (mounted) {
+        if (active != null) {
           _trip = active;
           final estado = active['estado'] as String?;
           if (estado != null) {
             setState(() => _status = estado);
           }
+        } else {
+          _trip = null;
+          _ofertas = [];
+          _hasOffers = false;
         }
+      }
+
+      // Cargar ofertas existentes (por si el conductor ya ofertó antes de abrir la pantalla)
+      if (_trip != null && _status != 'aceptado') {
+        try {
+          final existingOffers = await OfferService.getOffers(_trip?['id']);
+          if (existingOffers.isNotEmpty && mounted) {
+            setState(() {
+              _hasOffers = true;
+              _ofertas = existingOffers;
+            });
+          }
+        } catch (_) {}
       }
 
       if (!_socketListenersSetUp) {
@@ -93,7 +126,12 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         await _startLocationUpdates();
       }
 
-      if (_status == 'buscando_conductor' && mounted) {
+      if (mounted && (_status == 'entregado' || _status == 'esperando_confirmacion')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_isNavigating && !_finalizeShown) _showFinalizeConfirmation();
+        });
+      }
+      if (mounted && (_status == 'buscando_conductor' || _status == 'pendiente' || _status == 'en_curso' || _status == 'entregado' || _status == 'esperando_confirmacion')) {
         _startPolling();
       }
     } catch (e) {
@@ -158,6 +196,11 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
           setState(() => _status = newStatus);
           if (newStatus == 'aceptado' || newStatus == 'en_curso') {
             _startLocationUpdates();
+            if (newStatus == 'en_curso') _startPolling();
+          }
+          if (newStatus == 'entregado' || newStatus == 'esperando_confirmacion') {
+            _startPolling();
+            if (!_isNavigating && !_finalizeShown) _showFinalizeConfirmation();
           }
         });
       }
@@ -218,6 +261,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         if (!mounted) return;
         setState(() => _status = 'en_curso');
         _startLocationUpdates();
+        _startPolling();
       });
     });
 
@@ -244,7 +288,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
 
     _tripFinalizedSub = SocketServiceClient.instance.onTripCompleted.listen((data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || _isNavigating) return;
         final conductor = _trip?['conductor'] as Map<String, dynamic>? ?? {};
         _safePush(ViajeFinalizado(
           trip: _trip ?? {},
@@ -252,12 +296,20 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         ));
       });
     });
+
+    _sosActivatedSub = SocketServiceClient.instance.onSosActivated.listen((data) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _safePush(SOSAlertScreen(tripId: _trip?['id']?.toString()));
+      });
+    });
   }
 
   void _startPolling() {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (!mounted || _status != 'buscando_conductor') {
+      if (!mounted) return;
+      if (!['buscando_conductor', 'pendiente', 'en_curso', 'entregado', 'esperando_confirmacion'].contains(_status)) {
         _pollingTimer?.cancel();
         return;
       }
@@ -267,9 +319,18 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
           setState(() {
             _trip = trip;
             final estado = trip['estado'] as String?;
-            if (estado == 'aceptado' || estado == 'en_curso') {
+            if (estado == 'pendiente' || estado == 'aceptado' || estado == 'conductor_aceptado' || estado == 'en_curso' || estado == 'entregado' || estado == 'esperando_confirmacion') {
               _status = estado!;
+            }
+            if (estado == 'aceptado' || estado == 'conductor_aceptado') {
               _pollingTimer?.cancel();
+            }
+            if (estado == 'entregado' || estado == 'esperando_confirmacion') {
+              if (!_isNavigating && !_finalizeShown) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _showFinalizeConfirmation();
+                });
+              }
             }
           });
         }
@@ -386,62 +447,107 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     }
   }
 
-  void _cancelar() {
-    Navigator.push<Map<String, dynamic>>(
+  Future<void> _cancelar() async {
+    final dist = _distanceToPickup();
+    if (_status == 'aceptado' && dist < 1.0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cancelación no disponible. El conductor está a menos de 1 km del punto de recogida.')),
+      );
+      return;
+    }
+    if (_status == 'aceptado' && dist >= 1.0 && dist < 2.0) {
+      if (!mounted) return;
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Advertencia de proximidad'),
+          content: const Text('El conductor ya se encuentra cerca. Cancelar el viaje puede afectar tu reputación.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cancelar de todas formas')),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+    }
+    if (!mounted) return;
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: _status == 'en_curso')),
-    ).then((result) {
-      if (result != null) {
-        _doCancel();
-      }
-    });
+    );
+    if (result != null) {
+      _doCancel();
+    }
   }
 
   void _showFinalizeConfirmation() {
+    if (_isNavigating) return;
+    _finalizeShown = true;
     final conductor = _trip?['conductor'] as Map<String, dynamic>? ?? {};
 
-    // Primero mostrar LlegadaAlDestinoScreen
     _safePush(LlegadaAlDestinoScreen(
       conductor: conductor,
       trip: _trip ?? {},
       onVerDetalle: () {
-        // Desde aquí ir a ConfirmarEntregaScreen
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ConfirmarEntregaScreen(
-            onConfirmar: () {
-              SocketServiceClient.instance.emit('trip:finalize_response', {
-                'accepted': true,
-                'tripId': _trip?['id'] ?? _trip?['_id'],
-              });
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => ViajeFinalizado(
-                    trip: _trip ?? {},
-                    conductor: _trip?['conductor'] as Map<String, dynamic>? ?? {},
-                  ),
-                ),
-                (route) => route.isFirst,
-              );
-            },
-            onReportar: () {
-              SocketServiceClient.instance.emit('trip:finalize_response', {
-                'accepted': false,
-                'motivo': 'Cliente reportó un problema',
-                'tripId': _trip?['id'] ?? _trip?['_id'],
-              });
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => ReportarProblemaScreen(
-                    trip: _trip,
-                    role: 'cliente',
-                    onSubmitted: () {},
-                  ),
-                ),
-                (route) => route.isFirst,
-              );
-            },
-          ),
-        ));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ConfirmarEntregaScreen(
+                onConfirmar: () async {
+                  try {
+                    final tripId = _trip?['id'] ?? _trip?['_id'];
+                    if (tripId != null) {
+                      final montoFinal = _trip?['precioFinal'] != null
+                          ? (_trip!['precioFinal'] as num).toDouble()
+                          : (_trip?['precioEstimado'] as num?)?.toDouble();
+                      await TripService.finalizeTrip(tripId, montoFinal: montoFinal);
+                    }
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error al finalizar: $e')),
+                    );
+                    return;
+                  }
+                  SocketServiceClient.instance.emit('trip:finalize_response', {
+                    'accepted': true,
+                    'tripId': _trip?['id'] ?? _trip?['_id'],
+                  });
+                  if (!mounted) return;
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) => ViajeFinalizado(
+                        trip: _trip ?? {},
+                        conductor: _trip?['conductor'] as Map<String, dynamic>? ?? {},
+                      ),
+                    ),
+                    (route) => route.isFirst,
+                  );
+                },
+                onReportar: () {
+                  SocketServiceClient.instance.emit('trip:finalize_response', {
+                    'accepted': false,
+                    'motivo': 'Cliente report� un problema',
+                    'tripId': _trip?['id'] ?? _trip?['_id'],
+                  });
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) => ReportarProblemaScreen(
+                        trip: _trip,
+                        role: 'cliente',
+                        onSubmitted: () {},
+                      ),
+                    ),
+                    (route) => route.isFirst,
+                  );
+                },
+              ),
+            ),
+          );
+        });
       },
     ));
   }
@@ -468,7 +574,9 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     _driverLocationSub?.cancel();
     _finalizeRequestSub?.cancel();
     _tripFinalizedSub?.cancel();
+    _sosActivatedSub?.cancel();
     _pulseCtrl.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -511,7 +619,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   }
 
   List<Widget> _buildAppBarActions() {
-    if (_hasOffers && _status == 'buscando_conductor') {
+    if (_hasOffers && (_status == 'buscando_conductor' || _status == 'pendiente')) {
       return [
         Stack(
           children: [
@@ -563,9 +671,13 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
 
     switch (_status) {
       case 'buscando_conductor':
+      case 'pendiente':
         return _buildSearchContent();
       case 'aceptado':
+      case 'conductor_aceptado':
       case 'en_curso':
+      case 'entregado':
+      case 'esperando_confirmacion':
         return _buildTrackingContent();
       default:
         return _buildSearchContent();
@@ -804,9 +916,9 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
               Expanded(
                 child: _buildActionButton(
                   icon: Icons.cancel_outlined,
-                  label: 'Cancelar',
-                  onTap: _cancelling ? null : _cancelar,
-                  color: const Color(0xFFE53935),
+                  label: _cancelarDeshabilitado ? 'No disponible' : 'Cancelar',
+                  onTap: _cancelling || _cancelarDeshabilitado ? null : _cancelar,
+                  color: _cancelarDeshabilitado ? const Color(0xFFBDBDBD) : const Color(0xFFE53935),
                 ),
               ),
               const SizedBox(width: 8),
@@ -826,6 +938,39 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          if (_status == 'entregado' || _status == 'esperando_confirmacion')
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (!_finalizeShown && !_isNavigating) _showFinalizeConfirmation();
+                  },
+                  icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  label: const Text('Confirmar entrega', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _safePush(SOSAlertScreen(tripId: _trip?['id']?.toString())),
+              icon: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+              label: const Text('SOS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
           ),
         ],
       ),

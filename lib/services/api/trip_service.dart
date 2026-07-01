@@ -25,8 +25,10 @@ class TripService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  static Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20}) async {
-    final data = await HttpClient.get('/api/trips/history?page=$page&limit=$limit', auth: true);
+  static Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20, String? estado}) async {
+    String url = '/api/trips/history?page=$page&limit=$limit';
+    if (estado != null && estado.isNotEmpty) url += '&estado=$estado';
+    final data = await HttpClient.get(url, auth: true);
     return (data['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
   }
 
@@ -43,14 +45,24 @@ class TripService {
     await HttpClient.post('/api/trips/$id/start-trip', auth: true);
   }
 
-  static Future<void> completeTrip(dynamic id) async {
-    await HttpClient.post('/api/trips/$id/complete', auth: true);
+  static Future<void> completeTrip(dynamic id, {num? montoFinal}) async {
+    final body = <String, dynamic>{};
+    if (montoFinal != null) body['montoFinal'] = montoFinal;
+    await HttpClient.post('/api/trips/$id/complete', body: body, auth: true);
   }
 
   static Future<void> finalizeTrip(dynamic id, {num? montoFinal}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
     await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true);
+  }
+
+  static Future<void> confirmArrival(dynamic id) async {
+    await HttpClient.post('/api/trips/$id/confirm-arrival', auth: true);
+  }
+
+  static Future<void> confirmPickup(dynamic id) async {
+    await HttpClient.post('/api/trips/$id/confirm-pickup', auth: true);
   }
 
   static Future<void> cancelTrip(dynamic id, {String? motivo}) async {

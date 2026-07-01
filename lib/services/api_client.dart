@@ -11,6 +11,7 @@ import 'api/driver_service.dart';
 import 'api/profile_service.dart';
 import 'api/payment_service.dart';
 import 'api/dispute_service.dart';
+import 'socket_service_client.dart';
 
 class ApiClient {
   static final ApiClient instance = ApiClient._();
@@ -65,6 +66,7 @@ class ApiClient {
     final auth = await AuthService.login(email, password);
     await _saveTokens(auth.token, auth.refreshToken);
     await saveProfile(auth);
+    SocketServiceClient.instance.forceReconnect();
     return auth;
   }
 
@@ -72,6 +74,7 @@ class ApiClient {
     final auth = await AuthService.register(body);
     await _saveTokens(auth.token, auth.refreshToken);
     await saveProfile(auth);
+    SocketServiceClient.instance.forceReconnect();
     return auth;
   }
 
@@ -162,11 +165,13 @@ class ApiClient {
 
   Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) => TripService.requestTrip(data);
   Future<Map<String, dynamic>?> getActiveTrip() => TripService.getActiveTrip();
-  Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20}) => TripService.getTripHistory(page: page, limit: limit);
+  Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20, String? estado}) => TripService.getTripHistory(page: page, limit: limit, estado: estado);
   Future<Map<String, dynamic>> getTripDetail(dynamic id) => TripService.getTripDetail(id);
   Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) => TripService.getNearbyTrips(lat, lng, radio: radio);
   Future<void> startTrip(dynamic id) => TripService.startTrip(id);
-  Future<void> completeTrip(dynamic id) => TripService.completeTrip(id);
+  Future<void> confirmArrival(dynamic id) => TripService.confirmArrival(id);
+  Future<void> confirmPickup(dynamic id) => TripService.confirmPickup(id);
+  Future<void> completeTrip(dynamic id, {num? montoFinal}) => TripService.completeTrip(id, montoFinal: montoFinal);
   Future<void> finalizeTrip(dynamic id, {num? montoFinal}) => TripService.finalizeTrip(id, montoFinal: montoFinal);
   Future<void> cancelTrip(dynamic id, {String? motivo}) => TripService.cancelTrip(id, motivo: motivo);
   Future<void> requestCancellation(dynamic id, {String? motivo}) => TripService.requestCancellation(id, motivo: motivo);

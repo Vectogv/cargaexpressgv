@@ -92,10 +92,8 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
         ),
       );
 
-      // Después de OfertaAceptadaScreen, RastreoScreen toma el control via socket onOfferAccepted
-      // NO hacer maybePop extra: evita double-pop que deja estado inconsistente
       if (mounted) {
-        setState(() => _acceptingId = null);
+        Navigator.maybePop(context);
       }
     } catch (e) {
       if (mounted) {

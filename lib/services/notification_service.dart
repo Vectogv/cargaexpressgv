@@ -21,6 +21,8 @@ class NotificationService {
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
   StreamSubscription<Map<String, dynamic>>? _tripCancelledSub;
+  StreamSubscription<Map<String, dynamic>>? _tripDeliveredSub;
+  StreamSubscription<Map<String, dynamic>>? _sosActivatedSub;
   StreamSubscription<Map<String, dynamic>>? _notificationSub;
 
   List<Map<String, dynamic>> get notifications => List.unmodifiable(_notifications);
@@ -48,6 +50,14 @@ class NotificationService {
 
     _tripCancelledSub = SocketServiceClient.instance.onTripCancelled.listen((data) {
       _addNotification({...data, '__event': 'trip:cancelled'});
+    });
+
+    _tripDeliveredSub = SocketServiceClient.instance.onTripDelivered.listen((data) {
+      _addNotification({...data, '__event': 'trip:delivered'});
+    });
+
+    _sosActivatedSub = SocketServiceClient.instance.onSosActivated.listen((data) {
+      _addNotification({...data, '__event': 'sos:activated'});
     });
 
     _notificationSub = SocketServiceClient.instance.onNotification.listen((data) {
@@ -149,6 +159,8 @@ class NotificationService {
     _tripStatusSub?.cancel();
     _tripAcceptedSub?.cancel();
     _tripCancelledSub?.cancel();
+    _tripDeliveredSub?.cancel();
+    _sosActivatedSub?.cancel();
     _notificationSub?.cancel();
     _controller.close();
   }
