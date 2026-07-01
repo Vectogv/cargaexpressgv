@@ -36,7 +36,7 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
       case 'buscando_conductor': return 'Buscando conductor';
       case 'aceptado': return 'Aceptado';
       case 'en_curso': return 'En curso';
-      case 'completado': return 'Completado';
+      case 'esperando_confirmacion': return 'Esperando confirmación';
       case 'finalizado': return 'Finalizado';
       case 'cancelado': return 'Cancelado';
       default: return estado;
@@ -48,7 +48,7 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
       case 'buscando_conductor': return const Color(0xFFFF9800);
       case 'aceptado': return const Color(0xFF1E88E5);
       case 'en_curso': return const Color(0xFF1565C0);
-      case 'completado':
+      case 'esperando_confirmacion':
       case 'finalizado': return const Color(0xFF4CAF50);
       case 'cancelado': return Colors.red;
       default: return Colors.grey;

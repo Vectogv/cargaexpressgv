@@ -503,7 +503,9 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         return 'Conductor asignado';
       case 'en_curso':
         return 'Viaje en curso';
-      case 'completado':
+      case 'entregado':
+        return 'Viaje entregado';
+      case 'esperando_confirmacion':
         return 'Viaje completado';
       default:
         return 'Rastreo';

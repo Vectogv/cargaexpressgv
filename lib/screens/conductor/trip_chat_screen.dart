@@ -67,7 +67,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
         _activeTrip = await ApiClient.instance.getActiveTrip();
       }
       final estado = _activeTrip?['estado'] as String?;
-      _canChat = estado == 'aceptado' || estado == 'en_curso' || estado == 'completado';
+      _canChat = estado == 'aceptado' || estado == 'conductor_en_camino' || estado == 'conductor_llegada' || estado == 'en_curso' || estado == 'entregado' || estado == 'esperando_confirmacion';
       if (_canChat) {
         _setupSocket();
         final tripId = _activeTrip!['id']?.toString();
@@ -151,7 +151,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
       if (data['id']?.toString() == tripId && mounted) {
         final estado = data['estado'] as String?;
         if (estado != null) {
-          setState(() => _canChat = estado == 'aceptado' || estado == 'en_curso' || estado == 'completado');
+          setState(() => _canChat = estado == 'aceptado' || estado == 'conductor_en_camino' || estado == 'conductor_llegada' || estado == 'en_curso' || estado == 'entregado' || estado == 'esperando_confirmacion');
         }
       }
     });

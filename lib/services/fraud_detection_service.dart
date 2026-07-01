@@ -120,9 +120,9 @@ class FraudDetectionService {
   }
 
   FraudAlert? checkTripTransition(String tripId, String fromState, String toState) {
-    if (fromState == 'aceptado' && toState == 'completado') {
+    if (fromState == 'aceptado' && toState == 'conductor_en_camino') {
       _rapidTransitions.putIfAbsent(tripId, () => [DateTime.now(), DateTime.now()]);
-    } else if (fromState == 'en_curso' && toState == 'completado') {
+    } else if (fromState == 'en_curso' && toState == 'entregado') {
       final states = _rapidTransitions[tripId];
       if (states != null && states.length >= 2) {
         final duration = DateTime.now().difference(states[1]);

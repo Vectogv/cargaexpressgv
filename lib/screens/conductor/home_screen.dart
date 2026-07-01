@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       } else if (tipo == 'trip:status') {
         final estado = event['estado'] as String?;
-        if (estado == 'completado' || estado == 'cancelado') {
+        if (estado == 'esperando_confirmacion' || estado == 'finalizado' || estado == 'cancelado') {
           if (mounted) setState(() => _activeTrip = null);
         } else {
           _fetchActiveTrip();

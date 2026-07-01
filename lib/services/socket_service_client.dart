@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../contracts/socket_events.dart';
 import 'api_client.dart';
 import 'logger_service.dart';
 import 'network_monitor_service.dart';
@@ -19,6 +20,9 @@ class SocketServiceClient {
   StreamSubscription<bool>? _networkSub;
 
   final _tripStatusCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _driverOnWayCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _driverArrivedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _sosActivatedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverLocationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _newOfferCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -47,6 +51,9 @@ class SocketServiceClient {
   final _disputeResolvedCtrl = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onTripStatus => _tripStatusCtrl.stream;
+  Stream<Map<String, dynamic>> get onDriverOnWay => _driverOnWayCtrl.stream;
+  Stream<Map<String, dynamic>> get onDriverArrived => _driverArrivedCtrl.stream;
+  Stream<Map<String, dynamic>> get onSosActivated => _sosActivatedCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverLocation => _driverLocationCtrl.stream;
   Stream<Map<String, dynamic>> get onNewOffer => _newOfferCtrl.stream;
   Stream<Map<String, dynamic>> get onOfferAccepted => _offerAcceptedCtrl.stream;
@@ -86,9 +93,12 @@ class SocketServiceClient {
     _chatUnreadCtrl.add(0);
   }
 
-  void _incrementChatUnread() {
-    _chatUnreadCount++;
-    _chatUnreadCtrl.add(_chatUnreadCount);
+  void _incrementChatUnreadIfOther(Map data) {
+    final senderId = data['senderId']?.toString();
+    if (senderId != null && senderId != ApiClient.instance.userId) {
+      _chatUnreadCount++;
+      _chatUnreadCtrl.add(_chatUnreadCount);
+    }
   }
 
   Future<void> init() async {
@@ -179,6 +189,22 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_tripStatusCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn(SocketEvents.tripStatusChanged, (data) {
+        if (data is Map) safeAdd(_tripStatusCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn(SocketEvents.driverOnWay, (data) {
+        if (data is Map) safeAdd(_driverOnWayCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn(SocketEvents.driverArrived, (data) {
+        if (data is Map) safeAdd(_driverArrivedCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn(SocketEvents.sosActivated, (data) {
+        if (data is Map) safeAdd(_sosActivatedCtrl, Map<String, dynamic>.from(data));
+      });
+
       safeOn('driver:location', (data) {
         if (data is Map) safeAdd(_driverLocationCtrl, Map<String, dynamic>.from(data));
       });
@@ -198,10 +224,14 @@ class SocketServiceClient {
       safeOn('message:new', (data) {
         if (data is Map) {
           safeAdd(_messageCtrl, Map<String, dynamic>.from(data));
-          final senderId = (data as Map)['senderId']?.toString();
-          if (senderId != null && senderId != ApiClient.instance.userId) {
-            _incrementChatUnread();
-          }
+          _incrementChatUnreadIfOther(data);
+        }
+      });
+
+      safeOn(SocketEvents.chatMessage, (data) {
+        if (data is Map) {
+          safeAdd(_messageCtrl, Map<String, dynamic>.from(data));
+          _incrementChatUnreadIfOther(data);
         }
       });
 
@@ -347,6 +377,9 @@ class SocketServiceClient {
     _socket?.disconnect();
     _socket?.dispose();
     _tripStatusCtrl.close();
+    _driverOnWayCtrl.close();
+    _driverArrivedCtrl.close();
+    _sosActivatedCtrl.close();
     _driverLocationCtrl.close();
     _newOfferCtrl.close();
     _offerAcceptedCtrl.close();

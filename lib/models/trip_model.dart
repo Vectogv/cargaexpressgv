@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../contracts/trip_status.dart';
 import 'location_model.dart';
 import 'user_model.dart';
 
@@ -37,24 +38,40 @@ class TripModel {
   });
 
   bool get isActive =>
-      estado != 'cancelado' &&
-      estado != 'finalizado' &&
-      estado != 'completado';
+      estado != TripStatus.cancelado &&
+      estado != TripStatus.finalizado &&
+      estado != TripStatus.rechazado;
 
   String get estadoLabel {
     switch (estado) {
-      case 'pendiente':
+      case TripStatus.creado:
+        return 'Creado';
+      case TripStatus.buscando:
+        return 'Buscando conductor';
+      case TripStatus.pendiente:
         return 'Pendiente';
-      case 'aceptado':
+      case TripStatus.aceptado:
         return 'Aceptado';
-      case 'en_curso':
+      case TripStatus.enCamino:
+        return 'Conductor en camino';
+      case TripStatus.llegada:
+        return 'Conductor llegó';
+      case TripStatus.enCurso:
         return 'En curso';
-      case 'completado':
-        return 'Completado';
-      case 'finalizado':
+      case TripStatus.entregado:
+        return 'Entregado';
+      case TripStatus.esperaConfirmacion:
+        return 'Esperando confirmación';
+      case TripStatus.finalizado:
         return 'Finalizado';
-      case 'cancelado':
+      case TripStatus.cancelado:
         return 'Cancelado';
+      case TripStatus.rechazado:
+        return 'Rechazado';
+      case TripStatus.disputa:
+        return 'En disputa';
+      case TripStatus.sos:
+        return 'Emergencia';
       default:
         return estado ?? 'Desconocido';
     }
@@ -62,18 +79,34 @@ class TripModel {
 
   Color get estadoColor {
     switch (estado) {
-      case 'pendiente':
+      case TripStatus.creado:
+        return Colors.indigo;
+      case TripStatus.buscando:
+        return Colors.deepPurple;
+      case TripStatus.pendiente:
         return Colors.orange;
-      case 'aceptado':
+      case TripStatus.aceptado:
         return Colors.blue;
-      case 'en_curso':
+      case TripStatus.enCamino:
+        return Colors.lightBlue;
+      case TripStatus.llegada:
+        return Colors.cyan;
+      case TripStatus.enCurso:
         return Colors.green;
-      case 'completado':
+      case TripStatus.entregado:
         return Colors.teal;
-      case 'finalizado':
+      case TripStatus.esperaConfirmacion:
+        return Colors.amber;
+      case TripStatus.finalizado:
         return Colors.grey;
-      case 'cancelado':
+      case TripStatus.cancelado:
         return Colors.red;
+      case TripStatus.rechazado:
+        return Colors.deepOrange;
+      case TripStatus.disputa:
+        return Colors.purple;
+      case TripStatus.sos:
+        return Colors.redAccent;
       default:
         return Colors.grey;
     }

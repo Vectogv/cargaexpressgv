@@ -24,7 +24,7 @@ class _ViajesScreenState extends State<ViajesScreen> {
     {'key': 'pendiente', 'label': 'Pendiente'},
     {'key': 'aceptado', 'label': 'Aceptado'},
     {'key': 'en_curso', 'label': 'En Curso'},
-    {'key': 'completado', 'label': 'Completado'},
+    {'key': 'esperando_confirmacion', 'label': 'Esperando confirmación'},
     {'key': 'cancelado', 'label': 'Cancelado'},
   ];
 
@@ -301,7 +301,7 @@ class _ViajeCard extends StatelessWidget {
       case 'pendiente': return 'Pendiente';
       case 'aceptado': return 'Aceptado';
       case 'en_curso': return 'En Curso';
-      case 'completado': return 'Completado';
+      case 'esperando_confirmacion': return 'Esperando confirmación';
       case 'finalizado': return 'Finalizado';
       case 'cancelado': return 'Cancelado';
       default: return estado;
@@ -313,7 +313,7 @@ class _ViajeCard extends StatelessWidget {
       case 'pendiente': return const Color(0xFFE53935);
       case 'aceptado': return const Color(0xFF1E88E5);
       case 'en_curso': return const Color(0xFFFB8C00);
-      case 'completado':
+      case 'esperando_confirmacion':
       case 'finalizado': return const Color(0xFF43A047);
       case 'cancelado': return Colors.black38;
       default: return Colors.black38;

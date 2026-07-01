@@ -167,7 +167,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     switch (estado) {
       case 'aceptado': c = const Color(0xFFFF8F00); label = 'Aceptado — Dirígete al origen'; break;
       case 'en_curso': c = _primaryBlue; label = 'En curso — Realizando entrega'; break;
-      case 'completado': c = _accentGreen; label = 'Completado — Esperando finalización'; break;
+      case 'esperando_confirmacion': c = _accentGreen; label = 'Esperando confirmación'; break;
       default: c = Colors.grey; label = estado; break;
     }
     return Container(
@@ -228,7 +228,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     String label;
     switch (estado) {
       case 'finalizado': c = _accentGreen; label = 'Finalizado'; break;
-      case 'completado': c = _primaryBlue; label = 'Completado'; break;
+      case 'esperando_confirmacion': c = _primaryBlue; label = 'Esperando confirmación'; break;
       case 'cancelado': c = Colors.red; label = 'Cancelado'; break;
       default: c = _textGrey; label = estado; break;
     }

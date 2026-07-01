@@ -118,7 +118,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
       case 'buscando_conductor': return 'Buscando conductor';
       case 'aceptado': return 'Conductor asignado';
       case 'en_curso': return 'En camino a destino';
-      case 'completado': return 'Entrega completada';
+      case 'esperando_confirmacion': return 'Entrega completada';
       case 'finalizado': return 'Finalizado';
       case 'cancelado': return 'Cancelado';
       default: return estado ?? '';

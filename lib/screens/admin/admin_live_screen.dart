@@ -510,7 +510,7 @@ class _TripCard extends StatelessWidget {
       case 'buscando_conductor': estadoColor = _accentOrange; break;
       case 'aceptado': estadoColor = _primaryDark; break;
       case 'en_curso': estadoColor = _accentGreen; break;
-      case 'completado': estadoColor = _textGrey; break;
+      case 'esperando_confirmacion': estadoColor = _textGrey; break;
       default: estadoColor = _textGrey;
     }
 

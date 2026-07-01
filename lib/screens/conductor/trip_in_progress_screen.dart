@@ -695,7 +695,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   bool get _isTripActive {
     final e = _trip?['estado'] as String?;
-    return e == 'aceptado' || e == 'en_curso' || e == 'completado';
+    return e == 'aceptado' || e == 'conductor_en_camino' || e == 'conductor_llegada' || e == 'en_curso' || e == 'entregado' || e == 'esperando_confirmacion';
   }
 
   bool get _isNearDestination {
@@ -910,7 +910,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               ),
             ],
           ]
-          else if (estado == 'completado')
+          else if (estado == 'esperando_confirmacion')
             _actionButton('Confirmar finalización', _finalizeTrip, _primaryBlue),
         ]),
       ),
@@ -1022,8 +1022,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Widget _buildStepper(String estado) {
-    final steps = ['Aceptado', 'En curso', 'Completado', 'Finalizado'];
-    final estados = ['aceptado', 'en_curso', 'completado', 'finalizado'];
+    final steps = ['Aceptado', 'En camino', 'Llegada', 'En curso', 'Entregado', 'Esperando conf.', 'Finalizado'];
+    final estados = ['aceptado', 'conductor_en_camino', 'conductor_llegada', 'en_curso', 'entregado', 'esperando_confirmacion', 'finalizado'];
     final current = estados.indexOf(estado);
     if (current < 0) return const SizedBox.shrink();
     return Row(

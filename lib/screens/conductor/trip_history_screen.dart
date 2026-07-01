@@ -143,7 +143,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
     String label;
     switch (estado) {
       case 'finalizado': c = _accentGreen; label = 'Finalizado'; break;
-      case 'completado': c = _primaryDark; label = 'Completado'; break;
+      case 'esperando_confirmacion': c = _primaryDark; label = 'Esperando confirmación'; break;
       case 'cancelado': c = Colors.red; label = 'Cancelado'; break;
       default: c = _textGrey; label = estado; break;
     }
