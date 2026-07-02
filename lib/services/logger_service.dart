@@ -29,6 +29,13 @@ class LoggerService {
   void _log(LogLevel level, String message, [dynamic error, StackTrace? stack]) {
     if (level.index < _minLevel.index) return;
 
+    if (kReleaseMode) {
+      if (level == LogLevel.error) {
+        _recordInCrashlytics(error, stack);
+      }
+      return;
+    }
+
     final entry = {
       'timestamp': DateTime.now().toIso8601String(),
       'level': level.name,
@@ -54,8 +61,10 @@ class LoggerService {
 
   void _recordInCrashlytics(dynamic error, StackTrace? stack) {
     if (kIsWeb) return;
-    FirebaseCrashlytics.instance.recordError(error, stack ?? StackTrace.current)
-      .catchError((_) {});
+    try {
+      FirebaseCrashlytics.instance.recordError(error, stack ?? StackTrace.current)
+        .catchError((_) {});
+    } catch (_) {}
   }
 
   void _checkAutoAlert() {

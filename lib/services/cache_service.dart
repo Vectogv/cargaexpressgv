@@ -122,7 +122,8 @@ class CacheService {
 
   void cacheMessages(String tripId, List<Map<String, dynamic>> messages) {
     try {
-      Hive.box(_chatBox).put(tripId, jsonEncode(messages));
+      final limited = messages.length > 100 ? messages.sublist(messages.length - 100) : messages;
+      Hive.box(_chatBox).put(tripId, jsonEncode(limited));
     } catch (e) {
       LoggerService.instance.error('CacheService.cacheMessages error', e);
     }
@@ -132,7 +133,8 @@ class CacheService {
     try {
       final raw = Hive.box(_chatBox).get(tripId) as String?;
       if (raw == null) return null;
-      return jsonDecode(raw) as List<Map<String, dynamic>>?;
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded.cast<Map<String, dynamic>>();
     } catch (e) {
       LoggerService.instance.error('CacheService.getCachedMessages error', e);
       return null;

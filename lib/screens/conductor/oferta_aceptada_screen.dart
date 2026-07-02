@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/trip.dart';
 import '../../services/api_client.dart';
 import 'trip_chat_screen.dart';
 import 'viaje_aceptado_screen.dart';
@@ -44,6 +45,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
   bool _cancelling = false;
 
   Future<void> _iniciarViaje() async {
+    if (_starting) return;
     final tripId = widget.trip['viajeId']?.toString()
         ?? widget.trip['tripId']?.toString()
         ?? widget.trip['id']?.toString()
@@ -62,7 +64,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
         context,
         MaterialPageRoute(
           builder: (ctx) => TripInProgressScreen(
-            trip: capturedTrip,
+            trip: Trip.fromJson(capturedTrip),
           ),
         ),
       );

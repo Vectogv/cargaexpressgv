@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
+import '../../widgets/carga_express_bottom_nav.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
@@ -35,11 +36,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   int _notifUnread = 0;
   bool _redirected = false;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
-
-  final List<_NavItem> _navItems = [
-    _NavItem(icon: Icons.home_rounded, label: 'Inicio'),
-    _NavItem(icon: Icons.person_outline_rounded, label: 'Perfil'),
-  ];
 
   @override
   void initState() {
@@ -148,7 +144,18 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: CargaExpressBottomNav(
+        currentIndex: _selectedNavIndex,
+        items: [
+          (icon: Icons.home_rounded, label: 'Inicio', onTap: () {
+            setState(() => _selectedNavIndex = 0);
+          }),
+          (icon: Icons.person_outline_rounded, label: 'Perfil', onTap: () {
+            setState(() => _selectedNavIndex = 1);
+            _onNavTap(1);
+          }),
+        ],
+      ),
     );
   }
 
@@ -414,44 +421,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
     final parts = name.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Color(0xFFEEEEEE), width: 1),
-        ),
-      ),
-      child: BottomNavigationBar(
-        currentIndex: _selectedNavIndex,
-        onTap: (index) {
-          setState(() => _selectedNavIndex = index);
-          _onNavTap(index);
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: _white,
-        selectedItemColor: _primaryBlue,
-        unselectedItemColor: const Color(0xFFAAAAAA),
-        selectedLabelStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w400,
-        ),
-        elevation: 0,
-        items: _navItems
-            .map(
-              (item) => BottomNavigationBarItem(
-                icon: Icon(item.icon, size: 24),
-                label: item.label,
-              ),
-            )
-            .toList(),
-      ),
-    );
   }
 
   void _onNavTap(int index) {

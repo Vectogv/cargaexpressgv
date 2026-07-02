@@ -12,7 +12,7 @@ class TripChatScreen extends StatefulWidget {
   State<TripChatScreen> createState() => _TripChatScreenState();
 }
 
-class _TripChatScreenState extends State<TripChatScreen> {
+class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
@@ -41,11 +41,20 @@ class _TripChatScreenState extends State<TripChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initTrip();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _stopTyping();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollCtrl.dispose();
     _typingTimer?.cancel();

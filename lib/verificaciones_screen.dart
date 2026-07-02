@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'widgets/carga_express_bottom_nav.dart';
 
 void main() {
   runApp(const VerificacionesApp());
@@ -250,7 +251,26 @@ class _VerificacionesScreenState extends State<VerificacionesScreen>
             ],
           ),
         ),
-        bottomNavigationBar: _buildBottomNav(),
+        bottomNavigationBar: CargaExpressBottomNav(
+          currentIndex: _selectedNav,
+          items: [
+            (icon: Icons.home_rounded, label: 'Inicio', onTap: () {
+              setState(() => _selectedNav = 0);
+            }),
+            (icon: Icons.bar_chart_rounded, label: 'Reportes', onTap: () {
+              setState(() => _selectedNav = 1);
+            }),
+            (icon: Icons.chat_bubble_outline_rounded, label: 'Soporte', onTap: () {
+              setState(() => _selectedNav = 2);
+            }),
+            (icon: Icons.verified_user_outlined, label: 'Verificar', onTap: () {
+              setState(() => _selectedNav = 3);
+            }),
+            (icon: Icons.person_outline_rounded, label: 'Perfil', onTap: () {
+              setState(() => _selectedNav = 4);
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -641,62 +661,6 @@ class _VerificacionesScreenState extends State<VerificacionesScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Bottom Nav ──────────────────────────────────────────────────────────────
-
-  Widget _buildBottomNav() {
-    const items = [
-      (Icons.home_rounded, 'Inicio'),
-      (Icons.bar_chart_rounded, 'Reportes'),
-      (Icons.chat_bubble_outline_rounded, 'Soporte'),
-      (Icons.verified_user_outlined, 'Verificar'),
-      (Icons.person_outline_rounded, 'Perfil'),
-    ];
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE5E5EA), width: 0.5)),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 58,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (i) {
-              final selected = _selectedNav == i;
-              final color = selected
-                  ? const Color(0xFF1A237E)
-                  : Colors.grey.shade500;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedNav = i),
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 60,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(items[i].$1, color: color, size: 22),
-                      const SizedBox(height: 3),
-                      Text(
-                        items[i].$2,
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: color,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
       ),
     );
   }

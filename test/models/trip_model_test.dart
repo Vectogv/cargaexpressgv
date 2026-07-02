@@ -111,9 +111,9 @@ void main() {
         expect(t.isActive, isFalse);
       });
 
-      test('is false for completado', () {
+      test('is true for completado (no es estado inactivo)', () {
         final t = TripModel(id: '1', estado: 'completado');
-        expect(t.isActive, isFalse);
+        expect(t.isActive, isTrue);
       });
 
       test('is true for unknown state', () {
@@ -127,7 +127,7 @@ void main() {
         expect(TripModel(id: '1', estado: 'pendiente').estadoLabel, 'Pendiente');
         expect(TripModel(id: '1', estado: 'aceptado').estadoLabel, 'Aceptado');
         expect(TripModel(id: '1', estado: 'en_curso').estadoLabel, 'En curso');
-        expect(TripModel(id: '1', estado: 'completado').estadoLabel, 'Completado');
+        expect(TripModel(id: '1', estado: 'completado').estadoLabel, 'completado');
         expect(TripModel(id: '1', estado: 'finalizado').estadoLabel, 'Finalizado');
         expect(TripModel(id: '1', estado: 'cancelado').estadoLabel, 'Cancelado');
       });
@@ -146,7 +146,7 @@ void main() {
         expect(TripModel(id: '1', estado: 'pendiente').estadoColor, Colors.orange);
         expect(TripModel(id: '1', estado: 'aceptado').estadoColor, Colors.blue);
         expect(TripModel(id: '1', estado: 'en_curso').estadoColor, Colors.green);
-        expect(TripModel(id: '1', estado: 'completado').estadoColor, Colors.teal);
+        expect(TripModel(id: '1', estado: 'completado').estadoColor, Colors.grey);
         expect(TripModel(id: '1', estado: 'finalizado').estadoColor, Colors.grey);
         expect(TripModel(id: '1', estado: 'cancelado').estadoColor, Colors.red);
       });

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
+import '../../widgets/carga_express_bottom_nav.dart';
+import '../../models/trip.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
@@ -160,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip)));
+      Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip != null ? Trip.fromJson(_activeTrip!) : null)));
     });
   }
 
@@ -293,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
       SocketServiceClient.instance.resetChatUnread();
     }
     final routes = <int, Widget>{
-      1: TripInProgressScreen(trip: _activeTrip),
+      1: TripInProgressScreen(trip: _activeTrip != null ? Trip.fromJson(_activeTrip!) : null),
       2: const OffersScreen(),
       4: const EarningsScreen(),
       5: TripChatScreen(trip: _activeTrip),
@@ -328,7 +330,23 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: CargaExpressBottomNav(
+        currentIndex: _bottomIndex,
+        items: [
+          (icon: Icons.home_rounded, label: 'Inicio', onTap: () {
+            setState(() => _bottomIndex = 0);
+          }),
+          (icon: Icons.receipt_long_rounded, label: 'Viajes', onTap: () {
+            _navigate(11);
+          }),
+          (icon: Icons.bar_chart_rounded, label: 'Ingresos', onTap: () {
+            _navigate(4);
+          }),
+          (icon: Icons.person_rounded, label: 'Perfil', onTap: () {
+            _navigate(9);
+          }),
+        ],
+      ),
     );
   }
 
@@ -442,76 +460,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _navigate(index);
         }
       },
-    );
-  }
-
-  Widget _buildBottomNav() {
-    final items = [
-      _NavItem(icon: Icons.home_rounded, label: 'Inicio'),
-      _NavItem(icon: Icons.receipt_long_rounded, label: 'Viajes'),
-      _NavItem(icon: Icons.bar_chart_rounded, label: 'Ingresos'),
-      _NavItem(icon: Icons.person_rounded, label: 'Perfil'),
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (i) {
-              final selected = i == _bottomIndex;
-              return GestureDetector(
-                onTap: () {
-                  if (i == 0) {
-                    setState(() => _bottomIndex = 0);
-                  } else if (i == 1) {
-                    _navigate(11);
-                  } else if (i == 2) {
-                    _navigate(4);
-                  } else if (i == 3) {
-                    _navigate(9);
-                  }
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        items[i].icon,
-                        color: selected ? _accentBlue : _textSecondary,
-                        size: 26,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        items[i].label,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                          color: selected ? _accentBlue : _textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-      ),
     );
   }
 
@@ -644,7 +592,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity, height: 50,
                   child: ElevatedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: t))),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: Trip.fromJson(t)))),
                     icon: const Icon(Icons.map_rounded, size: 22),
                     label: const Text('Ver viaje en el mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
@@ -929,8 +877,3 @@ class _MockMapPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _NavItem {
-  final IconData icon;
-  final String label;
-  const _NavItem({required this.icon, required this.label});
-}

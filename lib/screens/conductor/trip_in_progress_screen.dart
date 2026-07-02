@@ -8,6 +8,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../contracts/trip_status.dart';
+import '../../models/trip.dart';
+import '../../models/user.dart';
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/notification_service.dart';
@@ -32,7 +34,7 @@ import '../shared/dispute_screen.dart';
 import 'disputa_iniciada_wrapper.dart';
 
 class TripInProgressScreen extends StatefulWidget {
-  final Map<String, dynamic>? trip;
+  final Trip? trip;
   const TripInProgressScreen({super.key, this.trip});
 
   @override
@@ -40,7 +42,7 @@ class TripInProgressScreen extends StatefulWidget {
 }
 
 class _TripInProgressScreenState extends State<TripInProgressScreen> with WidgetsBindingObserver {
-  Map<String, dynamic>? _trip;
+  Trip? _trip;
   bool _loading = true;
   bool _actionLoading = false;
   Timer? _locationTimer;
@@ -64,6 +66,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   bool _isRouteLoading = true;
   bool _locationWarningShown = false;
   int _locationFailCount = 0;
+  DateTime? _lastLocationSent;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _primaryBlue = Color(0xFF1565C0);
@@ -85,7 +88,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     final cachedTrip = CacheService.instance.getCachedActiveTrip();
     if (cachedTrip != null) {
-      _trip = cachedTrip;
+      _trip = Trip.fromJson(cachedTrip);
       _loading = false;
     }
 
@@ -137,35 +140,29 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       LoggerService.instance.info('TripInProgress: app backgrounded, caching trip state');
       _cacheTripState();
       BackgroundLocationService.instance.updateNotification(
-        estado: _trip?['estado'] as String?,
+        estado: _trip?.estado,
         destino: _getDestinoDireccion(),
       );
     }
   }
 
   String? _getDestinoDireccion() {
-    final destino = _trip?['destino'] as Map<String, dynamic>?;
-    return destino?['direccion'] as String?;
+    return _trip?.destino?.direccion;
   }
 
   void _cacheTripState() {
     if (_trip != null) {
-      CacheService.instance.cacheActiveTrip(_trip!);
+      CacheService.instance.cacheActiveTrip(_trip!.toJson());
     }
   }
 
   Future<void> _loadRoute() async {
     final t = _trip ?? widget.trip;
     if (t == null) return;
-    final origen = t['origen'] as Map<String, dynamic>?;
-    final destino = t['destino'] as Map<String, dynamic>?;
+    final origen = t.origen;
+    final destino = t.destino;
     if (origen == null || destino == null) return;
-    final oLat = double.tryParse(origen['lat']?.toString() ?? '');
-    final oLng = double.tryParse(origen['lng']?.toString() ?? '');
-    final dLat = double.tryParse(destino['lat']?.toString() ?? '');
-    final dLng = double.tryParse(destino['lng']?.toString() ?? '');
-    if (oLat == null || oLng == null || dLat == null || dLng == null) return;
-    final points = await RouteService.getRoute(LatLng(oLat, oLng), LatLng(dLat, dLng));
+    final points = await RouteService.getRoute(LatLng(origen.lat, origen.lng), LatLng(destino.lat, destino.lng));
     if (mounted) setState(() {
       _routePoints = points;
       _isRouteLoading = false;
@@ -174,22 +171,31 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   Future<void> _restoreAfterBackground() async {
     try {
-      final fresh = await ApiClient.instance.getActiveTrip();
-      if (fresh != null && mounted) {
+      final data = await ApiClient.instance.getActiveTrip();
+      if (data != null && mounted) {
+        final fresh = Trip.fromJson(data);
         setState(() {
           _trip = fresh;
           _elapsedSeconds = _calcularElapsed(fresh);
         });
         _cacheTripState();
         _restartTimersIfNeeded();
+        return;
       }
     } catch (e) {
       LoggerService.instance.error('TripInProgress: error restoring after background', e);
+      final cached = CacheService.instance.getCachedActiveTrip();
+      if (cached != null && mounted) {
+        setState(() { _trip = Trip.fromJson(cached); });
+        _snack('Reconectado con el viaje en curso.');
+        return;
+      }
     }
+    if (mounted) Navigator.pop(context);
   }
 
-  int _calcularElapsed(Map<String, dynamic> trip) {
-    final inicio = trip['inicio'] as String?;
+  int _calcularElapsed(Trip trip) {
+    final inicio = trip.toJson()['inicio'] as String?;
     if (inicio == null) return _elapsedSeconds;
     try {
       final inicioDt = DateTime.parse(inicio);
@@ -213,21 +219,17 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   void _fitMapBounds() {
-    final origen = _trip?['origen'] as Map<String, dynamic>?;
-    final destino = _trip?['destino'] as Map<String, dynamic>?;
+    final origen = _trip?.origen;
+    final destino = _trip?.destino;
     final points = <LatLng>[];
     if (_currentLat != null && _currentLng != null) {
       points.add(LatLng(_currentLat!, _currentLng!));
     }
     if (origen != null) {
-      final oLat = double.tryParse(origen['lat']?.toString() ?? '');
-      final oLng = double.tryParse(origen['lng']?.toString() ?? '');
-      if (oLat != null && oLng != null) points.add(LatLng(oLat, oLng));
+      points.add(LatLng(origen.lat, origen.lng));
     }
     if (destino != null) {
-      final dLat = double.tryParse(destino['lat']?.toString() ?? '');
-      final dLng = double.tryParse(destino['lng']?.toString() ?? '');
-      if (dLat != null && dLng != null) points.add(LatLng(dLat, dLng));
+      points.add(LatLng(destino.lat, destino.lng));
     }
     if (points.length < 2) {
       if (points.length == 1) {
@@ -347,20 +349,20 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             _snack('El cliente rechaz\u00f3 la confirmaci\u00f3n. Se abrir\u00e1 una disputa.');
             try {
               final disputeResult = await ApiClient.instance.disputeTrip(
-                _trip?['id'],
+                _trip?.id,
                 motivo: 'Rechazo de entrega',
                 descripcion: motivo,
               );
               final disputeId = disputeResult['id'] ?? disputeResult['disputeId'];
               if (mounted) {
                 final trip = _trip;
-                final origenText = (trip?['origen'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
-                final destinoText = (trip?['destino'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
+                final origenText = trip?.origen?.direccion ?? '';
+                final destinoText = trip?.destino?.direccion ?? '';
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => DisputaIniciadaWrapper(
-                      tripId: trip?['id'],
+                      tripId: trip?.id,
                       disputeId: disputeId,
                       motivo: motivo,
                       origen: origenText,
@@ -387,7 +389,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
       if (file == null) return null;
       final bytes = await file.readAsBytes();
-      final url = await TripService.deliveryPhoto(_trip!['id'], bytes, 'delivery_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final url = await TripService.deliveryPhoto(_trip!.id, bytes, 'delivery_${DateTime.now().millisecondsSinceEpoch}.jpg');
       return url;
     } catch (e) {
       LoggerService.instance.error('Error taking delivery photo', e);
@@ -396,7 +398,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _requestFinalization() async {
-    if (_trip == null) return;
+    if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
 
     final confirm = await showDialog<bool>(
@@ -446,8 +448,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (!mounted) return;
 
     SocketServiceClient.instance.emit('trip:finalize_request', {
-      'tripId': _trip!['id'],
-      'trip': _trip,
+      'tripId': _trip!.id,
+      'trip': _trip!.toJson(),
       if (_deliveryPhotoUrl != null) 'foto': _deliveryPhotoUrl,
     });
 
@@ -465,10 +467,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             timer.cancel();
             _countdownTimer = null;
             Navigator.pop(ctx);
-            if (mounted) {
-              _snack('El cliente no respondi\u00f3. Finalizando viaje.');
-              _finalizeTrip();
-            }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _snack('El cliente no respondi\u00f3. Finalizando viaje.');
+                _finalizeTrip();
+              }
+            });
           } else {
             setState(() {});
           }
@@ -495,7 +499,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   onPressed: () {
                     _cancelCountdown();
                     SocketServiceClient.instance.emit('trip:finalize_cancelled', {
-                      'tripId': _trip?['id'],
+                      'tripId': _trip?.id,
                     });
                     Navigator.pop(ctx);
                     if (mounted) {
@@ -515,7 +519,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   Future<void> _fetchActiveTrip() async {
     try {
-      final trip = await ApiClient.instance.getActiveTrip();
+      final data = await ApiClient.instance.getActiveTrip();
+      final trip = data != null ? Trip.fromJson(data) : null;
       if (mounted) setState(() { _trip = trip; _loading = false; });
       if (trip != null) {
         _startGpsTimer();
@@ -548,10 +553,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       if (!SocketServiceClient.instance.isConnected) {
         LoggerService.instance.info('TripInProgress: polling trip state via API');
         try {
-          final fresh = await ApiClient.instance.getActiveTrip();
-          if (fresh != null && mounted) {
-            final oldEstado = _trip?['estado'] as String?;
-            final newEstado = fresh['estado'] as String?;
+          final data = await ApiClient.instance.getActiveTrip();
+          if (data != null && mounted) {
+            final fresh = Trip.fromJson(data);
+            final oldEstado = _trip?.estado;
+            final newEstado = fresh.estado;
             if (oldEstado != null && newEstado != null && oldEstado != newEstado) {
               LoggerService.instance.info('TripInProgress: estado changed $oldEstado -> $newEstado');
               setState(() { _trip = fresh; });
@@ -592,6 +598,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _sendLocation() async {
+    if (_lastLocationSent != null && DateTime.now().difference(_lastLocationSent!).inSeconds < 10) return;
     if (_currentLat == null || _currentLng == null) {
       _locationFailCount++;
       if (_locationFailCount > 3 && !_locationWarningShown && mounted) {
@@ -612,7 +619,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     // Socket para el cliente (tiempo real)
     if (_trip != null && SocketServiceClient.instance.isConnected) {
       SocketServiceClient.instance.emit('driver:location', {
-        'tripId': _trip!['id'] ?? _trip!['_id'],
+        'tripId': _trip!.id,
         'latitude': _currentLat,
         'longitude': _currentLng,
         'speed': _currentSpeed ?? 0,
@@ -622,6 +629,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     // HTTP para persistencia backend
     try {
       await ApiClient.instance.updateLocation(_currentLat!, _currentLng!);
+      _lastLocationSent = DateTime.now();
     } catch (e) {
       final msg = e.toString();
       if (msg.contains('429') || msg.contains('RateLimited')) return;
@@ -630,11 +638,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _startTrip() async {
-    if (_trip == null) return;
+    if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
     try {
-      await ApiClient.instance.startTrip(_trip!['id']);
-      _trip!['estado'] = TripStatus.enCurso;
+      await ApiClient.instance.startTrip(_trip!.id);
+      final json = _trip!.toJson();
+      json['estado'] = TripStatus.enCurso;
+      _trip = Trip.fromJson(json);
       if (mounted) setState(() {});
       _snack('Viaje iniciado');
       _startGpsTimer();
@@ -651,23 +661,25 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     setState(() => _actionLoading = true);
     try {
       final t = _trip!;
-      final montoFinal = t['precioFinal'] as num? ?? t['precioEstimado'] as num?;
-      await ApiClient.instance.finalizeTrip(t['id'], montoFinal: montoFinal);
-      t['estado'] = TripStatus.finalizado;
+      final montoFinal = t.precioFinal ?? t.precioEstimado;
+      await ApiClient.instance.finalizeTrip(t.id, montoFinal: montoFinal);
+      final json = t.toJson();
+      json['estado'] = TripStatus.finalizado;
+      _trip = Trip.fromJson(json);
       _stopGpsTimer();
       if (!mounted) return;
 
-      final precio = t['precioFinal'] as num? ?? t['precioEstimado'] as num? ?? 0;
-      final pctComision = t['porcentajeComision'] as num? ?? 10;
+      final precio = t.precioFinal ?? t.precioEstimado ?? 0;
+      final pctComision = t.toJson()['porcentajeComision'] as num? ?? 10;
       final precioStr = '\$${precio.toStringAsFixed(0)}';
       final comisionVal = precio * (pctComision / 100);
       final comisionStr = '- \$${comisionVal.toStringAsFixed(0)}';
       final totalStr = '\$${(precio - comisionVal).toStringAsFixed(0)}';
-      final cliente = t['cliente'] as Map<String, dynamic>?;
-      final nombreCliente = cliente?['nombre'] as String? ?? '';
-      final rating = cliente?['calificacion'] is num ? (cliente!['calificacion'] as num).toDouble() : 4.0;
-      final origenText = (t['origen'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
-      final destinoText = (t['destino'] as Map<String, dynamic>?)?['direccion'] as String? ?? '';
+      final cliente = t.cliente;
+      final nombreCliente = cliente?.nombre ?? '';
+      final rating = cliente?.calificacion ?? 4.0;
+      final origenText = t.origen?.direccion ?? '';
+      final destinoText = t.destino?.direccion ?? '';
 
       Navigator.pushAndRemoveUntil(
         context,
@@ -696,7 +708,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   void _pushResumenViaje(
-    Map<String, dynamic> t,
+    Trip t,
     String precioStr, String comisionStr, String pctComision, String totalStr,
     String origenText, String destinoText,
   ) {
@@ -707,13 +719,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           data: ResumenViajeData(
             origen: origenText,
             destino: destinoText,
-            distanciaTotal: t['distancia'] != null
-                ? '${t['distancia']} km'
+            distanciaTotal: t.distancia != null
+                ? '${t.distancia} km'
                 : '${_haversine(
-              double.tryParse((t['origen'] as Map?)?['lat']?.toString() ?? '') ?? 0,
-              double.tryParse((t['origen'] as Map?)?['lng']?.toString() ?? '') ?? 0,
-              double.tryParse((t['destino'] as Map?)?['lat']?.toString() ?? '') ?? 0,
-              double.tryParse((t['destino'] as Map?)?['lng']?.toString() ?? '') ?? 0,
+              t.origen?.lat ?? 0,
+              t.origen?.lng ?? 0,
+              t.destino?.lat ?? 0,
+              t.destino?.lng ?? 0,
             ).toStringAsFixed(1)} km (aprox.)',
             duracionTotal: _formatElapsed(),
             precioAcordado: precioStr,
@@ -736,7 +748,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           ratingActual: rating,
           onEnviar: (estrellas, comentario) async {
             try {
-              await ApiClient.instance.rateTrip(_trip?['id'], estrellas, comentario: comentario);
+              await ApiClient.instance.rateTrip(_trip?.id, estrellas, comentario: comentario);
             } catch (_) {}
             if (!context.mounted) return;
             Navigator.popUntil(context, (route) => route.isFirst);
@@ -759,18 +771,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   bool get _isTripActive {
-    final e = _trip?['estado'] as String?;
+    final e = _trip?.estado;
     return e == TripStatus.aceptado || e == TripStatus.enCamino || e == TripStatus.llegada || e == TripStatus.enCurso || e == TripStatus.entregado || e == TripStatus.esperaConfirmacion;
   }
 
   bool get _isNearDestination {
     if (_currentLat == null || _currentLng == null) return false;
-    final destino = _trip?['destino'] as Map<String, dynamic>?;
+    final destino = _trip?.destino;
     if (destino == null) return false;
-    final dLat = double.tryParse(destino['lat']?.toString() ?? '');
-    final dLng = double.tryParse(destino['lng']?.toString() ?? '');
-    if (dLat == null || dLng == null) return false;
-    final dist = _haversine(_currentLat!, _currentLng!, dLat, dLng) * 1000;
+    final dist = _haversine(_currentLat!, _currentLng!, destino.lat, destino.lng) * 1000;
     return dist <= 150;
   }
 
@@ -794,9 +803,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
 
     final t = _trip!;
-    final origen = t['origen'] as Map<String, dynamic>?;
-    final destino = t['destino'] as Map<String, dynamic>?;
-    final estado = t['estado'] as String? ?? '';
+    final estado = t.estado ?? '';
 
     return PopScope(
       canPop: !_isTripActive,
@@ -810,7 +817,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         body: Column(
           children: [
             _buildHeader(context, estado),
-            Expanded(child: _buildMapWithContent(t, origen, destino, estado)),
+            Expanded(child: _buildMapWithContent(t, estado)),
             _buildBottomNav(t, estado),
           ],
         ),
@@ -858,37 +865,37 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  Widget _buildEnCaminoPanel(Map<String, dynamic> t) {
-    final cliente = t['cliente'] as Map<String, dynamic>?;
-    final origen = t['origen'] as Map<String, dynamic>?;
-    final oLat = double.tryParse(origen?['lat']?.toString() ?? '') ?? 0;
-    final oLng = double.tryParse(origen?['lng']?.toString() ?? '') ?? 0;
+  Widget _buildEnCaminoPanel(Trip t) {
+    final cliente = t.cliente;
+    final origen = t.origen;
+    final oLat = origen?.lat ?? 0;
+    final oLng = origen?.lng ?? 0;
     final distOrigen = (_currentLat != null && _currentLng != null && oLat != 0)
         ? _haversine(_currentLat!, _currentLng!, oLat, oLng)
         : 0.0;
     final etaMin = distOrigen > 0 ? (distOrigen / 30 * 60).round() : 0;
 
     return ViajeEnCaminoScreen(
-      nombreCliente: cliente?['nombre'] as String? ?? 'Cliente',
-      ratingCliente: (cliente?['calificacion'] as num?)?.toDouble() ?? 5.0,
+      nombreCliente: cliente?.nombre ?? 'Cliente',
+      ratingCliente: cliente?.calificacion ?? 5.0,
       tiempoEstimado: etaMin > 0 ? '~$etaMin min' : '--',
       distancia: distOrigen > 0 ? '${distOrigen.toStringAsFixed(1)} km' : '--',
       onChat: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => TripChatScreen(trip: t))),
+        builder: (_) => TripChatScreen(trip: t.toJson()))),
       onLlamar: () => _showClientPhone(t),
       onCancelarViaje: () => _cancelTrip(t),
     );
   }
 
-  Widget _buildLlegadaOrigenPanel(Map<String, dynamic> t) {
-    final cliente = t['cliente'] as Map<String, dynamic>?;
+  Widget _buildLlegadaOrigenPanel(Trip t) {
+    final cliente = t.cliente;
     return ViajeEnCaminoScreen(
-      nombreCliente: cliente?['nombre'] as String? ?? 'Cliente',
-      ratingCliente: (cliente?['calificacion'] as num?)?.toDouble() ?? 5.0,
+      nombreCliente: cliente?.nombre ?? 'Cliente',
+      ratingCliente: cliente?.calificacion ?? 5.0,
       tiempoEstimado: '--',
       distancia: '0.0 km',
       onChat: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => TripChatScreen(trip: t))),
+        builder: (_) => TripChatScreen(trip: t.toJson()))),
       onLlamar: () => _showClientPhone(t),
       actionLabel: 'Iniciar viaje',
       actionIcon: Icons.play_arrow_rounded,
@@ -897,14 +904,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  Widget _buildLlegadaDestinoPanel(Map<String, dynamic> t) {
-    final cliente = t['cliente'] as Map<String, dynamic>?;
+  Widget _buildLlegadaDestinoPanel(Trip t) {
+    final cliente = t.cliente;
     return LlegadaDestinoScreen(
-      nombreCliente: cliente?['nombre'] as String? ?? 'Cliente',
-      ratingCliente: (cliente?['calificacion'] as num?)?.toDouble() ?? 5.0,
+      nombreCliente: cliente?.nombre ?? 'Cliente',
+      ratingCliente: cliente?.calificacion ?? 5.0,
       isFinalizando: _actionLoading,
       onChat: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => TripChatScreen(trip: t))),
+        builder: (_) => TripChatScreen(trip: t.toJson()))),
       onLlamar: () => _showClientPhone(t),
       onHeLlegado: _requestFinalization,
       onSubirFoto: () async {
@@ -919,11 +926,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  Widget _buildTripPanel(Map<String, dynamic> t, Map<String, dynamic>? origen, Map<String, dynamic>? destino, String estado) {
-    final oLat = double.tryParse(origen?['lat']?.toString() ?? '') ?? 0;
-    final oLng = double.tryParse(origen?['lng']?.toString() ?? '') ?? 0;
-    final dLat = double.tryParse(destino?['lat']?.toString() ?? '') ?? 0;
-    final dLng = double.tryParse(destino?['lng']?.toString() ?? '') ?? 0;
+  Widget _buildTripPanel(Trip t, String estado) {
+    final origen = t.origen;
+    final destino = t.destino;
+    final oLat = origen?.lat ?? 0;
+    final oLng = origen?.lng ?? 0;
+    final dLat = destino?.lat ?? 0;
+    final dLng = destino?.lng ?? 0;
 
     return Container(
       width: double.infinity,
@@ -936,9 +945,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           const SizedBox(height: 12),
           _buildStepper(estado),
           const SizedBox(height: 12),
-          _routeRow(Icons.trip_origin, 'Origen', origen?['direccion'] as String? ?? '', Colors.green),
+          _routeRow(Icons.trip_origin, 'Origen', origen?.direccion ?? '', Colors.green),
           const SizedBox(height: 6),
-          _routeRow(Icons.location_on, 'Destino', destino?['direccion'] as String? ?? '', Colors.red),
+          _routeRow(Icons.location_on, 'Destino', destino?.direccion ?? '', Colors.red),
           if (estado == TripStatus.enCurso && _isNearDestination) ...[
             const SizedBox(height: 8),
             Container(
@@ -957,7 +966,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: _requestFinalization,
+                onPressed: _actionLoading ? null : _requestFinalization,
                 icon: const Icon(Icons.location_off, size: 18),
                 label: const Text('Finalizar sin GPS', style: TextStyle(fontSize: 13)),
                 style: OutlinedButton.styleFrom(
@@ -970,11 +979,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           ],
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            _infoChip('Carga', t['carga'] as String? ?? 'N/A'),
-            _infoChip('Precio', '\$${(t['precioFinal'] as num? ?? t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}'),
+            _infoChip('Carga', t.carga ?? 'N/A'),
+            _infoChip('Precio', '\$${(t.precioFinal ?? t.precioEstimado)?.toStringAsFixed(0) ?? '0'}'),
           ]),
           const SizedBox(height: 12),
-          _clientSection(t['cliente'] as Map<String, dynamic>?, t),
+          _clientSection(t.cliente, t),
           const SizedBox(height: 12),
           if (estado == TripStatus.aceptado || estado == TripStatus.llegada)
             _actionButton('Iniciar viaje', _startTrip, _primaryDark)
@@ -1010,11 +1019,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  Widget _buildMapWithContent(Map<String, dynamic> t, Map<String, dynamic>? origen, Map<String, dynamic>? destino, String estado) {
-    final oLat = double.tryParse(origen?['lat']?.toString() ?? '') ?? 0;
-    final oLng = double.tryParse(origen?['lng']?.toString() ?? '') ?? 0;
-    final dLat = double.tryParse(destino?['lat']?.toString() ?? '') ?? 0;
-    final dLng = double.tryParse(destino?['lng']?.toString() ?? '') ?? 0;
+  Widget _buildMapWithContent(Trip t, String estado) {
+    final origen = t.origen;
+    final destino = t.destino;
+    final oLat = origen?.lat ?? 0;
+    final oLng = origen?.lng ?? 0;
+    final dLat = destino?.lat ?? 0;
+    final dLng = destino?.lng ?? 0;
     final centerLat = _currentLat ?? oLat;
     final centerLng = _currentLng ?? oLng;
 
@@ -1080,7 +1091,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   ? _buildLlegadaOrigenPanel(t)
                   : (estado == TripStatus.enCurso && _isNearDestination)
                       ? _buildLlegadaDestinoPanel(t)
-                      : _buildTripPanel(t, origen, destino, estado),
+                      : _buildTripPanel(t, estado),
         ),
       ],
     );
@@ -1167,16 +1178,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     ]);
   }
 
-  Widget _clientSection(Map<String, dynamic>? cliente, Map<String, dynamic> t) {
+  Widget _clientSection(User? cliente, Trip t) {
     if (cliente == null) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: _bgLight, borderRadius: BorderRadius.circular(12)),
       child: Row(children: [
-        CircleAvatar(radius: 16, backgroundColor: _primaryDark, child: Text(_initials(cliente['nombre'] as String? ?? ''), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
+        CircleAvatar(radius: 16, backgroundColor: _primaryDark, child: Text(_initials(cliente.nombre), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
         const SizedBox(width: 10),
-        Expanded(child: Text(cliente['nombre'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
-        if (cliente['telefono'] != null)
+        Expanded(child: Text(cliente.nombre ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
+        if (cliente.telefono != null)
           IconButton(icon: const Icon(Icons.phone, size: 20), color: _primaryBlue, onPressed: () => _showClientPhone(t)),
       ]),
     );
@@ -1198,18 +1209,18 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  Widget _buildBottomNav(Map<String, dynamic> t, String estado) {
+  Widget _buildBottomNav(Trip t, String estado) {
     return Container(
       padding: const EdgeInsets.only(bottom: 24, top: 8),
       decoration: const BoxDecoration(color: _white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))]),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         _navItem(Icons.chat_bubble_outline, 'Chat', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t)));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
         }),
         _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
         _navItem(Icons.info_outline, 'Detalle', () => _showClientDetail(t)),
         _navItem(Icons.gavel_outlined, 'Reportar', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t, role: 'conductor')));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
         }),
         _navItem(Icons.emergency_outlined, 'SOS', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
@@ -1217,7 +1228,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         if (estado == TripStatus.aceptado)
           _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
         if (estado == TripStatus.enCurso)
-          _navItem(Icons.report_problem_outlined, 'Solicitar cancelaci\u00f3n', () => _requestCancellation(t)),
+          _navItem(Icons.report_problem_outlined, 'Solicitar cancelaci\u00f3n', _isCancelling ? () {} : () => _requestCancellation(t)),
       ]),
     );
   }
@@ -1233,10 +1244,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  void _showClientPhone(Map<String, dynamic> t) {
-    final cliente = t['cliente'] as Map<String, dynamic>?;
-    final nombre = cliente?['nombre'] as String? ?? 'Cliente';
-    final telefono = cliente?['telefono'] as String?;
+  void _showClientPhone(Trip t) {
+    final cliente = t.cliente;
+    final nombre = cliente?.nombre ?? 'Cliente';
+    final telefono = cliente?.telefono;
     if (telefono == null || telefono.isEmpty) {
       _snack('No hay n\u00famero de tel\u00e9fono disponible');
       return;
@@ -1259,15 +1270,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  void _showClientDetail(Map<String, dynamic> t) {
-    final cliente = t['cliente'] as Map<String, dynamic>?;
+  void _showClientDetail(Trip t) {
+    final cliente = t.cliente;
     if (cliente == null) {
       _snack('No hay informaci\u00f3n del cliente disponible');
       return;
     }
-    final nombre = cliente['nombre'] as String? ?? 'Sin nombre';
-    final telefono = cliente['telefono'] as String?;
-    final calificacion = cliente['calificacion'];
+    final nombre = cliente.nombre ?? 'Sin nombre';
+    final telefono = cliente.telefono;
+    final calificacion = cliente.calificacion;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1317,8 +1328,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  Future<void> _cancelTrip(Map<String, dynamic> t) async {
-    final estado = t['estado'] as String?;
+  Future<void> _cancelTrip(Trip t) async {
+    final estado = t.estado;
     if (estado == TripStatus.enCurso) {
       _snack('El viaje est\u00e1 en curso. Usa "Solicitar cancelaci\u00f3n" para pedir la cancelaci\u00f3n al administrador.');
       _requestCancellation(t);
@@ -1388,7 +1399,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     try {
       final desc = motivoCtrl.text.trim();
-      await ApiClient.instance.cancelTrip(t['id'], motivo: desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado);
+      await ApiClient.instance.cancelTrip(t.id, motivo: desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado);
       if (mounted) {
         _snack('Viaje cancelado. Se ha notificado al cliente.');
         Navigator.pop(context);
@@ -1398,7 +1409,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
-  Future<void> _requestCancellation(Map<String, dynamic> t) async {
+  Future<void> _requestCancellation(Trip t) async {
     if (_isCancelling) return;
     _isCancelling = true;
 
@@ -1465,7 +1476,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
       final desc = motivoCtrl.text.trim();
       final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
-      await ApiClient.instance.requestCancellation(t['id'], motivo: motivo);
+      await ApiClient.instance.requestCancellation(t.id, motivo: motivo);
       if (mounted) {
         _snack('Solicitud de cancelaci\u00f3n enviada. Se notificar\u00e1 al cliente y a soporte.');
       }

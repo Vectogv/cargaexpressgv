@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class ConfirmarEntregaScreen extends StatelessWidget {
+class ConfirmarEntregaScreen extends StatefulWidget {
   final VoidCallback onConfirmar;
   final VoidCallback onReportar;
 
@@ -9,6 +9,25 @@ class ConfirmarEntregaScreen extends StatelessWidget {
     required this.onConfirmar,
     required this.onReportar,
   });
+
+  @override
+  State<ConfirmarEntregaScreen> createState() => _ConfirmarEntregaScreenState();
+}
+
+class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
+  bool _loading = false;
+
+  Future<void> _handleConfirmar() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    widget.onConfirmar();
+  }
+
+  Future<void> _handleReportar() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    widget.onReportar();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +39,7 @@ class ConfirmarEntregaScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(flex: 2),
-              _Illustration(),
+              const _Illustration(),
               const SizedBox(height: 36),
               const Text(
                 '\u00bfTodo est\u00e1 en orden?',
@@ -46,7 +65,7 @@ class ConfirmarEntregaScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: onConfirmar,
+                  onPressed: _loading ? null : _handleConfirmar,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF22C55E),
                     foregroundColor: Colors.white,
@@ -55,10 +74,12 @@ class ConfirmarEntregaScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'S\u00ed, confirmar entrega',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+                  child: _loading
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                      : const Text(
+                          'S\u00ed, confirmar entrega',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
                 ),
               ),
               const SizedBox(height: 14),
@@ -66,21 +87,23 @@ class ConfirmarEntregaScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: OutlinedButton(
-                  onPressed: onReportar,
+                  onPressed: _loading ? null : _handleReportar,
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFFF97316), width: 1.5),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Reportar un problema',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFF97316),
-                    ),
-                  ),
+                  child: _loading
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFFF97316)))
+                      : const Text(
+                          'Reportar un problema',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFF97316),
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -93,176 +116,45 @@ class ConfirmarEntregaScreen extends StatelessWidget {
 }
 
 class _Illustration extends StatelessWidget {
+  const _Illustration();
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 200,
       height: 180,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            top: 0,
-            left: 30,
-            child: CustomPaint(
-              size: const Size(120, 150),
-              painter: _ClipboardPainter(),
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            right: 18,
-            child: CustomPaint(
-              size: const Size(70, 65),
-              painter: _BoxPainter(),
-            ),
-          ),
-          Positioned(
-            bottom: 10,
-            left: 18,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(
-                color: Color(0xFF22C55E),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x3322C55E),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.check,
-                color: Colors.white,
-                size: 26,
-                weight: 700,
-              ),
-            ),
-          ),
-        ],
+      child: CustomPaint(
+        painter: _DeliveryPainter(),
+        size: const Size(200, 180),
       ),
     );
   }
 }
 
-class _ClipboardPainter extends CustomPainter {
+class _DeliveryPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final boardPaint = Paint()..color = const Color(0xFFF9FAFB);
-    final borderPaint = Paint()
-      ..color = const Color(0xFFE5E7EB)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    final clipPaint = Paint()..color = const Color(0xFFD1D5DB);
-    final linePaint = Paint()
-      ..color = const Color(0xFFD1D5DB)
-      ..strokeWidth = 6
-      ..strokeCap = StrokeCap.round;
-    final checkLinePaint = Paint()
-      ..color = const Color(0xFF22C55E)
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round;
+    final paint = Paint()..style = PaintingStyle.fill;
 
-    final body = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 14, size.width, size.height - 14),
-      const Radius.circular(10),
-    );
-    canvas.drawRRect(body, boardPaint);
-    canvas.drawRRect(body, borderPaint);
+    // Círculo verde de fondo
+    paint.color = const Color(0xFFDCFCE7);
+    canvas.drawCircle(Offset(size.width / 2, size.height / 2), 70, paint);
 
-    final clip = RRect.fromRectAndRadius(
-      Rect.fromLTWH(size.width * 0.3, 6, size.width * 0.4, 20),
-      const Radius.circular(4),
-    );
-    canvas.drawRRect(clip, clipPaint);
+    // checkmark blanco
+    paint.color = const Color(0xFF22C55E);
+    canvas.drawCircle(Offset(size.width / 2, size.height / 2), 45, paint);
 
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.38, 0, size.width * 0.24, 14),
-        const Radius.circular(7),
-      ),
-      Paint()
-        ..color = const Color(0xFF9CA3AF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
-    );
+    paint.color = Colors.white;
+    paint.strokeWidth = 4;
+    paint.style = PaintingStyle.stroke;
+    paint.strokeCap = StrokeCap.round;
 
-    final lineY = [50.0, 68.0, 86.0, 104.0];
-    final lineWidths = [0.7, 0.55, 0.65, 0.45];
-    for (var i = 0; i < lineY.length; i++) {
-      canvas.drawLine(
-        Offset(16, lineY[i]),
-        Offset(size.width * lineWidths[i] + 16, lineY[i]),
-        linePaint,
-      );
-    }
+    final path = Path()
+      ..moveTo(size.width / 2 - 18, size.height / 2 + 2)
+      ..lineTo(size.width / 2 - 6, size.height / 2 + 14)
+      ..lineTo(size.width / 2 + 18, size.height / 2 - 12);
 
-    canvas.drawLine(
-      Offset(16, 122),
-      Offset(size.width * 0.5, 122),
-      checkLinePaint,
-    );
-
-    final checkPaint = Paint()
-      ..color = const Color(0xFF22C55E)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final checkPath = Path()
-      ..moveTo(size.width * 0.62, 118)
-      ..lineTo(size.width * 0.68, 126)
-      ..lineTo(size.width * 0.8, 114);
-    canvas.drawPath(checkPath, checkPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _BoxPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final frontPaint = Paint()..color = const Color(0xFFF59E0B);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, size.height * 0.3, size.width, size.height * 0.7),
-        const Radius.circular(4),
-      ),
-      frontPaint,
-    );
-
-    final topPaint = Paint()..color = const Color(0xFFD97706);
-    final topPath = Path()
-      ..moveTo(0, size.height * 0.3)
-      ..lineTo(size.width * 0.15, 0)
-      ..lineTo(size.width * 0.85, 0)
-      ..lineTo(size.width, size.height * 0.3)
-      ..close();
-    canvas.drawPath(topPath, topPaint);
-
-    final linePaint = Paint()
-      ..color = const Color(0xFFC2590A).withValues(alpha: 0.5)
-      ..strokeWidth = 1.5;
-    canvas.drawLine(
-      Offset(0, size.height * 0.3 + (size.height * 0.7) / 2),
-      Offset(size.width, size.height * 0.3 + (size.height * 0.7) / 2),
-      linePaint,
-    );
-    canvas.drawLine(
-      Offset(size.width / 2, size.height * 0.3),
-      Offset(size.width / 2, size.height),
-      linePaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.5, 0),
-      Offset(size.width * 0.5, size.height * 0.3),
-      linePaint,
-    );
+    canvas.drawPath(path, paint..style = PaintingStyle.stroke);
   }
 
   @override

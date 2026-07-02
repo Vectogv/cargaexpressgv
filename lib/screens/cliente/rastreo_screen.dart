@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../models/trip.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/api/offer_service.dart';
@@ -35,7 +36,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   static const double _proximidadKm = 1.0;
   static const double _zonaKm = 0.05;
   late final AnimationController _pulseCtrl;
-  Map<String, dynamic>? _trip;
+  Trip? _trip;
   List<Map<String, dynamic>> _ofertas = [];
   String _status = TripStatus.buscando;
   bool _loading = false;
@@ -84,8 +85,8 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
       if (_trip == null) {
         final active = await TripService.getActiveTrip();
         if (active != null && mounted) {
-          _trip = active;
-          final estado = active['estado'] as String?;
+          _trip = Trip.fromJson(active);
+          final estado = _trip?.estado;
           if (estado != null) {
             setState(() => _status = estado);
           }
@@ -175,7 +176,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
           if (!mounted) return;
           setState(() {
             _status = newStatus;
-            _trip = data;
+            _trip = Trip.fromJson(data);
           });
           if (newStatus == TripStatus.aceptado || newStatus == TripStatus.enCamino || newStatus == TripStatus.llegada || newStatus == TripStatus.enCurso) {
             _startLocationUpdates();
@@ -266,10 +267,10 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     _tripFinalizedSub = SocketServiceClient.instance.onTripCompleted.listen((data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        final conductor = _trip?['conductor'] as Map<String, dynamic>? ?? {};
+        final conductor = _trip?.conductor;
         _safePush(ViajeFinalizado(
-          trip: _trip ?? {},
-          conductor: conductor,
+          trip: _trip?.toJson() ?? {},
+          conductor: conductor?.toJson() ?? {},
         ));
       });
     });
@@ -286,8 +287,8 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         final trip = await TripService.getActiveTrip();
         if (trip != null && mounted) {
           setState(() {
-            _trip = trip;
-            final estado = trip['estado'] as String?;
+            _trip = Trip.fromJson(trip);
+            final estado = _trip?.estado;
             if (estado == TripStatus.aceptado || estado == TripStatus.enCurso) {
               _status = estado!;
               _pollingTimer?.cancel();
@@ -306,11 +307,11 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
       try {
         final trip = await TripService.getActiveTrip();
         if (trip != null && mounted) {
-          final estado = trip['estado'] as String?;
-          if (estado != null && estado != _status) {
+          final parsed = Trip.fromJson(trip);
+          if (parsed.estado != null && parsed.estado != _status) {
             setState(() {
-              _trip = trip;
-              _status = estado;
+              _trip = parsed;
+              _status = parsed.estado!;
             });
           }
         }
@@ -338,12 +339,9 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
 
   double _distanceToPickup() {
     if (_trip == null) return double.infinity;
-    final origen = _trip!['origen'] as Map<String, dynamic>?;
+    final origen = _trip!.origen;
     if (origen == null) return double.infinity;
-    final oLat = _parseDouble(origen['lat']);
-    final oLng = _parseDouble(origen['lng']);
-    if (oLat == null || oLng == null) return double.infinity;
-    return _haversine(_driverLat, _driverLng, oLat, oLng) / 1000;
+    return _haversine(_driverLat, _driverLng, origen.lat, origen.lng) / 1000;
   }
 
   double _haversine(double lat1, double lng1, double lat2, double lng2) {
@@ -393,14 +391,14 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   void _showConductorEnLaZona() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final conductor = _trip?['conductor'] as Map<String, dynamic>? ?? {};
+      final conductor = _trip?.conductor;
       _safePush(ConductorEnLaZonaScreen(
-        conductor: conductor,
+        conductor: conductor?.toJson() ?? {},
         onChat: () {
-          _safePush(ChatScreen(trip: _trip ?? {}));
+          _safePush(ChatScreen(trip: _trip?.toJson() ?? {}));
         },
         onCall: () async {
-          final tel = conductor['telefono'] as String?;
+          final tel = conductor?.telefono;
           if (tel != null) {
             final uri = Uri.parse('tel:$tel');
             if (await canLaunchUrl(uri)) {
@@ -417,13 +415,13 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     setState(() => _cancelling = true);
     try {
       if (_status == TripStatus.enCurso) {
-        await TripService.requestCancellation(_trip?['id'] ?? '', motivo: 'Cancelado por el usuario');
+        await TripService.requestCancellation(_trip?.id ?? '', motivo: 'Cancelado por el usuario');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Solicitud de cancelaci\u00f3n enviada. Un administrador la revisar\u00e1.')),
         );
       } else {
-        await TripService.cancelTrip(_trip?['id'] ?? '', motivo: 'Cancelado por el usuario');
+        await TripService.cancelTrip(_trip?.id ?? '', motivo: 'Cancelado por el usuario');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Viaje cancelado correctamente')),
         );
@@ -450,12 +448,12 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   }
 
   void _showFinalizeConfirmation() {
-    final conductor = _trip?['conductor'] as Map<String, dynamic>? ?? {};
+    final conductor = _trip?.conductor;
 
     // Primero mostrar LlegadaAlDestinoScreen
     _safePush(LlegadaAlDestinoScreen(
-      conductor: conductor,
-      trip: _trip ?? {},
+      conductor: conductor?.toJson() ?? {},
+      trip: _trip?.toJson() ?? {},
       onVerDetalle: () {
         // Desde aquí ir a ConfirmarEntregaScreen
         Navigator.push(context, MaterialPageRoute(
@@ -463,13 +461,13 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
             onConfirmar: () {
               SocketServiceClient.instance.emit('trip:finalize_response', {
                 'accepted': true,
-                'tripId': _trip?['id'] ?? _trip?['_id'],
+                'tripId': _trip?.id,
               });
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(
                   builder: (_) => ViajeFinalizado(
-                    trip: _trip ?? {},
-                    conductor: _trip?['conductor'] as Map<String, dynamic>? ?? {},
+                    trip: _trip?.toJson() ?? {},
+                    conductor: _trip?.conductor?.toJson() ?? {},
                   ),
                 ),
                 (route) => route.isFirst,
@@ -479,12 +477,12 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
               SocketServiceClient.instance.emit('trip:finalize_response', {
                 'accepted': false,
                 'motivo': 'Cliente reportó un problema',
-                'tripId': _trip?['id'] ?? _trip?['_id'],
+                'tripId': _trip?.id,
               });
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(
                   builder: (_) => ReportarProblemaScreen(
-                    trip: _trip,
+                    trip: _trip?.toJson(),
                     role: 'cliente',
                     onSubmitted: () {},
                   ),
@@ -579,12 +577,12 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
               onPressed: () {
                 _safePush(OfertasRecibidasScreen(
                   ofertas: _ofertas,
-                  trip: _trip ?? {},
+                  trip: _trip?.toJson() ?? {},
                   onAccept: (offerId) async {
-                    await OfferService.acceptOffer(_trip?['id'], offerId);
+                    await OfferService.acceptOffer(_trip?.id, offerId);
                   },
                   onReject: (offerId) async {
-                    await OfferService.rejectOffer(_trip?['id'], offerId);
+                    await OfferService.rejectOffer(_trip?.id, offerId);
                   },
                 ));
               },
@@ -729,12 +727,12 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
                 onTap: () {
                   _safePush(OfertasRecibidasScreen(
                     ofertas: _ofertas,
-                    trip: _trip ?? {},
+                    trip: _trip?.toJson() ?? {},
                     onAccept: (offerId) async {
-                      await OfferService.acceptOffer(_trip?['id'], offerId);
+                      await OfferService.acceptOffer(_trip?.id, offerId);
                     },
                     onReject: (offerId) async {
-                      await OfferService.rejectOffer(_trip?['id'], offerId);
+                      await OfferService.rejectOffer(_trip?.id, offerId);
                     },
                   ));
                 },
@@ -826,14 +824,10 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   }
 
   Widget _buildDriverPanel() {
-    final conductor = _trip?['conductor'] as Map<String, dynamic>?;
-    final conductorNombre = conductor?['nombre'] as String? ?? 'Conductor';
-    final tipoVehiculo = conductor?['tipoVehiculo'] as String? ?? '';
-    final placa = conductor?['placa'] as String? ?? '';
-    final rating = (conductor?['rating'] as num?)?.toDouble()
-        ?? (conductor?['calificacion'] as num?)?.toDouble()
-        ?? 0;
-    final telefono = conductor?['telefono'] as String?;
+    final conductor = _trip?.conductor;
+    final conductorNombre = conductor?.nombre ?? 'Conductor';
+    final rating = conductor?.calificacion ?? 0;
+    final telefono = conductor?.telefono;
     final distance = _distanceToPickup();
 
     return Container(
@@ -872,11 +866,6 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
                         color: Color(0xFF1A1A2E),
                       ),
                     ),
-                    if (tipoVehiculo.isNotEmpty || placa.isNotEmpty)
-                      Text(
-                        '${tipoVehiculo.isNotEmpty ? tipoVehiculo : ''}${tipoVehiculo.isNotEmpty && placa.isNotEmpty ? ' - ' : ''}${placa.isNotEmpty ? placa : ''}',
-                        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
-                      ),
                   ],
                 ),
               ),
@@ -909,7 +898,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
                   icon: Icons.chat_bubble_outline,
                   label: 'Chat',
                   onTap: () {
-                    _safePush(ChatScreen(trip: _trip ?? {}));
+                    _safePush(ChatScreen(trip: _trip?.toJson() ?? {}));
                   },
                 ),
               ),
@@ -944,7 +933,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
                   label: 'Reportar',
                   onTap: () {
                     _safePush(ReportarProblemaScreen(
-                      trip: _trip,
+                      trip: _trip?.toJson(),
                       role: 'cliente',
                       onSubmitted: () {
                         _safePop();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
+import '../../models/trip.dart';
 import 'trip_in_progress_screen.dart';
 
 class OffersScreen extends StatefulWidget {
@@ -148,7 +149,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip))),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip != null ? Trip.fromJson(_activeTrip!) : null))),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primaryBlue, foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,

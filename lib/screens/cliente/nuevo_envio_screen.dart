@@ -146,9 +146,12 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     }
   }
 
+  static const String _recentKey = 'recent_addresses';
+
   Future<void> _searchAddress({bool isOrigen = true}) async {
     final ctrl = TextEditingController();
     try {
+      final recent = await _loadRecentSearches();
       final result = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -184,6 +187,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
         if (!mounted) return;
 
+        final allResults = [...recent, ...data.cast<Map<String, dynamic>>()];
+        final recentCount = recent.length;
+
         final selected = await showDialog<Map<String, dynamic>>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -192,14 +198,36 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               width: double.maxFinite,
               child: ListView.builder(
                 shrinkWrap: true,
-                itemCount: data.length,
+                itemCount: allResults.length,
                 itemBuilder: (_, i) {
-                  final item = data[i] as Map<String, dynamic>;
-                  return ListTile(
-                    leading: const Icon(Icons.location_on, color: Color(0xFF2563EB)),
-                    title: Text(item['display_name'] as String? ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
-                    onTap: () => Navigator.pop(ctx, item),
-                  );
+                  final isRecent = i < recentCount;
+                  final item = allResults[i];
+                  if (isRecent && i == 0 && recentCount > 0) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                          child: Text('RECIENTES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+                        ),
+                        _addressTile(item, ctx),
+                      ],
+                    );
+                  }
+                  if (isRecent && i == recentCount - 1 && i + 1 < allResults.length) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _addressTile(item, ctx),
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                          child: Text('RESULTADOS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+                        ),
+                      ],
+                    );
+                  }
+                  return _addressTile(item, ctx);
                 },
               ),
             ),
@@ -210,6 +238,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
         );
 
         if (selected != null && mounted) {
+          _saveRecentSearch(selected);
           final lat = double.tryParse(selected['lat'] as String? ?? '');
           final lon = double.tryParse(selected['lon'] as String? ?? '');
           if (lat != null && lon != null) {
@@ -232,6 +261,33 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     } finally {
       ctrl.dispose();
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_recentKey);
+    if (raw == null) return [];
+    return raw.map((e) => jsonDecode(e) as Map<String, dynamic>).toList();
+  }
+
+  Future<void> _saveRecentSearch(Map<String, dynamic> address) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_recentKey) ?? [];
+    final id = address['place_id'] ?? address['display_name'];
+    raw.removeWhere((e) {
+      try { return (jsonDecode(e) as Map<String, dynamic>)['place_id'] == id; } catch (_) { return false; }
+    });
+    raw.insert(0, jsonEncode(address));
+    if (raw.length > 10) raw.removeLast();
+    await prefs.setStringList(_recentKey, raw);
+  }
+
+  Widget _addressTile(Map<String, dynamic> item, BuildContext ctx) {
+    return ListTile(
+      leading: const Icon(Icons.location_on, color: Color(0xFF2563EB)),
+      title: Text(item['display_name'] as String? ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
+      onTap: () => Navigator.pop(ctx, item),
+    );
   }
 
   void _showMapPicker({bool isOrigen = true}) {

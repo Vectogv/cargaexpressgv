@@ -1,21 +1,21 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import '../models/trip.dart';
 import '../screens/user/auth_screen.dart';
-import '../screens/user/login_screen.dart';
-import '../screens/user/register_screen.dart';
 import '../screens/cliente/home_screen.dart' as cliente;
-import '../screens/cliente/rastreo_screen.dart';
 import '../screens/cliente/nuevo_envio_screen.dart';
+import '../screens/cliente/rastreo_screen.dart';
 import '../screens/cliente/mis_envios_screen.dart';
-import '../screens/cliente/viaje_detalle_screen.dart';
-import '../screens/cliente/chat_screen.dart';
 import '../screens/cliente/perfil_screen.dart';
 import '../screens/cliente/pagos_screen.dart';
 import '../screens/cliente/ajustes_screen.dart';
+import '../screens/cliente/chat_screen.dart';
 import '../screens/conductor/home_screen.dart' as conductor;
-import '../screens/conductor/conductor_trip_detail_screen.dart';
+import '../screens/user/login_screen.dart';
+import '../screens/user/register_screen.dart';
 import '../screens/conductor/trip_in_progress_screen.dart';
 import '../screens/conductor/trip_chat_screen.dart';
+import '../screens/conductor/conductor_trip_detail_screen.dart';
 import '../services/api_client.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -55,7 +55,7 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/conductor/trip-progress/:tripId',
-      builder: (_, state) => TripInProgressScreen(trip: {'id': state.pathParameters['tripId']}),
+      builder: (_, state) => TripInProgressScreen(trip: Trip.fromJson({'id': state.pathParameters['tripId'] ?? ''})),
     ),
     GoRoute(
       path: '/conductor/chat/:tripId',
