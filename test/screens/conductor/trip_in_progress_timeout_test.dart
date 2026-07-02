@@ -29,8 +29,7 @@ void main() {
     test('el contador parte en 30 y decrementa cada segundo', () {
       fakeAsync((async) {
         var tickCount = 0;
-        Timer? timer;
-        timer = Timer.periodic(const Duration(seconds: 1), (t) {
+        Timer.periodic(const Duration(seconds: 1), (t) {
           tickCount++;
           if (tickCount >= 5) t.cancel();
         });

@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "E2E: Flujo completo (debug)",
+      "type": "dart",
+      "request": "launch",
+      "program": "integration_test/flujo_completo_test.dart",
+      "args": [
+        "--dart-define=TEST_MODE=true",
+        "--reporter=expanded"
+      ]
+    },
+    {
+      "name": "E2E: Flujo completo (run)",
+      "type": "dart",
+      "request": "launch",
+      "program": "integration_test/flujo_completo_test.dart",
+      "args": [
+        "--dart-define=TEST_MODE=true",
+        "--reporter=expanded"
+      ],
+      "flutterMode": "release"
+    }
+  ]
+}

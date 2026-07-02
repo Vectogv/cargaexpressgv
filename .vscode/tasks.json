@@ -1,0 +1,55 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "E2E: Flujo completo",
+      "type": "shell",
+      "command": "flutter",
+      "args": [
+        "test",
+        "--dart-define=TEST_MODE=true",
+        "--reporter=expanded",
+        "integration_test/flujo_completo_test.dart"
+      ],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "E2E: Todos los tests de integración",
+      "type": "shell",
+      "command": "flutter",
+      "args": [
+        "test",
+        "--dart-define=TEST_MODE=true",
+        "--reporter=expanded",
+        "integration_test/"
+      ],
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "E2E: Iniciar mock server manualmente",
+      "type": "shell",
+      "command": "dart",
+      "args": [
+        "run",
+        "integration_test/mock_server.dart"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../core/environment.dart';
 import '../api_client.dart';
 import '../logger_service.dart';
 import '../network_monitor_service.dart';
 import '../performance_monitor.dart';
 
 class HttpClient {
-  static const String baseUrl = 'http://localhost:3333';
+  static String get baseUrl => Environment.baseUrl;
 
   static Map<String, String> _headers({bool auth = false}) {
     final headers = <String, String>{'Content-Type': 'application/json'};

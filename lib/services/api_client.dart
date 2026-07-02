@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/environment.dart';
 import 'auth_response.dart';
 import 'api/auth_service.dart';
 import 'api/trip_service.dart';
@@ -16,7 +17,7 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
   ApiClient._();
 
-  static const String baseUrl = 'http://localhost:3333';
+  static String get baseUrl => Environment.baseUrl;
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'auth_refresh_token';
   static const String _userIdKey = 'auth_user_id';
