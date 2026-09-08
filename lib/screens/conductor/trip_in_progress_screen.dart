@@ -163,10 +163,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final destino = t.destino;
     if (origen == null || destino == null) return;
     final points = await RouteService.getRoute(LatLng(origen.lat, origen.lng), LatLng(destino.lat, destino.lng));
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       _routePoints = points;
       _isRouteLoading = false;
     });
+    }
   }
 
   Future<void> _restoreAfterBackground() async {
@@ -253,13 +255,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 10),
+          timeLimit: Duration(seconds: 10),
         ),
       );
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _currentLat = pos.latitude;
         _currentLng = pos.longitude;
       });
+      }
     } catch (e) {
       LoggerService.instance.error('trip_in_progress._initLocation error', e);
     }
@@ -1308,7 +1312,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               const SizedBox(height: 8),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 ...List.generate(5, (i) {
-                  final val = calificacion is num ? calificacion.toInt() : 0;
+                  final val = calificacion.toInt();
                   return Icon(
                     i < val ? Icons.star_rounded : Icons.star_border_rounded,
                     color: const Color(0xFFFF8F00),

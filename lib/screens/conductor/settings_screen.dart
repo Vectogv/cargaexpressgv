@@ -31,11 +31,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     try {
       final settings = await ApiClient.instance.getSettings();
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _sonido = settings['notificacionesSonido'] as bool? ?? true;
         _visible = settings['visibilidad'] == 'visible';
         _loading = false;
       });
+      }
     } catch (_) {
       _loadFromCache();
     }

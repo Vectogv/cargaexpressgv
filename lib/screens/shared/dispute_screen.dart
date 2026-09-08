@@ -24,7 +24,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
   final _descCtrl = TextEditingController();
   String? _selectedType;
   bool _submitting = false;
-  List<String> _photoUrls = [];
+  final List<String> _photoUrls = [];
   bool _uploading = false;
 
   static const List<Map<String, dynamic>> _disputeTypes = [

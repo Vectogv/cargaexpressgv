@@ -37,7 +37,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   static const double _zonaKm = 0.05;
   late final AnimationController _pulseCtrl;
   Trip? _trip;
-  List<Map<String, dynamic>> _ofertas = [];
+  final List<Map<String, dynamic>> _ofertas = [];
   String _status = TripStatus.buscando;
   bool _loading = false;
   bool _cancelling = false;

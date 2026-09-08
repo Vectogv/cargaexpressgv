@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../api_client.dart';
+import '../dio_client.dart';
 import '../logger_service.dart';
 
 class AuthInterceptor extends Interceptor {
@@ -19,7 +20,7 @@ class AuthInterceptor extends Interceptor {
         LoggerService.instance.info('AuthInterceptor: refreshing token');
         final auth = await ApiClient.instance.refreshToken();
         err.requestOptions.headers['Authorization'] = 'Bearer ${auth.token}';
-        final response = await Dio().fetch(err.requestOptions);
+        final response = await DioClient.configuredDio!.fetch(err.requestOptions);
         handler.resolve(response);
         return;
       } catch (e) {

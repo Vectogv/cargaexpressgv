@@ -201,23 +201,29 @@ class _HomeScreenState extends State<HomeScreen> {
         // Verificar estado primero
         final estado = _verificacionEstado;
         if (estado == null) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Cargando tu perfil... intenta en un momento'), backgroundColor: Colors.orange),
           );
+          }
           return;
         }
         if (estado != 'aprobado') {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Tu cuenta no está aprobada para recibir viajes'), backgroundColor: Colors.orange),
           );
+          }
           return;
         }
         // Intentar GPS primero
         final gpsOk = await DriverLocationService.instance.start();
         if (!gpsOk) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Permiso de ubicación denegado. Actívalo en Ajustes.'), backgroundColor: Colors.red),
           );
+          }
           return; // NO marcar online si GPS falló
         }
         try { await ApiClient.instance.setDriverStatus(true); } catch (_) {}
@@ -228,9 +234,11 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) setState(() => _online = false);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
       );
+      }
     } finally {
       if (mounted) setState(() => _statusLoading = false);
     }

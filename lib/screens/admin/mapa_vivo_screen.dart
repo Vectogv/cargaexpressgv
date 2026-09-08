@@ -52,11 +52,13 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
       );
       if (res.statusCode == 200) {
         final List data = jsonDecode(res.body);
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _trips = List<Map<String, dynamic>>.from(data);
           _loading = false;
           _mapError = false;
         });
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);

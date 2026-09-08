@@ -32,12 +32,14 @@ class _EarningsScreenState extends State<EarningsScreen> {
         ApiClient.instance.getDriverStats(),
         ApiClient.instance.getDebt(),
       ]);
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _earnings = results[0];
         _stats = results[1];
         _commission = results[2];
         _loading = false;
       });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }

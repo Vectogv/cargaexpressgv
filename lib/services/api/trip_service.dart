@@ -43,8 +43,10 @@ class TripService {
     await HttpClient.post('/api/trips/$id/start-trip', auth: true);
   }
 
-  static Future<void> completeTrip(dynamic id) async {
-    await HttpClient.post('/api/trips/$id/complete', auth: true);
+  static Future<void> completeTrip(dynamic id, {num? montoFinal}) async {
+    final body = <String, dynamic>{};
+    if (montoFinal != null) body['montoFinal'] = montoFinal;
+    await HttpClient.post('/api/trips/$id/complete', body: body, auth: true);
   }
 
   static Future<void> finalizeTrip(dynamic id, {num? montoFinal}) async {

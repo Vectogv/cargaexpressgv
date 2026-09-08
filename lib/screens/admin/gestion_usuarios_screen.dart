@@ -111,6 +111,10 @@ class _UsersScreenState extends State<UsersScreen> {
         title: 'Editar usuario',
         icon: Icons.edit_rounded,
         iconColor: _blue,
+        onCancel: () => Navigator.pop(ctx, false),
+        onConfirm: () => Navigator.pop(ctx, true),
+        confirmLabel: 'Guardar',
+        confirmColor: _blue,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -121,10 +125,6 @@ class _UsersScreenState extends State<UsersScreen> {
             _DialogField(controller: emailCtrl,    label: 'Email',    icon: Icons.email_rounded),
           ],
         ),
-        onCancel: () => Navigator.pop(ctx, false),
-        onConfirm: () => Navigator.pop(ctx, true),
-        confirmLabel: 'Guardar',
-        confirmColor: _blue,
       ),
     );
     if (result != true) return;
@@ -151,11 +151,11 @@ class _UsersScreenState extends State<UsersScreen> {
         title: 'Actualizar avatar',
         icon: Icons.image_rounded,
         iconColor: _teal,
-        child: _DialogField(controller: urlCtrl, label: 'URL del avatar', icon: Icons.link_rounded),
         onCancel: () => Navigator.pop(ctx, false),
         onConfirm: () => Navigator.pop(ctx, true),
         confirmLabel: 'Guardar',
         confirmColor: _teal,
+        child: _DialogField(controller: urlCtrl, label: 'URL del avatar', icon: Icons.link_rounded),
       ),
     );
     if (result != true || urlCtrl.text.trim().isEmpty) return;
@@ -255,11 +255,11 @@ class _UsersScreenState extends State<UsersScreen> {
           title: title,
           icon: icon,
           iconColor: confirmColor,
-          child: Text(message, style: const TextStyle(color: _textSec, fontSize: 14, height: 1.5)),
           onCancel: () => Navigator.pop(ctx, false),
           onConfirm: () => Navigator.pop(ctx, true),
           confirmLabel: confirmLabel,
           confirmColor: confirmColor,
+          child: Text(message, style: const TextStyle(color: _textSec, fontSize: 14, height: 1.5)),
         ),
       );
 

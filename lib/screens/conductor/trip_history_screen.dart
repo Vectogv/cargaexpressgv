@@ -54,11 +54,13 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
     if (!isLoadMore) setState(() => _loading = true);
     try {
       final data = await ApiClient.instance.getTripHistory(page: _page, limit: _pageSize);
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _history.addAll(data);
         _hasMore = data.length >= _pageSize;
         _loading = false;
       });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }

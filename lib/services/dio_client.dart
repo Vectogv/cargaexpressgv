@@ -10,6 +10,9 @@ class DioClient {
 
   late final Dio dio;
 
+  /// Static reference for interceptors to use
+  static Dio? get configuredDio => instance.dio;
+
   void init() {
     dio = Dio(BaseOptions(
       baseUrl: ApiClient.baseUrl,
@@ -74,7 +77,7 @@ class RetryInterceptor extends Interceptor {
 
         await Future.delayed(delay);
         try {
-          final response = await Dio().fetch(options);
+          final response = await DioClient.configuredDio!.fetch(options);
           handler.resolve(response);
           return;
         } catch (e) {

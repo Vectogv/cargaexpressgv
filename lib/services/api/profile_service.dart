@@ -15,8 +15,11 @@ class ProfileService {
     return data['avatar'] as String? ?? '';
   }
 
-  static Future<List<Map<String, dynamic>>> getNotifications() async {
-    final list = await HttpClient.getList('/api/notifications', auth: true);
+  static Future<List<Map<String, dynamic>>> getNotifications({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final list = await HttpClient.getList('/api/notifications?page=$page&limit=$limit', auth: true);
     return list.cast<Map<String, dynamic>>();
   }
 

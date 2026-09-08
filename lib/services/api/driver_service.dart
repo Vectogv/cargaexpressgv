@@ -78,6 +78,17 @@ class DriverService {
     return data['fotoConductor'] as String? ?? '';
   }
 
+  static Future<String> uploadPaymentProof(Uint8List bytes, String filename) async {
+    final data = await HttpClient.uploadFile(
+      '/api/payment/proof', 
+      bytes: bytes, 
+      filename: filename, 
+      fieldName: 'file', 
+      auth: true
+    );
+    return data['url'] as String? ?? '';
+  }
+
   static String _extractError(dynamic data) {
     if (data is Map) {
       if (data['message'] != null) return data['message'] as String;

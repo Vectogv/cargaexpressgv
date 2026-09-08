@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'logger_service.dart';
 import 'socket_service_client.dart';
 import 'network_monitor_service.dart';
-import 'driver_location_service.dart';
 import 'cache_service.dart';
 
 class AppLifecycleService with WidgetsBindingObserver {
