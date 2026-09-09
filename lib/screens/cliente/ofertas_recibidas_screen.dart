@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/socket_service_client.dart';
 import 'oferta_aceptada_screen.dart';
 
 class OfertasRecibidasScreen extends StatefulWidget {
@@ -52,6 +53,9 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
     return '\$${monto.toStringAsFixed(0)}';
   }
 
+  String? _offerId(Map<String, dynamic> offer) =>
+      (offer['_id'] ?? offer['id'])?.toString();
+
   Future<void> _rechazar(String offerId, int index) async {
     try {
       await widget.onReject(offerId);
@@ -74,26 +78,32 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       if (!mounted) return;
 
       final offer = _offers.cast<Map<String, dynamic>?>().firstWhere(
-        (o) => o?['id']?.toString() == offerId,
+        (o) => _offerId(o!) == offerId,
         orElse: () => null,
       );
       final conductor = offer?['conductor'] as Map<String, dynamic>?;
 
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OfertaAceptadaScreen(
-            conductorNombre: conductor?['nombre'] as String? ?? 'Conductor',
-            camion: conductor?['tipoVehiculo'] as String? ?? '',
-            placa: offer?['placa']?.toString() ?? conductor?['placa']?.toString() ?? '',
-            rating: (conductor?['rating'] as num?)?.toDouble() ?? 0,
-            onVerSeguimiento: () => Navigator.pop(context),
+      // RastreoScreen (pantalla inferior) ya escucha `offer:accepted` y
+      // reemplaza la ruta con OfertaAceptadaScreen. Para evitar DOBLE push
+      // (éste + el del socket), volvemos a RastreoScreen y dejamos que el
+      // socket tome el control. Si el socket no está conectado, navegamos
+      // manualmente como respaldo.
+      if (SocketServiceClient.instance.isConnected) {
+        Navigator.of(context).pop();
+      } else {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OfertaAceptadaScreen(
+              conductorNombre: conductor?['nombre'] as String? ?? 'Conductor',
+              camion: conductor?['tipoVehiculo'] as String? ?? '',
+              placa: offer?['placa']?.toString() ?? conductor?['placa']?.toString() ?? '',
+              rating: (conductor?['rating'] as num?)?.toDouble() ?? 0,
+              onVerSeguimiento: () => Navigator.pop(context),
+            ),
           ),
-        ),
-      );
-
-      // Después de OfertaAceptadaScreen, RastreoScreen toma el control via socket onOfferAccepted
-      // NO hacer maybePop extra: evita double-pop que deja estado inconsistente
+        );
+      }
       if (mounted) {
         setState(() => _acceptingId = null);
       }
@@ -155,12 +165,13 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, i) {
                     final offer = _offers[i];
+                    final offerId = _offerId(offer);
                     final conductor = offer['conductor'] as Map<String, dynamic>?;
                     final nombre = conductor?['nombre'] as String? ?? 'Conductor';
                     final camion = '${conductor?['tipoVehiculo'] ?? ''} · ${offer['placa']?.toString() ?? conductor?['placa']?.toString() ?? ''}';
                     final monto = num.tryParse(offer['monto']?.toString() ?? '') ?? 0;
                     final diff = presupuesto > 0 ? ((monto - presupuesto) / presupuesto * 100).round() : 0;
-                    final isAccepting = _acceptingId == offer['id'];
+                    final isAccepting = _acceptingId == offerId;
 
                     return Container(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
@@ -225,7 +236,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: isAccepting ? null : () => _rechazar(offer['id']?.toString() ?? '', i),
+                                  onPressed: isAccepting ? null : () => _rechazar(offerId ?? '', i),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.black87,
                                     side: const BorderSide(color: Color(0xFFDDDDDD)),
@@ -238,7 +249,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: isAccepting ? null : () => _aceptar(offer['id']?.toString() ?? ''),
+                                  onPressed: isAccepting ? null : () => _aceptar(offerId ?? ''),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF22C55E),
                                     foregroundColor: Colors.white,

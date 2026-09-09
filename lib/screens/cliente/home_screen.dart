@@ -492,8 +492,3 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   }
 }
 
-class _NavItem {
-  final IconData icon;
-  final String label;
-  const _NavItem({required this.icon, required this.label});
-}

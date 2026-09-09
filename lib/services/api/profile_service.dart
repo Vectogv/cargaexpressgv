@@ -28,20 +28,23 @@ class ProfileService {
   }
 
   static Future<List<Map<String, dynamic>>> getForumPosts() async {
-    final list = await HttpClient.getList('/api/foro', auth: true);
+    // Contrato backend: los avisos/foro viven en /api/avisos.
+    final list = await HttpClient.getList('/api/avisos', auth: true);
     return list.cast<Map<String, dynamic>>();
   }
 
   static Future<Map<String, dynamic>> createForumPost(Map<String, dynamic> data) async {
-    return HttpClient.post('/api/foro', body: data, auth: true);
+    return HttpClient.post('/api/avisos', body: data, auth: true);
   }
 
   static Future<Map<String, dynamic>> getSurveyResults(dynamic id) async {
     return HttpClient.get('/api/moderator/encuestas/$id/results', auth: true);
   }
 
-  static Future<void> answerSurvey(dynamic id, dynamic opcionId) async {
-    await HttpClient.post('/api/moderator/encuestas/$id/answer', body: {'opcionId': opcionId}, auth: true);
+  static Future<void> answerSurvey(dynamic id, dynamic opcionElegida) async {
+    // Contrato backend: el campo se llama `opcionElegida` y debe ser el texto
+    // de la opción (no su id).
+    await HttpClient.post('/api/moderator/encuestas/$id/answer', body: {'opcionElegida': opcionElegida}, auth: true);
   }
 
   static Future<Map<String, dynamic>> getSettings() async {

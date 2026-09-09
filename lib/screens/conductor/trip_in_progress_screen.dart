@@ -63,7 +63,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   bool _isCancelling = false;
   bool _isFinalizing = false;
   List<LatLng> _routePoints = [];
-  bool _isRouteLoading = true;
   bool _locationWarningShown = false;
   int _locationFailCount = 0;
   DateTime? _lastLocationSent;
@@ -166,7 +165,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (mounted) {
       setState(() {
       _routePoints = points;
-      _isRouteLoading = false;
     });
     }
   }
@@ -458,7 +456,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     });
 
     int timeoutSec = 30;
-    if (!mounted) { setState(() => _actionLoading = false); return; }
+    if (!mounted) return;
+    setState(() => _actionLoading = true);
 
     await showDialog(
       context: context,
@@ -478,7 +477,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               }
             });
           } else {
-            setState(() {});
+            if (mounted) setState(() {});
           }
         });
         return StatefulBuilder(
@@ -518,7 +517,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         );
       },
     );
-    setState(() => _actionLoading = false);
+    if (mounted) setState(() => _actionLoading = false);
   }
 
   Future<void> _fetchActiveTrip() async {

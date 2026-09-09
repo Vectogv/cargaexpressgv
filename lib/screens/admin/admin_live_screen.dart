@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/notification_service.dart';
 import '../user/auth_screen.dart';
@@ -43,6 +44,7 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
   StreamSubscription<Map<String, dynamic>>? _disputeSub;
   StreamSubscription<Map<String, dynamic>>? _cancelSub;
   StreamSubscription<Map<String, dynamic>>? _emergencySub;
+  StreamSubscription<dynamic>? _notifSub;
   Timer? _pollTimer;
 
   @override
@@ -50,7 +52,7 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
     super.initState();
     _tabCtrl = TabController(length: 7, vsync: this);
     _notifUnread = NotificationService.instance.unreadCount;
-    NotificationService.instance.onNotification.listen((_) {
+    _notifSub = NotificationService.instance.onNotification.listen((_) {
       if (mounted) setState(() => _notifUnread = NotificationService.instance.unreadCount);
     });
     _initSocket();
@@ -65,10 +67,11 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
     _driverLocSub = SocketServiceClient.instance.onAdminDriverLocation.listen((data) {
       if (!mounted) return;
       setState(() {
-        final idx = _drivers.indexWhere((d) => d['id']?.toString() == data['id']?.toString());
+        final dataId = (data['_id'] ?? data['id'])?.toString();
+        final idx = _drivers.indexWhere((d) => (d['_id'] ?? d['id'])?.toString() == dataId);
         if (idx >= 0) {
           _drivers[idx] = Map<String, dynamic>.from(_drivers[idx])..addAll(data);
-        } else {
+        } else if (dataId != null) {
           _drivers.add(data);
         }
       });
@@ -97,6 +100,7 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
     _disputeSub?.cancel();
     _cancelSub?.cancel();
     _emergencySub?.cancel();
+    _notifSub?.cancel();
     _pollTimer?.cancel();
     super.dispose();
   }
@@ -113,6 +117,14 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
     if (mounted && _loading) setState(() => _loading = false);
   }
 
+  /// Tolerancia al formato de lista: acepta `[...]` y `{"data": [...]}`
+  /// (el backend pagina con `{data, total, page, limit}`).
+  List<Map<String, dynamic>> _parseList(String body) {
+    return List<Map<String, dynamic>>.from(
+      HttpClient.parseListLenient(jsonDecode(body)).whereType<Map>(),
+    );
+  }
+
   Future<void> _fetchTrips() async {
     try {
       final res = await http.get(
@@ -120,7 +132,7 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
         headers: _authHeaders,
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() => _trips = List<Map<String, dynamic>>.from(jsonDecode(res.body)));
+        setState(() => _trips = _parseList(res.body));
       }
     } catch (_) {}
   }
@@ -132,19 +144,25 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
         headers: _authHeaders,
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() => _drivers = List<Map<String, dynamic>>.from(jsonDecode(res.body)));
+        setState(() => _drivers = _parseList(res.body));
       }
     } catch (_) {}
   }
 
   Future<void> _fetchClients() async {
     try {
+      // Contrato real: no existe /api/admin/clients; la lista de usuarios
+      // se obtiene de GET /api/admin/users y se filtra por rol.
       final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/clients'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users'),
         headers: _authHeaders,
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() => _clients = List<Map<String, dynamic>>.from(jsonDecode(res.body)));
+        setState(() {
+          _clients = _parseList(res.body)
+              .where((u) => u['rol'] == 'cliente')
+              .toList();
+        });
       }
     } catch (_) {}
   }
@@ -156,19 +174,20 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
         headers: _authHeaders,
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() => _disputes = List<Map<String, dynamic>>.from(jsonDecode(res.body)));
+        setState(() => _disputes = _parseList(res.body));
       }
     } catch (_) {}
   }
 
   Future<void> _fetchCancellations() async {
     try {
+      // Contrato real: GET /api/admin/cancellation-requests
       final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/cancellations'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/cancellation-requests'),
         headers: _authHeaders,
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() => _cancellations = List<Map<String, dynamic>>.from(jsonDecode(res.body)));
+        setState(() => _cancellations = _parseList(res.body));
       }
     } catch (_) {}
   }
@@ -180,7 +199,7 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
         headers: _authHeaders,
       );
       if (res.statusCode == 200 && mounted) {
-        setState(() => _emergencies = List<Map<String, dynamic>>.from(jsonDecode(res.body)));
+        setState(() => _emergencies = _parseList(res.body));
       }
     } catch (_) {}
   }

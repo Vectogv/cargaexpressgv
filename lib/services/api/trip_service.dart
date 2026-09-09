@@ -6,7 +6,8 @@ import 'http_client.dart';
 
 class TripService {
   static Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) async {
-    return HttpClient.post('/api/trips/request', body: data, auth: true);
+    // El contrato del backend exige X-Idempotency-Key para prevenir duplicados.
+    return HttpClient.post('/api/trips/request', body: data, auth: true, idempotent: true);
   }
 
   static Future<Map<String, dynamic>?> getActiveTrip() async {
@@ -35,8 +36,9 @@ class TripService {
   }
 
   static Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) async {
+    // Tolerar ambos contratos: array plano `[...]` (api_spec) o `{data: [...]}` (mock/backend).
     final list = await HttpClient.getList('/api/trips/nearby?lat=$lat&lng=$lng&radio=$radio', auth: true);
-    return list.cast<Map<String, dynamic>>();
+    return list.whereType<Map<String, dynamic>>().toList();
   }
 
   static Future<void> startTrip(dynamic id) async {
@@ -46,13 +48,13 @@ class TripService {
   static Future<void> completeTrip(dynamic id, {num? montoFinal}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
-    await HttpClient.post('/api/trips/$id/complete', body: body, auth: true);
+    await HttpClient.post('/api/trips/$id/complete', body: body, auth: true, idempotent: true);
   }
 
   static Future<void> finalizeTrip(dynamic id, {num? montoFinal}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
-    await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true);
+    await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true, idempotent: true);
   }
 
   static Future<void> cancelTrip(dynamic id, {String? motivo}) async {

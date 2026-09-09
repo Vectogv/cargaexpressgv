@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../api_client.dart';
 import '../dio_client.dart';
+import '../error_handler_service.dart';
 import '../logger_service.dart';
 
 class AuthInterceptor extends Interceptor {
@@ -26,6 +27,7 @@ class AuthInterceptor extends Interceptor {
       } catch (e) {
         LoggerService.instance.error('AuthInterceptor: token refresh failed, logging out', e);
         await ApiClient.instance.logout();
+        ErrorHandlerService.instance.emitSessionExpired();
       }
     }
     handler.next(err);

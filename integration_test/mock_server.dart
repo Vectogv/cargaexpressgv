@@ -113,8 +113,9 @@ class MockServer {
     }
 
     // --- Config ---
-    if (path == '/api/config/mapbox-token') {
-      return _MockResponse(200, {'token': ''});
+    // Contrato real: GET /api/config/mapbox -> { mapboxAccessToken }
+    if (path == '/api/config/mapbox') {
+      return _MockResponse(200, {'mapboxAccessToken': ''});
     }
 
     // --- Trips ---
@@ -151,11 +152,40 @@ class MockServer {
     }
 
     // --- Driver ---
-    if (method == 'POST' && path == '/api/drivers/location') {
+    // Contrato real: PUT /api/drivers/location y PUT /api/drivers/status
+    if (method == 'PUT' && path == '/api/drivers/location') {
       return _MockResponse(200, {'message': 'ok'});
     }
-    if (method == 'POST' && path == '/api/drivers/status') {
+    if (method == 'PUT' && path == '/api/drivers/status') {
       return _MockResponse(200, {'message': 'ok'});
+    }
+
+    // --- Avisos / Foro ---
+    if (path == '/api/avisos') {
+      if (method == 'GET') return _MockResponse(200, {'data': []});
+      return _MockResponse(200, {'message': 'ok'});
+    }
+
+    // --- Admin (listas paginadas con {data: [...]}, contrato real) ---
+    if (path == '/api/admin/trips' ||
+        path == '/api/admin/drivers' ||
+        path == '/api/admin/users' ||
+        path == '/api/admin/disputes' ||
+        path == '/api/admin/cancellation-requests' ||
+        path == '/api/admin/emergencies' ||
+        path == '/api/admin/verifications' ||
+        path == '/api/admin/reports' ||
+        path == '/api/admin/moderator-reports' ||
+        path == '/api/admin/payments/pending' ||
+        path == '/api/admin/commissions') {
+      if (method == 'GET') return _MockResponse(200, {'data': []});
+    }
+    if (path == '/api/admin/dashboard' ||
+        path == '/api/admin/earnings' ||
+        path == '/api/admin/profile' ||
+        path == '/api/admin/config' ||
+        path == '/api/admin/backups') {
+      if (method == 'GET') return _MockResponse(200, {});
     }
 
     // --- Chats ---

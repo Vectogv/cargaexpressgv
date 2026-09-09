@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
-import 'widgets/carga_express_bottom_nav.dart';
+import '../lib/widgets/carga_express_bottom_nav.dart';
 
 void main() {
   runApp(const VerificacionesApp());

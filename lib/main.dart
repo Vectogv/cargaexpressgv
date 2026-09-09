@@ -25,6 +25,8 @@ import 'screens/admin/admin_live_screen.dart';
 import 'screens/conductor/home_screen.dart' as conductor;
 import 'screens/cliente/home_screen.dart';
 
+final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
@@ -90,6 +92,19 @@ void main() {
 // ─────────────────────────────────────────────────────────────────────────────
 void _setupErrorHandlers() {
   ErrorHandlerService.instance.init();
+
+  // Sesión expirada (401 sin refresh válido): volver al login limpiando la
+  // pila completa. Un segundo evento reemplaza [AuthScreen] por [AuthScreen],
+  // así que es idempotente.
+  ErrorHandlerService.instance.onAuthExpired.listen((_) {
+    final nav = _navigatorKey.currentState;
+    if (nav == null) return;
+    LoggerService.instance.info('Session expired: redirecting to login');
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+      (route) => false,
+    );
+  });
 
   FlutterError.onError = (details) {
     LoggerService.instance.error(
@@ -277,6 +292,7 @@ class MainApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: NotificationProvider.instance),
       ],
       child: MaterialApp(
+        navigatorKey: _navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'CargaExpress',
         theme: ThemeData(

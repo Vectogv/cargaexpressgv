@@ -12,6 +12,17 @@ class ErrorHandlerService {
   final StreamController<ErrorEvent> _errorCtrl = StreamController<ErrorEvent>.broadcast();
   Stream<ErrorEvent> get onError => _errorCtrl.stream;
 
+  /// Evento global de sesión expirada (401 sin refresh válido).
+  final StreamController<void> _authExpiredCtrl = StreamController<void>.broadcast();
+  Stream<void> get onAuthExpired => _authExpiredCtrl.stream;
+
+  /// Notifica que la sesión expiró y el token no pudo renovarse.
+  void emitSessionExpired() {
+    if (!_authExpiredCtrl.isClosed) {
+      _authExpiredCtrl.add(null);
+    }
+  }
+
   void init() {
     if (_initialized) return;
     _initialized = true;
@@ -223,6 +234,7 @@ class ErrorHandlerService {
 
   void dispose() {
     _errorCtrl.close();
+    _authExpiredCtrl.close();
   }
 }
 

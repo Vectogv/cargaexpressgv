@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/environment.dart';
 import 'auth_response.dart';
@@ -10,8 +8,8 @@ import 'api/offer_service.dart';
 import 'api/chat_service.dart';
 import 'api/driver_service.dart';
 import 'api/profile_service.dart';
-import 'api/payment_service.dart';
 import 'api/dispute_service.dart';
+import 'socket_service_client.dart';
 
 class ApiClient {
   static final ApiClient instance = ApiClient._();
@@ -54,12 +52,6 @@ class ApiClient {
     _rol = prefs.getString(_rolKey);
   }
 
-  Map<String, String> _headers({bool auth = false}) {
-    final headers = <String, String>{'Content-Type': 'application/json'};
-    if (auth && _token != null) headers['Authorization'] = 'Bearer $_token';
-    return headers;
-  }
-
   // --- Auth ---
 
   Future<AuthResponse> login(String email, String password) async {
@@ -80,7 +72,17 @@ class ApiClient {
     if (_refreshToken == null) throw Exception('No hay refresh token');
     try {
       final auth = await AuthService.refreshToken(_refreshToken!);
-      await _saveTokens(auth.token, auth.refreshToken);
+      // El endpoint de refresh (según el contrato) sólo devuelve token/refreshToken.
+      // Actualizamos únicamente los tokens y conservamos el perfil en memoria.
+      if (auth.token.isNotEmpty) _token = auth.token;
+      if (auth.refreshToken != null && auth.refreshToken!.isNotEmpty) {
+        _refreshToken = auth.refreshToken;
+      }
+      final prefs = await SharedPreferences.getInstance();
+      if (_token != null) await prefs.setString(_tokenKey, _token!);
+      if (_refreshToken != null) {
+        await prefs.setString(_refreshTokenKey, _refreshToken!);
+      }
       return auth;
     } catch (_) {
       await clearTokens();
@@ -95,12 +97,17 @@ class ApiClient {
     await clearTokens();
   }
 
-  Future<void> _saveTokens(String token, String refreshToken) async {
+  Future<void> _saveTokens(String token, String? refreshToken) async {
     _token = token;
-    _refreshToken = refreshToken;
+    if (refreshToken != null) _refreshToken = refreshToken;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
-    await prefs.setString(_refreshTokenKey, refreshToken);
+    if (refreshToken != null) {
+      await prefs.setString(_refreshTokenKey, refreshToken);
+    }
+    // Conectar el socket apenas exista sesión (cubre login/registro en frío,
+    // donde init() se ejecutó sin token y nunca conectó).
+    SocketServiceClient.instance.forceReconnect();
   }
 
   Future<void> saveProfile(AuthResponse auth) async {
@@ -110,11 +117,11 @@ class ApiClient {
     _email = auth.email;
     _rol = auth.rol;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_userIdKey, auth.id);
-    await prefs.setString(_nombreKey, auth.nombre);
-    await prefs.setString(_apellidoKey, auth.apellido);
-    await prefs.setString(_emailKey, auth.email);
-    await prefs.setString(_rolKey, auth.rol);
+    if (auth.id != null) await prefs.setString(_userIdKey, auth.id!);
+    if (auth.nombre != null) await prefs.setString(_nombreKey, auth.nombre!);
+    if (auth.apellido != null) await prefs.setString(_apellidoKey, auth.apellido!);
+    if (auth.email != null) await prefs.setString(_emailKey, auth.email!);
+    if (auth.rol != null) await prefs.setString(_rolKey, auth.rol!);
   }
 
   Future<void> clearTokens() async {
@@ -133,6 +140,9 @@ class ApiClient {
     await prefs.remove(_apellidoKey);
     await prefs.remove(_emailKey);
     await prefs.remove(_rolKey);
+    // Cerrar el socket de la sesión anterior para no recibir eventos con
+    // un token inválido ni mezclar usuarios.
+    SocketServiceClient.instance.disconnect();
   }
 
   // --- Profile ---

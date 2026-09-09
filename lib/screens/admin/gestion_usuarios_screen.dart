@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
+import '../../services/error_handler_service.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -34,6 +36,9 @@ class _UsersScreenState extends State<UsersScreen> {
     'Authorization': 'Bearer ${ApiClient.instance.token}',
   };
 
+  /// Id de usuario tolerante al contrato Mongo (`_id`) y al alias (`id`).
+  dynamic _userId(dynamic user) => user['_id'] ?? user['id'];
+
   List<dynamic> get _filtered => _searchQuery.isEmpty
       ? _users
       : _users.where((u) {
@@ -56,9 +61,20 @@ class _UsersScreenState extends State<UsersScreen> {
         Uri.parse('${ApiClient.baseUrl}/api/admin/users'),
         headers: _authHeaders,
       );
+      if (res.statusCode == 401) {
+        ErrorHandlerService.instance.emitSessionExpired();
+        return;
+      }
       if (res.statusCode == 200) {
         setState(() {
-          _users = jsonDecode(res.body) as List<dynamic>;
+          final decoded = jsonDecode(res.body);
+          if (decoded is List) {
+            _users = decoded;
+          } else if (decoded is Map && decoded['data'] is List) {
+            _users = decoded['data'] as List;
+          } else {
+            _users = [];
+          }
           _loading = false;
         });
       } else {
@@ -72,7 +88,7 @@ class _UsersScreenState extends State<UsersScreen> {
   Future<void> _toggleSuspend(dynamic user) async {
     try {
       final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${user['id']}/suspend'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/suspend'),
         headers: _authHeaders,
       );
       if (res.statusCode == 200) _fetchUsers();
@@ -90,7 +106,7 @@ class _UsersScreenState extends State<UsersScreen> {
     if (confirm != true) return;
     try {
       final res = await http.delete(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${user['id']}'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}'),
         headers: _authHeaders,
       );
       if (res.statusCode == 200) {
@@ -130,7 +146,7 @@ class _UsersScreenState extends State<UsersScreen> {
     if (result != true) return;
     try {
       await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${user['id']}'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}'),
         headers: _authHeaders,
         body: jsonEncode({
           'nombre':   nombreCtrl.text,
@@ -144,30 +160,30 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   Future<void> _updateAvatar(dynamic user) async {
-    final urlCtrl = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => _StyledDialog(
-        title: 'Actualizar avatar',
-        icon: Icons.image_rounded,
-        iconColor: _teal,
-        onCancel: () => Navigator.pop(ctx, false),
-        onConfirm: () => Navigator.pop(ctx, true),
-        confirmLabel: 'Guardar',
-        confirmColor: _teal,
-        child: _DialogField(controller: urlCtrl, label: 'URL del avatar', icon: Icons.link_rounded),
-      ),
-    );
-    if (result != true || urlCtrl.text.trim().isEmpty) return;
+    // Contrato real: PUT /api/admin/users/:id/avatar es multipart/form-data
+    // con el campo `file` (imagen). Ya no se envía una URL en JSON.
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     try {
-      await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${user['id']}/avatar'),
-        headers: _authHeaders,
-        body: jsonEncode({'url': urlCtrl.text.trim()}),
-      );
-      _fetchUsers();
-      _showSnack('Avatar actualizado', _teal);
-    } catch (_) {}
+      final request = http.MultipartRequest(
+        'PUT',
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/avatar'),
+      )
+        ..headers.addAll(_authHeaders)
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: picked.name));
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
+      if (res.statusCode == 200) {
+        _fetchUsers();
+        _showSnack('Avatar actualizado', _teal);
+      } else {
+        _showSnack('Error al actualizar avatar (${res.statusCode})', _red);
+      }
+    } catch (_) {
+      _showSnack('Error de conexión al actualizar avatar', _red);
+    }
   }
 
   Future<void> _clearDebt(dynamic user) async {
@@ -181,7 +197,7 @@ class _UsersScreenState extends State<UsersScreen> {
     if (confirm != true) return;
     try {
       await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${user['id']}/clear-debt'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/clear-debt'),
         headers: _authHeaders,
       );
       _fetchUsers();
@@ -200,7 +216,7 @@ class _UsersScreenState extends State<UsersScreen> {
     if (confirm != true) return;
     try {
       await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${user['id']}/moderator'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/moderator'),
         headers: _authHeaders,
       );
       _fetchUsers();
@@ -219,7 +235,7 @@ class _UsersScreenState extends State<UsersScreen> {
     if (confirm != true) return;
     try {
       await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${user['id']}/leader'),
+        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/leader'),
         headers: _authHeaders,
       );
       _fetchUsers();

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../../services/api_client.dart';
+import '../../services/error_handler_service.dart';
 import 'gestion_usuarios_screen.dart';
 import 'gestion_conductores_screen.dart';
 import 'gestion_viajes_screen.dart';
@@ -51,6 +52,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'Authorization': 'Bearer ${api.token}',
         },
       );
+      if (res.statusCode == 401) {
+        ErrorHandlerService.instance.emitSessionExpired();
+        return;
+      }
       if (res.statusCode == 200) {
         setState(() {
           _data = jsonDecode(res.body);

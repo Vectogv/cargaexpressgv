@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../services/api_client.dart';
+import '../../services/error_handler_service.dart';
 
 class ViajesScreen extends StatefulWidget {
   const ViajesScreen({super.key});
@@ -46,6 +47,10 @@ class _ViajesScreenState extends State<ViajesScreen> {
         Uri.parse('${ApiClient.baseUrl}/api/admin/trips'),
         headers: _authHeaders,
       );
+      if (res.statusCode == 401) {
+        ErrorHandlerService.instance.emitSessionExpired();
+        return;
+      }
       if (res.statusCode == 200) {
         final List data = jsonDecode(res.body);
         if (mounted) setState(() { _viajes = List<Map<String, dynamic>>.from(data); _loading = false; });
@@ -65,8 +70,16 @@ class _ViajesScreenState extends State<ViajesScreen> {
         headers: _authHeaders,
       );
       if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        if (mounted) setState(() { _solicitudes = List<Map<String, dynamic>>.from(data); _loadingSolicitudes = false; });
+        final decoded = jsonDecode(res.body);
+        final List<dynamic> data;
+        if (decoded is List) {
+          data = decoded;
+        } else if (decoded is Map && decoded['data'] is List) {
+          data = decoded['data'] as List<dynamic>;
+        } else {
+          data = [];
+        }
+        if (mounted) setState(() { _solicitudes = List<Map<String, dynamic>>.from(data.whereType<Map<String, dynamic>>()); _loadingSolicitudes = false; });
       } else {
         if (mounted) setState(() => _loadingSolicitudes = false);
       }

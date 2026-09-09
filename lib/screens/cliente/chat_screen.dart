@@ -37,6 +37,9 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   static const Color _bubbleSent = Color(0xFF4CAF50);
   static const Color _bubbleReceived = Color(0xFFFFFFFF);
 
+  /// Id del viaje tolerante al contrato Mongo (`_id`) y al alias (`id`).
+  dynamic get _tripId => widget.trip['_id'] ?? widget.trip['id'];
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +68,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   Future<void> _setup() async {
     _setupSocket();
-    final tripId = widget.trip['id']?.toString();
+    final tripId = _tripId?.toString();
     if (tripId != null) {
       final cached = CacheService.instance.getCachedMessages(tripId);
       if (cached != null && mounted) {
@@ -88,7 +91,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   }
 
   void _setupSocket() {
-    final tripId = widget.trip['id']?.toString();
+    final tripId = _tripId?.toString();
     if (tripId == null) return;
 
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
@@ -153,8 +156,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   Future<void> _fetchMessages() async {
     try {
-      final msgs = await ApiClient.instance.getTripMessages(widget.trip['id']);
-      final tripId = widget.trip['id']?.toString();
+      final msgs = await ApiClient.instance.getTripMessages(_tripId);
+      final tripId = _tripId?.toString();
       if (tripId != null) CacheService.instance.cacheMessages(tripId, msgs);
       if (mounted) {
         setState(() { _messages = msgs; _loading = false; });
@@ -173,7 +176,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   void _sendReadReceipt(dynamic msgId) {
     if (msgId == null) return;
     SocketServiceClient.instance.emit('message:read', {
-      'tripId': widget.trip['id'],
+      'tripId': _tripId,
       'messageId': msgId,
     });
   }
@@ -181,7 +184,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   void _onTyping() {
     if (!_isTyping) {
       _isTyping = true;
-      SocketServiceClient.instance.emit('typing:start', {'tripId': widget.trip['id']});
+      SocketServiceClient.instance.emit('typing:start', {'tripId': _tripId});
     }
     _typingTimer?.cancel();
     _typingTimer = Timer(const Duration(seconds: 2), _stopTyping);
@@ -191,7 +194,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     if (!_isTyping) return;
     _isTyping = false;
     _typingTimer?.cancel();
-    SocketServiceClient.instance.emit('typing:stop', {'tripId': widget.trip['id']});
+    SocketServiceClient.instance.emit('typing:stop', {'tripId': _tripId});
   }
 
   Future<void> _sendMessage() async {
@@ -207,12 +210,12 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     _scrollDown();
 
     SocketServiceClient.instance.emit('message:send', {
-      'tripId': widget.trip['id'],
+      'tripId': _tripId,
       'text': text,
     });
 
     try {
-      await ApiClient.instance.sendTripMessage(widget.trip['id'], text);
+      await ApiClient.instance.sendTripMessage(_tripId, text);
       if (mounted) {
         setState(() {
           for (final m in _messages) {
@@ -233,7 +236,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   }
 
   void _saveCache() {
-    final tripId = widget.trip['id']?.toString();
+    final tripId = _tripId?.toString();
     if (tripId != null) {
       CacheService.instance.cacheMessages(tripId, _messages);
     }

@@ -118,7 +118,7 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
     final destino = v['destino'] as Map<String, dynamic>?;
     final estado = v['estado'] as String? ?? '';
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ViajeDetalleScreen(tripId: v['id']))),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ViajeDetalleScreen(tripId: v['_id'] ?? v['id']))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),

@@ -206,8 +206,8 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
         children: [
           const Text('Información', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
           const SizedBox(height: 10),
-          if (_trip!['carga'] != null && (_trip!['carga'] as String).isNotEmpty)
-            _infoRow('Carga', _trip!['carga'] as String),
+          if (_trip!['descripcion'] != null && (_trip!['descripcion'] as String).isNotEmpty)
+            _infoRow('Carga', _trip!['descripcion'] as String),
           _infoRow('Precio estimado', '\$${(_trip!['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '-'}'),
           _infoRow('Precio final', '\$${(_trip!['precioFinal'] as num?)?.toStringAsFixed(0) ?? '-'}'),
           if (_trip!['motivoCancelacion'] != null)
@@ -252,12 +252,22 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(conductor['nombre'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-              Text('${conductor['tipoVehiculo'] ?? ''} · ${conductor['placa'] ?? ''}', style: const TextStyle(fontSize: 12, color: Colors.black45)),
+              Text('${_vehiculoTexto(conductor)}', style: const TextStyle(fontSize: 12, color: Colors.black45)),
             ])),
           ]),
         ],
       ),
     );
+  }
+
+  String _vehiculoTexto(Map<String, dynamic> conductor) {
+    // Tolerante a dos formas: `tipoVehiculo`/`placa` planos o
+    // anidados en `vehiculo: {tipo, placa}` (forma usada en ofertas).
+    final veh = conductor['vehiculo'] as Map<String, dynamic>?;
+    final tipo = (veh?['tipo'] ?? conductor['tipoVehiculo'])?.toString() ?? '';
+    final placa = (veh?['placa'] ?? conductor['placa'])?.toString() ?? '';
+    if (tipo.isEmpty && placa.isEmpty) return '';
+    return [tipo, placa].where((s) => s.isNotEmpty).join(' · ');
   }
 
   String _initials(String name) {

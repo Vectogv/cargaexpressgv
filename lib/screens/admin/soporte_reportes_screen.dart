@@ -126,7 +126,6 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
   late TabController _tabController;
   late List<ChatMessage> _chatMessages;
   late List<Ticket> _tickets;
-  bool _isSending = false;
   bool _isLoading = true;
 
   @override
@@ -194,7 +193,6 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
 
     HapticFeedback.lightImpact();
     setState(() {
-      _isSending = true;
       _chatMessages.add(ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         text: text,
@@ -205,7 +203,8 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
     });
 
     Future.delayed(const Duration(milliseconds: 300), () {
-      setState(() => _isSending = false);
+      if (!mounted) return;
+      setState(() {});
       _scrollToBottom();
     });
   }

@@ -108,6 +108,9 @@ class SocketServiceClient {
     _networkSub = NetworkMonitorService.instance.onConnectionChanged.listen((online) {
       if (online && !_connected) {
         LoggerService.instance.info('SocketServiceClient: network restored, reconnecting');
+        // Al restaurarse la red se reinicia el contador: no bloquear la
+        // reconexión aunque se haya llegado al máximo de intentos previos.
+        _reconnectAttempts = 0;
         _scheduleReconnect();
       }
     });
@@ -159,10 +162,16 @@ class SocketServiceClient {
         _reconnectAttempts = 0;
         safeAdd(_connectionCtrl, true);
         LoggerService.instance.info('SocketServiceClient connected');
+        final rol = ApiClient.instance.rol;
         if (userId != null) {
-          _socket!.emit('join:client', {'userId': userId});
+          // Contrato: conductor → join:driver:{userId}, cliente → join:client:{userId}
+          if (rol == 'conductor') {
+            _socket!.emit('join:driver', {'userId': userId});
+          } else {
+            _socket!.emit('join:client', {'userId': userId});
+          }
         }
-        if (ApiClient.instance.rol == 'admin') {
+        if (rol == 'admin') {
           _socket!.emit('admin:join', {});
         }
       });
@@ -369,6 +378,21 @@ class SocketServiceClient {
     _reconnectAttempts = 0;
     _reconnectTimer?.cancel();
     _connect();
+  }
+
+  /// Desconecta sin cerrar los streams (para logout / cambio de sesión).
+  void disconnect() {
+    _reconnectTimer?.cancel();
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
+    _connected = false;
+    if (!_connectionCtrl.isClosed) {
+      try {
+        _connectionCtrl.add(false);
+      } catch (_) {}
+    }
+    LoggerService.instance.info('SocketServiceClient disconnected (session change)');
   }
 
   void dispose() {

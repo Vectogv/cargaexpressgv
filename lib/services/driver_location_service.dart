@@ -196,7 +196,9 @@ class DriverLocationService {
   }
 
   void resume() {
-    if (!_running) return;
+    // pause() pone _running = false; resume() debe volver a activar el
+    // servicio (antes se abortaba silenciosamente y nunca se reanudaba).
+    _running = true;
     _online = true;
     if (_lastLat != null && _lastLng != null) {
       _startPositionStream();

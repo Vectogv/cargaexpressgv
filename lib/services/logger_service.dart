@@ -1,7 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+// dart:io no existe en web: se resuelve la exportación a archivo con un
+// stub en plataformas web y la implementación real con dart:io en el resto.
+import 'logger_io.dart' if (dart.library.html) 'logger_web_stub.dart' as log_export;
 
 enum LogLevel { debug, info, warning, error }
 
@@ -104,13 +106,7 @@ class LoggerService {
   void clearLogs() => _buffer.clear();
 
   Future<void> exportLogsToFile() async {
-    try {
-      final file = File('${Directory.systemTemp.path}/cargaexpress_logs_${DateTime.now().millisecondsSinceEpoch}.txt');
-      final content = _buffer.map((e) =>
-        '[${e['timestamp']}] [${e['level']}] ${e['message']}${e['error'] != null ? ' | ${e['error']}' : ''}'
-      ).join('\n');
-      await file.writeAsString(content);
-    } catch (_) {}
+    await log_export.exportLogsToFile(_buffer);
   }
 
   void dispose() {

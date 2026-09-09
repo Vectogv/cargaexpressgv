@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
 import '../../widgets/carga_express_bottom_nav.dart';
@@ -160,8 +159,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _redirectToActiveTrip() {
     if (!mounted) return;
+    // Evitar apilar varias TripInProgressScreen: si ya hay otra pantalla
+    // encima (p.ej. el propio viaje abierto), no volver a hacer push.
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final current = ModalRoute.of(context);
+      if (current != null && !current.isCurrent) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip != null ? Trip.fromJson(_activeTrip!) : null)));
     });
   }
@@ -182,7 +187,9 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       CacheService.instance.clearActiveTrip();
     }
-    if (mounted) setState(() => _activeTrip = null);
+    if (mounted) {
+      setState(() => _activeTrip = null);
+    }
   }
 
   Future<void> _fetchProfileFirst() async {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
 
 class GestionConductoresScreen extends StatefulWidget {
   const GestionConductoresScreen({super.key});
@@ -46,15 +47,21 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     if (mounted) setState(() => _loading = false);
   }
 
+  /// Tolerancia al formato de lista: acepta `[...]` y `{"data": [...]}`.
+  List<Map<String, dynamic>> _parseList(String body) {
+    return List<Map<String, dynamic>>.from(
+      HttpClient.parseListLenient(jsonDecode(body)).whereType<Map>(),
+    );
+  }
+
   Future<void> _fetchConductores() async {
     try {
       final res = await http.get(
         Uri.parse('${ApiClient.baseUrl}/api/admin/drivers'),
         headers: _authHeaders,
       );
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        setState(() => _conductores = List<Map<String, dynamic>>.from(data));
+      if (res.statusCode == 200 && mounted) {
+        setState(() => _conductores = _parseList(res.body));
       }
     } catch (_) {}
   }
@@ -65,9 +72,8 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         Uri.parse('${ApiClient.baseUrl}/api/admin/verifications'),
         headers: _authHeaders,
       );
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        setState(() => _verificaciones = List<Map<String, dynamic>>.from(data));
+      if (res.statusCode == 200 && mounted) {
+        setState(() => _verificaciones = _parseList(res.body));
       }
     } catch (_) {}
   }
@@ -90,7 +96,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         headers: _authHeaders,
       );
       if (res.statusCode == 200) {
-        _verificaciones.removeWhere((v) => v['id'] == conductorId);
+        _verificaciones.removeWhere((v) => (v['_id'] ?? v['id'])?.toString() == conductorId?.toString());
         _showSnack('Conductor verificado correctamente');
         _fetchConductores();
         if (mounted) setState(() {});
@@ -136,7 +142,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         body: jsonEncode({'nota': nota}),
       );
       if (res.statusCode == 200) {
-        _verificaciones.removeWhere((v) => v['id'] == conductorId);
+        _verificaciones.removeWhere((v) => (v['_id'] ?? v['id'])?.toString() == conductorId?.toString());
         _showSnack('Conductor rechazado');
         _fetchConductores();
         if (mounted) setState(() {});
@@ -275,7 +281,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         itemCount: _verificaciones.length,
         itemBuilder: (_, i) {
           final v = _verificaciones[i];
-          final condId = v['id'];
+          final condId = v['_id'] ?? v['id'];
           final usuario = v['usuario'] as Map<String, dynamic>?;
           return _VerificacionCard(
             nombre: usuario?['nombre'] as String? ?? '',

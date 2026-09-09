@@ -3,23 +3,18 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../models/trip.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/api/offer_service.dart';
-import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
-import '../../services/network_monitor_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
 import 'cancel_trip_screen.dart';
 import 'ofertas_recibidas_screen.dart';
 import 'oferta_aceptada_screen.dart';
 import 'confirmar_entrega_screen.dart';
 import 'viaje_finalizado.dart';
-import 'calificar_conductor_screen.dart';
 import 'reportar_problema_screen.dart';
 import 'conductor_en_la_zona_screen.dart';
 import 'llegada_al_destino_screen.dart';
@@ -43,6 +38,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   bool _cancelling = false;
   bool _hasOffers = false;
   bool _offerAcceptedShown = false;
+  bool _finalizeShown = false;
   bool _isNavigating = false;
   bool _socketListenersSetUp = false;
 
@@ -176,7 +172,14 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
           if (!mounted) return;
           setState(() {
             _status = newStatus;
-            _trip = Trip.fromJson(data);
+            // Los eventos de socket suelen traer sólo {id, estado}: fusionar con
+            // el viaje actual para NO perder conductor / origen / destino.
+            final incomingId = data['_id'] ?? data['id'];
+            if (_trip == null && incomingId == null) return;
+            final base = _trip?.toJson() ?? <String, dynamic>{};
+            base['_id'] = base['_id'] ?? incomingId;
+            base.addAll(Map<String, dynamic>.from(data));
+            _trip = Trip.fromJson(base);
           });
           if (newStatus == TripStatus.aceptado || newStatus == TripStatus.enCamino || newStatus == TripStatus.llegada || newStatus == TripStatus.enCurso) {
             _startLocationUpdates();
@@ -320,21 +323,11 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   }
 
   Future<void> _startLocationUpdates() async {
+    // El cliente NO debe publicar su posición en el endpoint de conductores
+    // (PUT /api/drivers/location). La posición del conductor llega por socket
+    // (driver:location). Esta función queda como no-op para mantener las
+    // llamadas existentes.
     _positionSub?.cancel();
-    var status = await Permission.location.status;
-    if (!status.isGranted) {
-      status = await Permission.location.request();
-      if (!status.isGranted) return;
-    }
-    try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
-      );
-      await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
-    } catch (_) {}
   }
 
   double _distanceToPickup() {
@@ -356,13 +349,6 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   }
 
   double _toRad(double deg) => deg * pi / 180;
-
-  double? _parseDouble(dynamic value) {
-    if (value == null) return null;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    return double.tryParse(value.toString());
-  }
 
   void _checkProximity() {
     final dist = _distanceToPickup();
@@ -448,6 +434,8 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   }
 
   void _showFinalizeConfirmation() {
+    if (_finalizeShown) return;
+    _finalizeShown = true;
     final conductor = _trip?.conductor;
 
     // Primero mostrar LlegadaAlDestinoScreen

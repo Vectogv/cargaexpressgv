@@ -205,7 +205,7 @@ class _ReportScreenState extends State<ReportScreen> {
     }
     try {
       final result = await ApiClient.instance.disputeTrip(
-        trip['id'],
+        trip['_id'] ?? trip['id'],
         motivo: 'Reporte del conductor',
         descripcion: 'Reporte iniciado desde pantalla de reportes',
       );
@@ -215,7 +215,7 @@ class _ReportScreenState extends State<ReportScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => DisputaIniciadaWrapper(
-            tripId: trip['id'],
+            tripId: trip['_id'] ?? trip['id'],
             disputeId: disputeId,
             motivo: 'Reporte del conductor',
             origen: (trip['origen'] as Map<String, dynamic>?)?['direccion'] as String? ?? '',
@@ -236,7 +236,7 @@ class _ReportScreenState extends State<ReportScreen> {
     }
     setState(() => _sending = true);
     try {
-      await ApiClient.instance.rateTrip(trip['id'], _rating, comentario: _comentarioCtrl.text.trim());
+      await ApiClient.instance.rateTrip(trip['_id'] ?? trip['id'], _rating, comentario: _comentarioCtrl.text.trim());
       if (mounted) {
         _snack('Calificación enviada');
         Navigator.pop(context);

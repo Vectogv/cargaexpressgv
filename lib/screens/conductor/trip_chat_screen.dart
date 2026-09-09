@@ -105,7 +105,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
       if (data['tripId']?.toString() == tripId) {
         final msgId = data['_id']?.toString() ?? data['id']?.toString();
-        if (msgId != null && _messages.any((m) => (m['id']?.toString()) == msgId)) return;
+        if (msgId != null && _messages.any((m) => _msgId(m) == msgId)) return;
         final msgText = data['text'] as String? ?? data['mensaje'] as String?;
         final senderId = data['senderId']?.toString();
         final userId = ApiClient.instance.userId;
@@ -166,15 +166,28 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     });
   }
 
+  String? _msgId(Map<String, dynamic> m) => (m['_id'] ?? m['id'])?.toString();
+
   Future<void> _fetchMessages() async {
     if (_activeTrip == null) return;
     try {
       final msgs = await ApiClient.instance.getTripMessages(_activeTrip!['id']);
       final tripId = _activeTrip!['id']?.toString();
-      final nowIds = msgs.map((m) => m['id']?.toString()).whereType<String>().toSet();
+      final nowIds = msgs.map(_msgId).whereType<String>().toSet();
+      final serverTexts = msgs
+          .map((m) => (m['text'] ?? m['mensaje'])?.toString() ?? '')
+          .where((t) => t.isNotEmpty)
+          .toSet();
+      // Conservar sólo los mensajes locales pendientes: los que aún no están
+      // en el servidor (por id o por huella de texto si ya se confirmó el envío).
       final localPending = _messages.where((m) {
-        final id = m['id']?.toString();
-        return id == null || !nowIds.contains(id);
+        final id = _msgId(m);
+        if (id != null && nowIds.contains(id)) return false;
+        final text = (m['text'] ?? m['mensaje'])?.toString() ?? '';
+        if (m['isSent'] == true && m['status'] == 'sent' && text.isNotEmpty) {
+          return !serverTexts.contains(text);
+        }
+        return true;
       }).toList();
       if (tripId != null) CacheService.instance.cacheMessages(tripId, msgs);
       if (mounted) {

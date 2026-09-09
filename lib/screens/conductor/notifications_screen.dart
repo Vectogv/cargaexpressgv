@@ -180,7 +180,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _onNotifTap(Map<String, dynamic> notif) {
-    if (!notif['leido'] == true) {
+    // `leido` puede venir null/ausente; `!= true` cubre false y null sin
+    // lanzar (el operador `!` sobre un bool nullable/null crashea).
+    if (notif['leido'] != true) {
       setState(() => notif['leido'] = true);
       ApiClient.instance.markNotificationRead(notif['id']).catchError((_) {});
     }
