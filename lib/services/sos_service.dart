@@ -4,7 +4,7 @@ import '../models/sos_alert_model.dart';
 import 'logger_service.dart';
 
 class SosService {
-  static Future<SosAlertModel> sendAlert({String? tripId}) async {
+  static Future<SosAlertModel> sendAlert({String? tripId, String? motivo}) async {
     Position pos;
     try {
       pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
@@ -15,6 +15,7 @@ class SosService {
 
     final payload = {
       'viajeId': tripId,
+      if (motivo != null && motivo.trim().isNotEmpty) 'motivo': motivo.trim(),
       'lat': pos.latitude,
       'lng': pos.longitude,
     };
@@ -26,5 +27,14 @@ class SosService {
       LoggerService.instance.error('SosService.sendAlert: API error', e);
       rethrow;
     }
+  }
+
+  static Future<List<Map<String, dynamic>>> getChatMessages(dynamic alertaId) async {
+    final list = await HttpClient.getList('/api/emergency/$alertaId/messages', auth: true);
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  static Future<Map<String, dynamic>> sendChatMessage(dynamic alertaId, String mensaje) async {
+    return HttpClient.post('/api/emergency/$alertaId/messages', body: {'mensaje': mensaje}, auth: true);
   }
 }

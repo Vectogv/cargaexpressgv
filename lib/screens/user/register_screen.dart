@@ -27,23 +27,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _cedulaCtrl = TextEditingController();
   final _placaCtrl = TextEditingController();
   final _capacidadCtrl = TextEditingController();
-  String _tipoVehiculo = 'sedan';
+  final _ciudadCtrl = TextEditingController();
+  String _tipoVehiculo = 'Motocicleta';
 
   final List<String> _tiposVehiculo = [
-    'sedan',
-    'camioneta',
-    'camion',
-    'moto',
-    'furgon',
+    'Motocicleta',
+    'Sedan',
+    'Camioneta',
+    'Camion',
+    'Furgon',
   ];
 
   Future<void> _register() async {
     if (_nombreCtrl.text.isEmpty ||
         _apellidoCtrl.text.isEmpty ||
         _emailCtrl.text.isEmpty ||
-        _passCtrl.text.isEmpty ||
-        _telefonoCtrl.text.isEmpty ||
-        _edadCtrl.text.isEmpty) {
+        _passCtrl.text.isEmpty) {
       _showSnack('Completa todos los campos obligatorios');
       return;
     }
@@ -62,11 +61,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'apellido': _apellidoCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
       'password': _passCtrl.text,
-      'telefono': _telefonoCtrl.text.trim(),
       'rol': _rol,
     };
+    if (_telefonoCtrl.text.trim().isNotEmpty) {
+      body['telefono'] = _telefonoCtrl.text.trim();
+    }
     if (_edadCtrl.text.trim().isNotEmpty) {
       body['edad'] = int.tryParse(_edadCtrl.text.trim()) ?? 0;
+    }
+    if (_ciudadCtrl.text.trim().isNotEmpty) {
+      body['ciudad'] = _ciudadCtrl.text.trim();
     }
 
     if (_rol == 'conductor') {
@@ -247,13 +251,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     items: _tiposVehiculo
                         .map((t) => DropdownMenuItem(
                               value: t,
-                              child: Text(
-                                  t[0].toUpperCase() + t.substring(1),
+                              child: Text(t,
                                   style: const TextStyle(fontSize: 14)),
                             ))
                         .toList(),
                     onChanged: (v) =>
-                        setState(() => _tipoVehiculo = v ?? 'sedan'),
+                        setState(() => _tipoVehiculo = v ?? 'Motocicleta'),
                   ),
                 ),
               ),
@@ -261,6 +264,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _buildField(
                 controller: _capacidadCtrl,
                 label: 'Capacidad (ej: 500 kg)',
+              ),
+              const SizedBox(height: 12),
+              _buildField(
+                controller: _ciudadCtrl,
+                label: 'Ciudad (zona de cobertura)',
               ),
             ],
 

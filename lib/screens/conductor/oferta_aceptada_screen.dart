@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
 import '../../services/api_client.dart';
 import 'trip_chat_screen.dart';
@@ -55,28 +56,19 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
       return;
     }
     setState(() => _starting = true);
-    try {
-      await ApiClient.instance.startTrip(tripId);
-      if (!mounted) return;
 
-      final capturedTrip = widget.trip;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (ctx) => TripInProgressScreen(
-            trip: Trip.fromJson(capturedTrip),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}'),
-        ));
-      }
-    } finally {
-      if (mounted) setState(() => _starting = false);
-    }
+    final capturedTrip = Map<String, dynamic>.from(widget.trip);
+    capturedTrip['id'] = tripId;
+    // El viaje queda 'aceptado'; el conductor confirma llegada al origen y
+    // luego inicia el viaje (flujo conductor_en_camino -> conductor_llegada -> en_curso).
+    capturedTrip['estado'] = TripStatus.aceptado;
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => TripInProgressScreen(trip: Trip.fromJson(capturedTrip)),
+      ),
+    );
   }
 
   Future<void> _cancelarViaje() async {

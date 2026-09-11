@@ -39,6 +39,11 @@ class Trip {
     this.updatedAt,
   });
 
-  factory Trip.fromJson(Map<String, dynamic> json) => _$TripFromJson(json);
+  factory Trip.fromJson(Map<String, dynamic> json) {
+    if (!json.containsKey('_id') && json.containsKey('id')) {
+      json = <String, dynamic>{...json, '_id': json['id']};
+    }
+    return _$TripFromJson(json);
+  }
   Map<String, dynamic> toJson() => _$TripToJson(this);
 }

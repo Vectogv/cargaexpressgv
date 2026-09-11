@@ -14,6 +14,7 @@ import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
 import 'perfil_screen.dart';
 import 'pagos_screen.dart';
+import 'soporte_screen.dart';
 import 'ajustes_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
@@ -23,7 +24,7 @@ class ClienteHomeScreen extends StatefulWidget {
   State<ClienteHomeScreen> createState() => _ClienteHomeScreenState();
 }
 
-class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
+class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindingObserver {
   static const Color _primaryBlue = Color(0xFF2563EB);
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
@@ -40,6 +41,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _notifUnread = NotificationService.instance.unreadCount;
     _loadActiveTrip();
 
@@ -72,7 +74,15 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadActiveTrip();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _socketSub?.cancel();
     super.dispose();
   }
@@ -460,6 +470,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> {
             _buildDrawerItem(Icons.person_outline, 'Perfil', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen()))),
             _buildDrawerItem(Icons.route_outlined, 'Mis viajes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
             _buildDrawerItem(Icons.payments_outlined, 'Pagos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PagosScreen()))),
+            _buildDrawerItem(Icons.support_agent, 'Soporte', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SoporteScreen()))),
             _buildDrawerItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen()))),
             const Spacer(),
             const Divider(),

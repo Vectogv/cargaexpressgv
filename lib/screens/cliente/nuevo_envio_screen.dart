@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
 import '../../services/logger_service.dart';
 import 'rastreo_screen.dart';
@@ -359,10 +360,50 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
         });
       }
     } catch (e) {
-      if (mounted) _snack(e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) _handleRequestError(e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _handleRequestError(Object e) {
+    if (e is ApiException && e.statusCode == 409) {
+      // El backend responde 409 { error, viajeId } cuando el cliente ya tiene
+      // un viaje activo: ofrecer ir directamente al seguimiento.
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ya tienes un viaje activo'),
+          content: Text(
+            e.message.isNotEmpty
+                ? e.message
+                : 'Debes cancelarlo o esperar a que termine antes de solicitar otro.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RastreoScreen()),
+                );
+              },
+              child: const Text('Ver mi viaje'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    _snack(e.toString().replaceFirst('Exception: ', ''));
   }
 
   void _snack(String msg) {

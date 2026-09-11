@@ -85,7 +85,9 @@ class HttpClient {
     );
     final duration = DateTime.now().millisecondsSinceEpoch - start;
     PerformanceMonitor.instance.recordApiCall('GET $path', duration, isError: res.statusCode >= 400);
-    if (res.statusCode != 200) throw Exception(_extractError(jsonDecode(res.body)));
+    if (res.statusCode != 200) {
+      throw ApiException(_extractError(jsonDecode(res.body)), statusCode: res.statusCode);
+    }
     return parseListResponse(jsonDecode(res.body), path);
   }
 
@@ -206,7 +208,7 @@ class HttpClient {
     if (res.statusCode != 200 && res.statusCode != 201) {
       final error = _extractError(data);
       LoggerService.instance.error('HttpClient: ${res.statusCode} ${res.request?.url.path ?? ''} - $error');
-      throw Exception(error);
+      throw ApiException(error, statusCode: res.statusCode);
     }
     return data as Map<String, dynamic>;
   }
@@ -222,4 +224,17 @@ class HttpClient {
     }
     return 'Error del servidor';
   }
+}
+
+/// Error de API que conserva el código de estado HTTP. `toString()` mantiene
+/// el formato `Exception: <mensaje>` para no romper los `catch` existentes
+/// que usan `replaceFirst('Exception: ', '')`.
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  ApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => 'Exception: $message';
 }

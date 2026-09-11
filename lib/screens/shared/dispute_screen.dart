@@ -185,38 +185,55 @@ class _DisputeScreenState extends State<DisputeScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Evidencias (fotos)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 80,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  ..._photoUrls.map((url) => Container(
-                    width: 80, height: 80,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
+            if (widget.role != 'conductor') ...[
+              const Text('Evidencias (fotos)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    ..._photoUrls.map((url) => Container(
+                      width: 80, height: 80,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
+                      ),
+                    )),
+                    Container(
+                      width: 80, height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: _uploading
+                        ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                        : IconButton(
+                            icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF1A3C6E)),
+                            onPressed: _addPhoto,
+                          ),
                     ),
-                  )),
-                  Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: _uploading
-                      ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                      : IconButton(
-                          icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF1A3C6E)),
-                          onPressed: _addPhoto,
-                        ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ] else ...[
+              const Text('Evidencias', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'Si necesitas adjuntar evidencias, el administrador te las solicitar\u00e1 durante la revisi\u00f3n de la disputa.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF757575)),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity, height: 48,

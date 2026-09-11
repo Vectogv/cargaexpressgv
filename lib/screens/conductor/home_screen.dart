@@ -253,28 +253,69 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showNewTripBanner(Map<String, dynamic> event) {
     if (!mounted) return;
-    final tripId = (event['id'] ?? event['_id'])?.toString();
-    if (tripId == null) return;
+    // Payload mínimo por socket: {tripId, origen: string, precioEstimado, type}
+    // Payload completo (polling cercanos): {id/_id, origen: {direccion,..}, precioEstimado, ...}
+    final tripId = (event['tripId'] ?? event['id'] ?? event['_id'])?.toString();
+    if (tripId == null || tripId.isEmpty) return;
     if (_activeBannerIds.contains(tripId)) return; // deduplicar
     _activeBannerIds.add(tripId);
 
+    final origenRaw = event['origen'];
+    String origenTxt = '';
+    if (origenRaw is String) {
+      origenTxt = origenRaw;
+    } else if (origenRaw is Map) {
+      origenTxt = (origenRaw['direccion'] as String?) ?? '';
+    }
+    final precioRaw = event['precioEstimado'];
+    final precioTxt = precioRaw is num
+        ? '\$${precioRaw.toStringAsFixed(0)}'
+        : (precioRaw != null ? '\$$precioRaw' : '');
+    final msg = 'Nuevo viaje: ${origenTxt.isNotEmpty ? origenTxt : 'solicitud cerca de ti'}'
+        '${precioTxt.isNotEmpty ? ' — $precioTxt' : ''}';
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Nueva solicitud de viaje cerca de ti'),
+        content: Text(msg),
         duration: const Duration(seconds: 25),
         action: SnackBarAction(
           label: 'Ver',
-          onPressed: () async {
+          onPressed: () {
             _offeredTripIds.add(tripId);       // antes de navegar
             _activeBannerIds.remove(tripId);
             _resetNearbyNotificationState();
-            await Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ConductorTripDetailScreen(trip: event),
-            ));
+            _openTripDetail(tripId);
           },
         ),
       ),
     );
+  }
+
+  Future<void> _openTripDetail(String tripId) async {
+    if (!mounted) return;
+    try {
+      final detail = await ApiClient.instance.getTripDetail(tripId);
+      if (!mounted) return;
+      final estado = detail['estado'] as String?;
+      if (estado != null && estado != TripStatus.buscando
+          && estado != 'pendiente') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Este viaje ya no está disponible')),
+        );
+        return;
+      }
+      final tripData = Map<String, dynamic>.from(detail);
+      if (tripData['id'] == null) tripData['id'] = tripId;
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => ConductorTripDetailScreen(trip: tripData),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar el viaje: ${e.toString().replaceFirst("Exception: ", "")}')),
+        );
+      }
+    }
   }
 
   void _resetNearbyNotificationState() {

@@ -177,6 +177,8 @@ class ApiClient {
   Future<Map<String, dynamic>> getTripDetail(dynamic id) => TripService.getTripDetail(id);
   Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) => TripService.getNearbyTrips(lat, lng, radio: radio);
   Future<void> startTrip(dynamic id) => TripService.startTrip(id);
+  Future<void> confirmArrival(dynamic id) => TripService.confirmArrival(id);
+  Future<void> confirmPickup(dynamic id) => TripService.confirmPickup(id);
   Future<void> completeTrip(dynamic id, {num? montoFinal}) => TripService.completeTrip(id, montoFinal: montoFinal);
   Future<void> finalizeTrip(dynamic id, {num? montoFinal}) => TripService.finalizeTrip(id, montoFinal: montoFinal);
   Future<void> cancelTrip(dynamic id, {String? motivo}) => TripService.cancelTrip(id, motivo: motivo);

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
+import '../../services/socket_service_client.dart';
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -13,6 +15,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   Map<String, dynamic>? _conductor;
   bool _loading = true;
   String? _uploadingDoc;
+  StreamSubscription<Map<String, dynamic>>? _verificationSub;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _accentGreen = Color(0xFF4CAF50);
@@ -32,6 +35,29 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void initState() {
     super.initState();
     _loadStatus();
+    // Actualiza el estado de verificación en tiempo real cuando el admin
+    // aprueba o rechaza (driver:approved / driver:rejected).
+    _verificationSub = SocketServiceClient.instance.onDriverVerification.listen((data) {
+      if (!mounted) return;
+      _loadStatus();
+      final event = data['__event'] as String?;
+      final estado = data['estado'] as String?;
+      final nota = data['nota'] as String?;
+      final msg = event == 'driver:approved'
+          ? (estado == 'aprobado' ? '\u2713 \u00a1Verificaci\u00f3n aprobada! Ya puedes recibir viajes.' : 'Verificaci\u00f3n actualizada: $estado')
+          : event == 'driver:rejected'
+              ? '\u2717 Verificaci\u00f3n rechazada${nota != null && nota.isNotEmpty ? ': $nota' : ''}. Corrige tus documentos.'
+              : null;
+      if (msg != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _verificationSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadStatus() async {
@@ -113,12 +139,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           switch (docType) {
             case 'cedula':
               await ApiClient.instance.uploadDocumentCedula(bytes, picked.name);
+              break;
             case 'licencia':
               await ApiClient.instance.uploadDocumentLicencia(bytes, picked.name);
+              break;
             case 'foto_vehiculo':
               await ApiClient.instance.uploadDocumentVehiculo(bytes, picked.name);
+              break;
             case 'foto_conductor':
               await ApiClient.instance.uploadDocumentDriverPhoto(bytes, picked.name);
+              break;
           }
           await _loadStatus();
           if (mounted) {

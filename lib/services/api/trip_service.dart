@@ -45,6 +45,14 @@ class TripService {
     await HttpClient.post('/api/trips/$id/start-trip', auth: true);
   }
 
+  static Future<void> confirmArrival(dynamic id) async {
+    await HttpClient.post('/api/trips/$id/confirm-arrival', auth: true);
+  }
+
+  static Future<void> confirmPickup(dynamic id) async {
+    await HttpClient.post('/api/trips/$id/confirm-pickup', auth: true);
+  }
+
   static Future<void> completeTrip(dynamic id, {num? montoFinal}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
@@ -75,12 +83,13 @@ class TripService {
 
   static Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) async {
     final data = await HttpClient.uploadFile('/api/trips/$tripId/delivery-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
-    return data['url'] as String? ?? '';
+    return data['fotoEntrega'] as String? ?? data['url'] as String? ?? '';
   }
 
+  // La subida de fotos de disputa es SOLO de cliente: POST /api/trips/:id/dispute/support
   static Future<String> disputePhoto(dynamic tripId, Uint8List bytes, String filename) async {
-    final data = await HttpClient.uploadFile('/api/trips/$tripId/dispute-photo', bytes: bytes, filename: filename, fieldName: 'foto', auth: true);
-    return data['url'] as String? ?? '';
+    final data = await HttpClient.uploadFile('/api/trips/$tripId/dispute/support', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
+    return data['soporte'] as String? ?? data['url'] as String? ?? '';
   }
 
   static String _extractError(dynamic data) {

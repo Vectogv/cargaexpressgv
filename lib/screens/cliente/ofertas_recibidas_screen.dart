@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../../services/api/offer_service.dart';
 import '../../services/socket_service_client.dart';
 import 'oferta_aceptada_screen.dart';
 
 class OfertasRecibidasScreen extends StatefulWidget {
   final List<Map<String, dynamic>> ofertas;
   final Map<String, dynamic> trip;
+  final dynamic tripId;
   final Future<void> Function(String offerId) onAccept;
   final Future<void> Function(String offerId) onReject;
 
@@ -12,6 +16,7 @@ class OfertasRecibidasScreen extends StatefulWidget {
     super.key,
     required this.ofertas,
     required this.trip,
+    this.tripId,
     required this.onAccept,
     required this.onReject,
   });
@@ -23,11 +28,83 @@ class OfertasRecibidasScreen extends StatefulWidget {
 class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
   late List<Map<String, dynamic>> _offers;
   String? _acceptingId;
+  bool _loadingOffers = false;
+  bool _offersError = false;
+  StreamSubscription<Map<String, dynamic>>? _socketSub;
+  StreamSubscription<Map<String, dynamic>>? _expirySub;
+  Timer? _ticker;
+  DateTime _now = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     _offers = List.from(widget.ofertas);
+    if (widget.tripId != null) {
+      _socketSub = SocketServiceClient.instance.onNewOffer.listen((data) {
+        if (!mounted) return;
+        final id = (data['_id'] ?? data['id'])?.toString();
+        setState(() {
+          final already = _offers.any((o) => (o['_id'] ?? o['id'])?.toString() == id);
+          if (!already) _offers.add(Map<String, dynamic>.from(data));
+        });
+      });
+      // `trip:offer_received` es el alias del backend con expiraAt (28s).
+      // Actualiza la oferta existente para alimentar el countdown.
+      _expirySub = SocketServiceClient.instance.onTripOfferReceived.listen((data) {
+        if (!mounted) return;
+        final id = (data['_id'] ?? data['id'])?.toString();
+        setState(() {
+          final idx = _offers.indexWhere((o) => (o['_id'] ?? o['id'])?.toString() == id);
+          if (idx >= 0) {
+            _offers[idx] = Map<String, dynamic>.from(data);
+          }
+        });
+      });
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _now = DateTime.now());
+      });
+      _fetchOffers();
+    }
+  }
+
+  @override
+  void dispose() {
+    _socketSub?.cancel();
+    _expirySub?.cancel();
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchOffers() async {
+    if (_loadingOffers) return;
+    setState(() {
+      _loadingOffers = true;
+      _offersError = false;
+    });
+    try {
+      final list = await OfferService.getOffers(widget.tripId);
+      if (!mounted) return;
+      setState(() {
+        final ids = <String>{};
+        for (final offer in _offers) {
+          final id = (offer['_id'] ?? offer['id'])?.toString();
+          if (id != null) ids.add(id);
+        }
+        final merged = List<Map<String, dynamic>>.from(_offers);
+        for (final offer in list) {
+          final id = (offer['_id'] ?? offer['id'])?.toString();
+          if (id == null || !ids.contains(id)) {
+            merged.add(Map<String, dynamic>.from(offer));
+          }
+        }
+        _offers = merged;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _offersError = _offers.isEmpty);
+    } finally {
+      if (mounted) setState(() => _loadingOffers = false);
+    }
   }
 
   Color _avatarColor(String name) {
@@ -97,7 +174,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
             builder: (_) => OfertaAceptadaScreen(
               conductorNombre: conductor?['nombre'] as String? ?? 'Conductor',
               camion: conductor?['tipoVehiculo'] as String? ?? '',
-              placa: offer?['placa']?.toString() ?? conductor?['placa']?.toString() ?? '',
+              placa: conductor?['placa']?.toString() ?? '',
               rating: (conductor?['rating'] as num?)?.toDouble() ?? 0,
               onVerSeguimiento: () => Navigator.pop(context),
             ),
@@ -151,7 +228,27 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
               ),
             ),
 
-            if (_offers.isEmpty)
+            if (_loadingOffers && _offers.isEmpty)
+              const Expanded(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_offersError && _offers.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('No se pudieron cargar las ofertas', style: TextStyle(color: Colors.black45, fontSize: 15)),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _fetchOffers,
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (_offers.isEmpty)
               const Expanded(
                 child: Center(
                   child: Text('No hay ofertas disponibles', style: TextStyle(color: Colors.black45, fontSize: 15)),
@@ -168,10 +265,16 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                     final offerId = _offerId(offer);
                     final conductor = offer['conductor'] as Map<String, dynamic>?;
                     final nombre = conductor?['nombre'] as String? ?? 'Conductor';
-                    final camion = '${conductor?['tipoVehiculo'] ?? ''} · ${offer['placa']?.toString() ?? conductor?['placa']?.toString() ?? ''}';
+                    final camion = '${conductor?['tipoVehiculo'] ?? ''} · ${conductor?['placa']?.toString() ?? ''}';
                     final monto = num.tryParse(offer['monto']?.toString() ?? '') ?? 0;
                     final diff = presupuesto > 0 ? ((monto - presupuesto) / presupuesto * 100).round() : 0;
                     final isAccepting = _acceptingId == offerId;
+
+                    final expiresRaw = offer['expiresAt'];
+                    final expiresAt = expiresRaw is String ? DateTime.tryParse(expiresRaw) : null;
+                    final remaining = expiresAt?.difference(_now).inSeconds;
+                    final expired = remaining != null && remaining <= 0;
+                    final showCountdown = expiresAt != null && !expired;
 
                     return Container(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
@@ -232,11 +335,44 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                             ],
                           ),
                           const SizedBox(height: 14),
+                          if (expired)
+                            Row(
+                              children: [
+                                const Icon(Icons.timer_off_outlined, size: 16, color: Color(0xFFDC2626)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Oferta expirada',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.red[600],
+                                  ),
+                                ),
+                              ],
+                            )
+                          else if (showCountdown)
+                            Row(
+                              children: [
+                                const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF2563EB)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Expira en $remaining s',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF2563EB),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            const SizedBox.shrink(),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: isAccepting ? null : () => _rechazar(offerId ?? '', i),
+                                  onPressed: isAccepting || expired ? null : () => _rechazar(offerId ?? '', i),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.black87,
                                     side: const BorderSide(color: Color(0xFFDDDDDD)),
@@ -249,7 +385,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: isAccepting ? null : () => _aceptar(offerId ?? ''),
+                                  onPressed: isAccepting || expired ? null : () => _aceptar(offerId ?? ''),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF22C55E),
                                     foregroundColor: Colors.white,

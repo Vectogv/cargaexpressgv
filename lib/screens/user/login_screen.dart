@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
 import '../admin/dashboard_screen.dart';
 import '../conductor/home_screen.dart' as conductor;
 import '../cliente/home_screen.dart';
@@ -47,15 +48,34 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      if (mounted) _showSnack(msg);
+      if (mounted) {
+        if (e is ApiException && e.statusCode == 403) {
+          _showSnack(
+            e.message,
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 5),
+          );
+        } else if (e is ApiException &&
+            e.statusCode == 400 &&
+            e.message == 'Invalid user credentials') {
+          _showSnack('Correo o contraseña incorrectos');
+        } else {
+          final msg = e.toString().replaceFirst('Exception: ', '');
+          _showSnack(msg);
+        }
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _showSnack(String msg,
+      {Color? backgroundColor, Duration? duration}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: backgroundColor,
+      duration: duration ?? const Duration(milliseconds: 4000),
+    ));
   }
 
   @override

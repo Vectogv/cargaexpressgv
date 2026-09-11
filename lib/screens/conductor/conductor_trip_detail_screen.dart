@@ -187,8 +187,8 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     final precio = (_toNum(t['precioEstimado'])?.toStringAsFixed(0) ?? '0');
     final distancia = t['distancia'] is num
         ? '${(t['distancia'] as num).toStringAsFixed(1)} km'
-        : '${t['distancia'] ?? '?'}';
-    final descripcionCarga = t['descripcion'] as String? ?? 'No especificada';
+        : (t['distancia'] != null ? '${t['distancia']}' : '--');
+    final descripcionCarga = (t['descripcion'] ?? t['carga']) as String? ?? 'No especificada';
     final tipoVehiculoStr = _tipoVehiculo ?? t['tipoVehiculo'] as String? ?? 'No especificado';
 
     return Scaffold(

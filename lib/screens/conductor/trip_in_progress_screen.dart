@@ -57,6 +57,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   String? _deliveryPhotoUrl;
   Timer? _elapsedTimer;
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
+  StreamSubscription<Map<String, dynamic>>? _driverStopGpsSub;
   StreamSubscription<bool>? _lifecycleSub;
   final MapController _mapController = MapController();
   Timer? _tripStateTimer;
@@ -84,6 +85,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     _gpsSubscription = NotificationService.instance.onNotification.listen(_onSocketEvent);
     _finalizeResponseSub = SocketServiceClient.instance.onFinalizeResponse.listen(_onFinalizeResponse);
+    _driverStopGpsSub = SocketServiceClient.instance.onDriverStopGps.listen((_) {
+      _stopGpsTimer();
+    });
 
     final cachedTrip = CacheService.instance.getCachedActiveTrip();
     if (cachedTrip != null) {
@@ -128,6 +132,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _elapsedTimer?.cancel();
     _gpsSubscription?.cancel();
     _finalizeResponseSub?.cancel();
+    _driverStopGpsSub?.cancel();
     _tripStateTimer?.cancel();
     _cancelCountdown();
     super.dispose();
@@ -399,6 +404,66 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
+  // El backend exige llegar a 'esperando_confirmacion' ANTES de finalizar:
+  // en_curso -> entregado -> esperando_confirmacion -> finalizado.
+  // POST /api/trips/:id/complete {montoFinal} hace en_curso/entregado ->
+  // esperando_confirmacion automáticamente. Devuelve false si no se pudo
+  // completar (se aborta la solicitud de finalización).
+  Future<bool> _completeTripIfNeeded(num? montoFinalOverride) async {
+    final t = _trip;
+    if (t == null) return true;
+    if (t.estado != TripStatus.enCurso && t.estado != TripStatus.entregado) return true;
+    final montoFinal = montoFinalOverride ?? t.precioFinal ?? t.precioEstimado;
+    try {
+      await ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal);
+      final json = t.toJson();
+      json['precioFinal'] = montoFinal;
+      json['estado'] = TripStatus.esperaConfirmacion;
+      _trip = Trip.fromJson(json);
+      return true;
+    } catch (e) {
+      LoggerService.instance.error('trip_in_progress: completeTrip error', e);
+      if (mounted) _snack('Error al completar la entrega: ${e.toString().replaceFirst("Exception: ", "")}');
+      return false;
+    }
+  }
+
+  Future<num?> _promptMontoFinal() async {
+    final t = _trip;
+    if (t == null) return null;
+    final current = t.precioFinal ?? t.precioEstimado;
+    if (current == null) return null;
+    final ctrl = TextEditingController(text: current.toStringAsFixed(0));
+    final value = await showDialog<num>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Monto final'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Monto final (\$)',
+            hintText: 'Monto a cobrar al cliente',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, current), child: const Text('Mantener actual')),
+          ElevatedButton(
+            onPressed: () {
+              final v = num.tryParse(ctrl.text.trim().replaceAll(',', ''));
+              if (v == null || v < 0) return;
+              Navigator.pop(ctx, v);
+            },
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return value ?? current;
+  }
+
   Future<void> _requestFinalization() async {
     if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
@@ -447,6 +512,17 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       }
     }
 
+    if (!mounted) return;
+
+    // Paso obligatorio del backend: marcar entrega completada antes de
+    // solicitar la confirmación/finalización al cliente.
+    final montoFinal = await _promptMontoFinal();
+    if (!mounted) return;
+    final completado = await _completeTripIfNeeded(montoFinal);
+    if (!completado) {
+      if (mounted) setState(() => _actionLoading = false);
+      return;
+    }
     if (!mounted) return;
 
     SocketServiceClient.instance.emit('trip:finalize_request', {
@@ -651,6 +727,40 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       if (mounted) setState(() {});
       _snack('Viaje iniciado');
       _startGpsTimer();
+    } catch (e) {
+      _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
+    }
+  }
+
+  Future<void> _confirmArrival() async {
+    if (_trip == null || _actionLoading) return;
+    setState(() => _actionLoading = true);
+    try {
+      await ApiClient.instance.confirmArrival(_trip!.id);
+      final json = _trip!.toJson();
+      json['estado'] = TripStatus.enCamino;
+      _trip = Trip.fromJson(json);
+      if (mounted) setState(() {});
+      _snack('Conduciendo hacia el origen');
+    } catch (e) {
+      _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
+    }
+  }
+
+  Future<void> _confirmPickup() async {
+    if (_trip == null || _actionLoading) return;
+    setState(() => _actionLoading = true);
+    try {
+      await ApiClient.instance.confirmPickup(_trip!.id);
+      final json = _trip!.toJson();
+      json['estado'] = TripStatus.llegada;
+      _trip = Trip.fromJson(json);
+      if (mounted) setState(() {});
+      _snack('Has llegado al origen');
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
@@ -887,6 +997,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         builder: (_) => TripChatScreen(trip: t.toJson()))),
       onLlamar: () => _showClientPhone(t),
       onCancelarViaje: () => _cancelTrip(t),
+      actionLabel: t.estado == TripStatus.enCamino ? 'Llegué al origen' : 'Conducir hacia el origen',
+      actionIcon: Icons.location_on_outlined,
+      onAction: t.estado == TripStatus.enCamino ? _confirmPickup : _confirmArrival,
+      bannerMessage: t.estado == TripStatus.enCamino
+          ? 'Has llegado al origen. Confirma para continuar.'
+          : 'Conduce hacia el punto de recogida del cliente.',
     );
   }
 
@@ -988,7 +1104,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           const SizedBox(height: 12),
           _clientSection(t.cliente, t),
           const SizedBox(height: 12),
-          if (estado == TripStatus.aceptado || estado == TripStatus.llegada)
+          if (estado == TripStatus.aceptado)
+            _actionButton('Conducir hacia el origen', _confirmArrival, _primaryDark)
+          else if (estado == TripStatus.enCamino)
+            _actionButton('Llegué al origen', _confirmPickup, _primaryDark)
+          else if (estado == TripStatus.llegada)
             _actionButton('Iniciar viaje', _startTrip, _primaryDark)
           else if (estado == TripStatus.enCurso) ...[
             if (_isNearDestination)
@@ -1228,9 +1348,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         _navItem(Icons.emergency_outlined, 'SOS', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
         }),
-        if (estado == TripStatus.aceptado)
+        if (estado == TripStatus.aceptado || estado == TripStatus.enCamino)
           _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
-        if (estado == TripStatus.enCurso)
+        if (estado == TripStatus.enCurso || estado == TripStatus.llegada)
           _navItem(Icons.report_problem_outlined, 'Solicitar cancelaci\u00f3n', _isCancelling ? () {} : () => _requestCancellation(t)),
       ]),
     );
@@ -1333,8 +1453,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   Future<void> _cancelTrip(Trip t) async {
     final estado = t.estado;
-    if (estado == TripStatus.enCurso) {
-      _snack('El viaje est\u00e1 en curso. Usa "Solicitar cancelaci\u00f3n" para pedir la cancelaci\u00f3n al administrador.');
+    // El backend (trip_controller.cancel) NO permite cancelar directamente en
+    // 'en_curso' ni en 'conductor_llegada' (403) -> usar solicitud de cancelación.
+    if (estado == TripStatus.enCurso || estado == TripStatus.llegada) {
+      _snack('El viaje en este estado requiere aprobaci\u00f3n. Se enviar\u00e1 una solicitud de cancelaci\u00f3n.');
       _requestCancellation(t);
       return;
     }

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../api_client.dart';
@@ -10,18 +9,13 @@ class DriverService {
   }
 
   static Future<void> updateLocation(double lat, double lng) async {
-    final headers = <String, String>{'Content-Type': 'application/json'};
-    if (ApiClient.instance.token != null) {
-      headers['Authorization'] = 'Bearer ${ApiClient.instance.token}';
-    }
-    final res = await http.put(
-      Uri.parse('${HttpClient.baseUrl}/api/drivers/location'),
-      headers: headers,
-      body: jsonEncode({'lat': lat, 'lng': lng}),
-    );
-    if (res.statusCode == 429) return;
-    if (res.statusCode != 200) {
-      throw Exception(_extractError(jsonDecode(res.body)));
+    // Usa HttpClient (refresca token ante 401) y tolera el 429 del rate-limit
+    // del endpoint GPS para no cortar el timbre de ubicación en segundo plano.
+    try {
+      await HttpClient.put('/api/drivers/location', body: {'lat': lat, 'lng': lng}, auth: true);
+    } on ApiException catch (e) {
+      if (e.statusCode == 429) return;
+      rethrow;
     }
   }
 
@@ -86,18 +80,6 @@ class DriverService {
       fieldName: 'file', 
       auth: true
     );
-    return data['url'] as String? ?? '';
-  }
-
-  static String _extractError(dynamic data) {
-    if (data is Map) {
-      if (data['message'] != null) return data['message'] as String;
-      final errors = data['errors'];
-      if (errors is List && errors.isNotEmpty) {
-        return (errors[0] as Map<String, dynamic>)['message'] as String? ?? 'Error desconocido';
-      }
-      if (data['error'] != null) return data['error'] as String;
-    }
-    return 'Error desconocido';
+    return data['comprobante'] as String? ?? data['url'] as String? ?? '';
   }
 }

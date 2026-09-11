@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class ConfirmarEntregaScreen extends StatefulWidget {
   final VoidCallback onConfirmar;
   final VoidCallback onReportar;
+  final String? montoFinal;
 
   const ConfirmarEntregaScreen({
     super.key,
     required this.onConfirmar,
     required this.onReportar,
+    this.montoFinal,
   });
 
   @override
@@ -60,6 +62,17 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (widget.montoFinal != null && widget.montoFinal!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  widget.montoFinal!,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF22C55E),
+                  ),
+                ),
+              ],
               const Spacer(flex: 3),
               SizedBox(
                 width: double.infinity,

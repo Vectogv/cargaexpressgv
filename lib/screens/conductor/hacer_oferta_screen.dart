@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
 
 class HacerOfertaScreen extends StatefulWidget {
   final dynamic tripId;
@@ -89,6 +90,12 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
     try {
       await ApiClient.instance.makeOffer(widget.tripId, monto, placa: widget.placa, mensaje: _mensajeController.text);
       if (mounted) Navigator.of(context).pop(_formatValue(_ofertaActual));
+    } on ApiException catch (e) {
+      if (e.statusCode == 429) {
+        _snack('L\u00edmite de ofertas alcanzado. Espera un momento e intenta de nuevo.');
+      } else {
+        _snack('Error: ${e.message}');
+      }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {

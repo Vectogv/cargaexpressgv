@@ -25,16 +25,25 @@ class SocketServiceClient {
   final _sosActivatedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverLocationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _newOfferCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripOfferReceivedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripDeliveredCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripOfferAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _driverStopGpsCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _driverVerificationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _messageCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _notificationCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _avisosMessageCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _conversationMessageCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _emergencyMessageCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripStartedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCompletedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeRequestCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeResponseCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _finalizeCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _typingStartCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _typingStopCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _messageReadCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -56,16 +65,25 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onSosActivated => _sosActivatedCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverLocation => _driverLocationCtrl.stream;
   Stream<Map<String, dynamic>> get onNewOffer => _newOfferCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripOfferReceived => _tripOfferReceivedCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripDelivered => _tripDeliveredCtrl.stream;
   Stream<Map<String, dynamic>> get onOfferAccepted => _offerAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onOfferRejected => _offerRejectedCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripOfferAccepted => _tripOfferAcceptedCtrl.stream;
+  Stream<Map<String, dynamic>> get onDriverStopGps => _driverStopGpsCtrl.stream;
+  Stream<Map<String, dynamic>> get onDriverVerification => _driverVerificationCtrl.stream;
   Stream<Map<String, dynamic>> get onMessage => _messageCtrl.stream;
   Stream<Map<String, dynamic>> get onNotification => _notificationCtrl.stream;
+  Stream<Map<String, dynamic>> get onAvisosMessage => _avisosMessageCtrl.stream;
+  Stream<Map<String, dynamic>> get onConversationMessage => _conversationMessageCtrl.stream;
+  Stream<Map<String, dynamic>> get onEmergencyMessage => _emergencyMessageCtrl.stream;
   Stream<Map<String, dynamic>> get onTripAccepted => _tripAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripStarted => _tripStartedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCompleted => _tripCompletedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCancelled => _tripCancelledCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeRequest => _finalizeRequestCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeResponse => _finalizeResponseCtrl.stream;
+  Stream<Map<String, dynamic>> get onFinalizeCancelled => _finalizeCancelledCtrl.stream;
   Stream<Map<String, dynamic>> get onTypingStart => _typingStartCtrl.stream;
   Stream<Map<String, dynamic>> get onTypingStop => _typingStopCtrl.stream;
   Stream<Map<String, dynamic>> get onMessageRead => _messageReadCtrl.stream;
@@ -222,12 +240,44 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_newOfferCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn('trip:offer_received', (data) {
+        if (data is Map) safeAdd(_tripOfferReceivedCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('trip:delivered', (data) {
+        if (data is Map) safeAdd(_tripDeliveredCtrl, Map<String, dynamic>.from(data));
+      });
+
       safeOn('offer:accepted', (data) {
         if (data is Map) safeAdd(_offerAcceptedCtrl, Map<String, dynamic>.from(data));
       });
 
       safeOn('offer:rejected', (data) {
         if (data is Map) safeAdd(_offerRejectedCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('trip:offer_accepted', (data) {
+        if (data is Map) safeAdd(_tripOfferAcceptedCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('driver:stop_gps', (data) {
+        if (data is Map) safeAdd(_driverStopGpsCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('driver:approved', (data) {
+        if (data is Map) {
+          final info = Map<String, dynamic>.from(data);
+          info['__event'] = 'driver:approved';
+          safeAdd(_driverVerificationCtrl, info);
+        }
+      });
+
+      safeOn('driver:rejected', (data) {
+        if (data is Map) {
+          final info = Map<String, dynamic>.from(data);
+          info['__event'] = 'driver:rejected';
+          safeAdd(_driverVerificationCtrl, info);
+        }
       });
 
       safeOn('message:new', (data) {
@@ -242,6 +292,18 @@ class SocketServiceClient {
           safeAdd(_messageCtrl, Map<String, dynamic>.from(data));
           _incrementChatUnreadIfOther(data);
         }
+      });
+
+      safeOn('avisos:new_message', (data) {
+        if (data is Map) safeAdd(_avisosMessageCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('conversation:message', (data) {
+        if (data is Map) safeAdd(_conversationMessageCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('emergency:message', (data) {
+        if (data is Map) safeAdd(_emergencyMessageCtrl, Map<String, dynamic>.from(data));
       });
 
       safeOn('notification:new', (data) {
@@ -286,6 +348,10 @@ class SocketServiceClient {
 
       safeOn('trip:finalize_response', (data) {
         if (data is Map) safeAdd(_finalizeResponseCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('trip:finalize_cancelled', (data) {
+        if (data is Map) safeAdd(_finalizeCancelledCtrl, Map<String, dynamic>.from(data));
       });
 
       safeOn('typing:start', (data) {
@@ -368,6 +434,16 @@ class SocketServiceClient {
     }
   }
 
+  /// Une al cliente con un viaje concreto (ofrecimientos, seguimiento, chat,
+  /// finalización). Se re-emite en cada reconexión desde la pantalla activa.
+  void joinTrip(String tripId) {
+    emit('join:trip', {'tripId': tripId, 'userId': ApiClient.instance.userId});
+  }
+
+  void leaveTrip(String tripId) {
+    emit('leave:trip', {'tripId': tripId, 'userId': ApiClient.instance.userId});
+  }
+
   void reconnect() {
     _reconnectAttempts = 0;
     _socket?.disconnect();
@@ -406,16 +482,25 @@ class SocketServiceClient {
     _sosActivatedCtrl.close();
     _driverLocationCtrl.close();
     _newOfferCtrl.close();
+    _tripOfferReceivedCtrl.close();
+    _tripDeliveredCtrl.close();
     _offerAcceptedCtrl.close();
     _offerRejectedCtrl.close();
+    _tripOfferAcceptedCtrl.close();
+    _driverStopGpsCtrl.close();
+    _driverVerificationCtrl.close();
     _messageCtrl.close();
     _notificationCtrl.close();
+    _avisosMessageCtrl.close();
+    _conversationMessageCtrl.close();
+    _emergencyMessageCtrl.close();
     _tripAcceptedCtrl.close();
     _tripStartedCtrl.close();
     _tripCompletedCtrl.close();
     _tripCancelledCtrl.close();
     _finalizeRequestCtrl.close();
     _finalizeResponseCtrl.close();
+    _finalizeCancelledCtrl.close();
     _typingStartCtrl.close();
     _typingStopCtrl.close();
     _messageReadCtrl.close();
