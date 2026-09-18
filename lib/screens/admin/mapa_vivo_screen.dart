@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
+import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+
 import '../../services/api_client.dart';
 import '../../services/map_config.dart';
 import '../../services/logger_service.dart';
@@ -18,22 +20,29 @@ class MapaVivoScreen extends StatefulWidget {
 class _MapaVivoScreenState extends State<MapaVivoScreen> {
   bool _loading = true;
   bool _mapError = false;
+
   List<Map<String, dynamic>> _trips = [];
+
   final MapController _mapController = MapController();
+
   Timer? _refreshTimer;
 
   Map<String, String> get _authHeaders => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ${ApiClient.instance.token}',
-  };
+        'Content-Type': 'application/json',
+        if (ApiClient.instance.token != null)
+          'Authorization': 'Bearer ${ApiClient.instance.token}',
+      };
 
   @override
   void initState() {
     super.initState();
+
     _fetchTrips();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      _fetchTrips();
-    });
+
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchTrips(),
+    );
   }
 
   @override
@@ -44,29 +53,82 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
 
   Future<void> _fetchTrips() async {
     if (!mounted) return;
-    setState(() => _loading = true);
+
+    setState(() {
+      _loading = true;
+    });
+
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/trips'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        if (mounted) {
+      final response = await http
+          .get(
+            Uri.parse('${ApiClient.baseUrl}/api/admin/trips'),
+            headers: _authHeaders,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is List) {
+          final trips = decoded
+              .whereType<Map>()
+              .map(
+                (item) => Map<String, dynamic>.from(item),
+              )
+              .toList();
+
           setState(() {
-          _trips = List<Map<String, dynamic>>.from(data);
-          _loading = false;
-          _mapError = false;
-        });
+            _trips = trips;
+            _loading = false;
+            _mapError = false;
+          });
+        } else {
+          setState(() {
+            _loading = false;
+            _mapError = true;
+          });
         }
+      } else {
+        LoggerService.instance.info(
+          'Trips API returned status ${response.statusCode}',
+        );
+
+        setState(() {
+          _loading = false;
+          _mapError = true;
+        });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e, s) {
+      LoggerService.instance.error(
+        'Error fetching live trips',
+        e,
+        s,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _mapError = true;
+      });
     }
   }
 
-  List<Map<String, dynamic>> get _activeTrips =>
-      _trips.where((t) => t['lat'] != null && t['lng'] != null).toList();
+  List<Map<String, dynamic>> get _activeTrips {
+    return _trips.where((trip) {
+      final lat = trip['lat'];
+      final lng = trip['lng'];
+
+      return lat is num &&
+          lng is num &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,14 +141,17 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
         surfaceTintColor: Colors.white,
         actions: [
           IconButton(
+            tooltip: 'Actualizar',
             icon: const Icon(Icons.refresh),
-            onPressed: _fetchTrips,
+            onPressed: _loading ? null : _fetchTrips,
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _mapError
+      body: _loading && _trips.isEmpty
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : _mapError && _trips.isEmpty
               ? _buildMapError()
               : RefreshIndicator(
                   onRefresh: _fetchTrips,
@@ -96,83 +161,148 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
   }
 
   Widget _buildMap() {
-    final markers = _activeTrips.map((trip) {
+    final activeTrips = _activeTrips;
+
+    final markers = activeTrips.map((trip) {
       try {
         final lat = (trip['lat'] as num).toDouble();
         final lng = (trip['lng'] as num).toDouble();
-        final name = trip['conductor'] as String? ?? '';
-        final status = trip['estado'] as String? ?? '';
-        final dest = trip['destino'] as String? ?? '';
+
+        final name = trip['conductor']?.toString() ?? 'Conductor';
+
+        final status = trip['estado']?.toString() ?? '';
+
+        final destination = trip['destino']?.toString() ?? '';
+
         return Marker(
           point: LatLng(lat, lng),
           width: 200,
-          height: 80,
+          height: 100,
           child: _TripMarker(
             name: name,
             status: status,
-            destination: dest,
+            destination: destination,
           ),
         );
       } catch (e, s) {
-        LoggerService.instance.error('Error building trip marker', e, s);
+        LoggerService.instance.error(
+          'Error building trip marker',
+          e,
+          s,
+        );
+
         return null;
       }
     }).whereType<Marker>().toList();
 
-    if (_activeTrips.isNotEmpty) {
-      try {
-        final first = _activeTrips.first;
-        final lat = (first['lat'] as num).toDouble();
-        final lng = (first['lng'] as num).toDouble();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _mapController.move(LatLng(lat, lng), 12);
-          }
-        });
-      } catch (_) {}
-    }
-
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: const LatLng(4.711, -74.072),
+        initialCenter: const LatLng(
+          4.711,
+          -74.072,
+        ),
         initialZoom: 12,
-        onMapReady: () => setState(() => _mapError = false),
+        onMapReady: () {
+          if (!mounted) return;
+
+          setState(() {
+            _mapError = false;
+          });
+
+          _moveToFirstTrip();
+        },
       ),
       children: [
         TileLayer(
           urlTemplate: MapConfig.tileUrl,
           userAgentPackageName: 'com.cargaexpress.app',
-          errorImage: const AssetImage(''),
         ),
-        MarkerLayer(markers: markers),
+
+        if (markers.isNotEmpty)
+          MarkerLayer(
+            markers: markers,
+          ),
       ],
     );
   }
 
+  void _moveToFirstTrip() {
+    final activeTrips = _activeTrips;
+
+    if (activeTrips.isEmpty) return;
+
+    try {
+      final first = activeTrips.first;
+
+      final lat = (first['lat'] as num).toDouble();
+      final lng = (first['lng'] as num).toDouble();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        try {
+          _mapController.move(
+            LatLng(lat, lng),
+            12,
+          );
+        } catch (e, s) {
+          LoggerService.instance.error(
+            'Error moving map to first trip',
+            e,
+            s,
+          );
+        }
+      });
+    } catch (e, s) {
+      LoggerService.instance.error(
+        'Error getting first trip location',
+        e,
+        s,
+      );
+    }
+  }
+
   Widget _buildMapError() {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 12),
-          const Text(
-            'No se pudo cargar el mapa',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Verifica tu conexi\u00f3n a internet',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () => setState(() => _mapError = false),
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Reintentar'),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.map_outlined,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'No se pudo cargar el mapa',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Verifica tu conexión a internet y vuelve a intentarlo.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _fetchTrips,
+              icon: const Icon(
+                Icons.refresh,
+                size: 18,
+              ),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -195,13 +325,21 @@ class _TripMarker extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          constraints: const BoxConstraints(
+            maxWidth: 190,
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 5,
+          ),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
+                color: Colors.black.withValues(
+                  alpha: 0.15,
+                ),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -213,30 +351,49 @@ class _TripMarker extends StatelessWidget {
             children: [
               Text(
                 name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: Colors.black87,
                 ),
               ),
-              Text(
-                status,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.black87.withValues(alpha: 0.6),
+
+              if (status.isNotEmpty)
+                Text(
+                  status,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.black87.withValues(
+                      alpha: 0.6,
+                    ),
+                  ),
                 ),
-              ),
-              Text(
-                destination,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.black87.withValues(alpha: 0.6),
+
+              if (destination.isNotEmpty)
+                Text(
+                  destination,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.black87.withValues(
+                      alpha: 0.6,
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
-        const Icon(Icons.location_on, color: Color(0xFFE53935), size: 28),
+
+        const Icon(
+          Icons.location_on,
+          color: Color(0xFFE53935),
+          size: 28,
+        ),
       ],
     );
   }
