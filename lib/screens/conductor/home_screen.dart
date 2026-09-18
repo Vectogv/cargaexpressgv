@@ -603,6 +603,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case TripStatus.enCurso: estadoLabel = 'En curso'; break;
       case TripStatus.entregado: estadoLabel = 'Entregado'; break;
       case TripStatus.esperaConfirmacion: estadoLabel = 'Esperando confirmación'; break;
+      case TripStatus.reservado: estadoLabel = 'Reservado'; break;
       default: estadoLabel = 'Activo';
     }
 

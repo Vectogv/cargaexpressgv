@@ -58,6 +58,11 @@ class SocketServiceClient {
   final _adminEmergencyCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _disputeUpdatedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _disputeResolvedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripEtaCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripDriverNearbyCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripGpsFrozenCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _paymentConfirmedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _paymentRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onTripStatus => _tripStatusCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverOnWay => _driverOnWayCtrl.stream;
@@ -95,6 +100,11 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onAdminEmergency => _adminEmergencyCtrl.stream;
   Stream<Map<String, dynamic>> get onDisputeUpdated => _disputeUpdatedCtrl.stream;
   Stream<Map<String, dynamic>> get onDisputeResolved => _disputeResolvedCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripEtaUpdate => _tripEtaCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripDriverNearby => _tripDriverNearbyCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripGpsFrozen => _tripGpsFrozenCtrl.stream;
+  Stream<Map<String, dynamic>> get onPaymentConfirmed => _paymentConfirmedCtrl.stream;
+  Stream<Map<String, dynamic>> get onPaymentRejected => _paymentRejectedCtrl.stream;
 
   Stream<bool> get onConnection => _connectionCtrl.stream;
 
@@ -397,6 +407,26 @@ class SocketServiceClient {
       safeOn('dispute:resolved', (data) {
         if (data is Map) safeAdd(_disputeResolvedCtrl, Map<String, dynamic>.from(data));
       });
+
+      safeOn('trip:eta_update', (data) {
+        if (data is Map) safeAdd(_tripEtaCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('trip:driver_nearby', (data) {
+        if (data is Map) safeAdd(_tripDriverNearbyCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn('trip:gps_frozen', (data) {
+        if (data is Map) safeAdd(_tripGpsFrozenCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn(SocketEvents.paymentConfirmed, (data) {
+        if (data is Map) safeAdd(_paymentConfirmedCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn(SocketEvents.paymentRejected, (data) {
+        if (data is Map) safeAdd(_paymentRejectedCtrl, Map<String, dynamic>.from(data));
+      });
     } catch (e) {
       LoggerService.instance.error('SocketServiceClient._connect error', e);
       _scheduleReconnect();
@@ -513,6 +543,11 @@ class SocketServiceClient {
     _adminEmergencyCtrl.close();
     _disputeUpdatedCtrl.close();
     _disputeResolvedCtrl.close();
+    _tripEtaCtrl.close();
+    _tripDriverNearbyCtrl.close();
+    _tripGpsFrozenCtrl.close();
+    _paymentConfirmedCtrl.close();
+    _paymentRejectedCtrl.close();
     _connectionCtrl.close();
   }
 }

@@ -15,6 +15,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
     with TickerProviderStateMixin {
   late TabController _tabCtrl;
   bool _loading = true;
+  bool _hasError = false;
   Map<String, dynamic> _data = {};
   List<Map<String, dynamic>> _commissions = [];
   List<Map<String, dynamic>> _pendingPayments = [];
@@ -52,7 +53,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
   }
 
   Future<void> _fetchAll() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _hasError = false;
+    });
     await Future.wait([
       _fetchEarnings(),
       _fetchCommissions(),
@@ -73,54 +77,8 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
         return;
       }
     } catch (_) {}
-    _data = {
-      'totalIngresos': 1393.38,
-      'totalTransacciones': 402.00,
-      'dolarTransacciones': 252.00,
-      'grafica': [
-        0.2,
-        0.35,
-        0.3,
-        0.5,
-        0.45,
-        0.6,
-        0.55,
-        0.75,
-        0.7,
-        0.9,
-        0.85,
-        1.0,
-      ],
-      'etiquetas': [
-        'Ene',
-        'Feb',
-        'Mar',
-        'Abr',
-        'May',
-        'Jun',
-        'Jul',
-        'Ago',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dic',
-      ],
-      'pagos': [
-        {
-          'tipo': 'Transacciones',
-          'sub': '15 activas',
-          'monto': 393.00,
-          'icon': 'swap',
-        },
-        {
-          'tipo': 'Pagos',
-          'sub': '28 pines',
-          'monto': 558.00,
-          'icon': 'payment',
-        },
-        {'tipo': 'Pasajeros', 'sub': '', 'monto': 506.00, 'icon': 'person'},
-      ],
-    };
+    _hasError = true;
+    _data = {};
   }
 
   Future<void> _fetchCommissions() async {
@@ -137,32 +95,8 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
         return;
       }
     } catch (_) {}
-    _commissions = [
-      {
-        'conductorId': 1,
-        'nombre': 'Carlos Mendoza',
-        'monto': 45.50,
-        'pagada': false,
-      },
-      {
-        'conductorId': 2,
-        'nombre': 'Ana López',
-        'monto': 32.00,
-        'pagada': false,
-      },
-      {
-        'conductorId': 3,
-        'nombre': 'Pedro Ramirez',
-        'monto': 78.25,
-        'pagada': true,
-      },
-      {
-        'conductorId': 4,
-        'nombre': 'Lucía Fernández',
-        'monto': 12.80,
-        'pagada': false,
-      },
-    ];
+    _hasError = true;
+    _commissions = [];
   }
 
   Future<void> _fetchPendingPayments() async {
@@ -179,29 +113,8 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
         return;
       }
     } catch (_) {}
-    _pendingPayments = [
-      {
-        'userId': 101,
-        'nombre': 'María García',
-        'email': 'maria@mail.com',
-        'monto': 150.00,
-        'concepto': 'Pago de servicios',
-      },
-      {
-        'userId': 102,
-        'nombre': 'José Martinez',
-        'email': 'jose@mail.com',
-        'monto': 220.50,
-        'concepto': 'Comisión viajes',
-      },
-      {
-        'userId': 103,
-        'nombre': 'Elena Torres',
-        'email': 'elena@mail.com',
-        'monto': 89.99,
-        'concepto': 'Reembolso',
-      },
-    ];
+    _hasError = true;
+    _pendingPayments = [];
   }
 
   Future<void> _markPaid(int conductorId) async {
@@ -426,15 +339,52 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : TabBarView(
-                      controller: _tabCtrl,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        _buildDashboardTab(),
-                        _buildComisionesTab(),
-                        _buildPagosTab(),
-                      ],
-                    ),
+                  : _hasError
+                      ? _buildErrorState()
+                      : TabBarView(
+                          controller: _tabCtrl,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            _buildDashboardTab(),
+                            _buildComisionesTab(),
+                            _buildPagosTab(),
+                          ],
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 56, color: Colors.black26),
+            const SizedBox(height: 16),
+            const Text(
+              'No se pudieron cargar los datos financieros',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black54),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Verifica tu conexión e intenta nuevamente.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.black38),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _fetchAll,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A3C6E),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Reintentar'),
             ),
           ],
         ),

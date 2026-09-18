@@ -15,8 +15,9 @@ class HttpClient {
   /// Timeout aplicado a todas las peticiones para evitar esperas infinitas.
   static const Duration _timeout = Duration(seconds: 20);
 
-  /// Evita refresh en cascada cuando varias peticiones reciben 401 a la vez.
-  static bool _isRefreshing = false;
+  /// Evita refresh en cascada cuando varias peticiones reciben 401 a la vez:
+  /// todas comparten el mismo Future de renovación de sesión.
+  static Future<bool>? _refreshing;
 
   /// Ejecuta la petición; ante 401 con auth intenta renovar el token y
   /// reintenta una vez. Si el refresh falla, emite sesión expirada.
@@ -26,11 +27,11 @@ class HttpClient {
     required bool auth,
   }) async {
     var res = await request().timeout(_timeout);
-    if (res.statusCode == 401 && auth && !_isRefreshing) {
-      _isRefreshing = true;
+    if (res.statusCode == 401 && auth) {
+      _refreshing ??= _refreshSession();
       try {
-        final ok = await _refreshSession();
-        if (ok) {
+        final ok = await _refreshing;
+        if (ok == true) {
           LoggerService.instance.info('HttpClient: token refrescado, reintentando $path');
           res = await request().timeout(_timeout);
         } else {
@@ -39,7 +40,7 @@ class HttpClient {
           throw Exception('Sesi\u00f3n expirada. Inicia sesi\u00f3n nuevamente.');
         }
       } finally {
-        _isRefreshing = false;
+        _refreshing = null;
       }
     }
     return res;
@@ -162,6 +163,43 @@ class HttpClient {
     final duration = DateTime.now().millisecondsSinceEpoch - start;
     PerformanceMonitor.instance.recordApiCall('PUT $path', duration, isError: res.statusCode >= 400);
     return _handleResponse(res);
+  }
+
+  static Future<Map<String, dynamic>> delete(String path, {bool auth = false}) async {
+    final start = DateTime.now().millisecondsSinceEpoch;
+    await _waitForNetwork();
+    final res = await _execute(
+      () => http.delete(Uri.parse('$baseUrl$path'), headers: _headers(auth: auth)),
+      path,
+      auth: auth,
+    );
+    final duration = DateTime.now().millisecondsSinceEpoch - start;
+    PerformanceMonitor.instance.recordApiCall('DELETE $path', duration, isError: res.statusCode >= 400);
+    return _handleResponse(res);
+  }
+
+  /// Descarga binaria (ej. PDF de ganancias) con el mismo manejo de token,
+  /// refresh y timeout que el resto de peticiones.
+  static Future<List<int>> getBytes(String path, {bool auth = false}) async {
+    final start = DateTime.now().millisecondsSinceEpoch;
+    await _waitForNetwork();
+    final res = await _execute(
+      () => http.get(Uri.parse('$baseUrl$path'), headers: _headers(auth: auth)),
+      path,
+      auth: auth,
+    );
+    final duration = DateTime.now().millisecondsSinceEpoch - start;
+    PerformanceMonitor.instance.recordApiCall('GET $path', duration, isError: res.statusCode >= 400);
+    if (res.statusCode != 200) {
+      dynamic data;
+      try {
+        data = jsonDecode(res.body);
+      } catch (_) {
+        data = null;
+      }
+      throw ApiException(_extractError(data), statusCode: res.statusCode);
+    }
+    return res.bodyBytes.toList();
   }
 
   static Future<Map<String, dynamic>> uploadFile(

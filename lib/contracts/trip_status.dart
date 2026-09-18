@@ -1,5 +1,8 @@
 class TripStatus {
   static const String creado = 'creado';
+  // Reserva programada creada por el cliente: estado previo a la búsqueda de
+  // conductor. La app lo trata como un viaje "en espera" (no activo).
+  static const String reservado = 'reservado';
   static const String buscando = 'buscando_conductor';
   static const String pendiente = 'pendiente';
   static const String aceptado = 'aceptado';

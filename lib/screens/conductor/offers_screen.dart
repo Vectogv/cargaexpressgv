@@ -174,6 +174,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
       case TripStatus.esperaConfirmacion: c = _accentGreen; label = 'Esperando confirmación'; break;
       case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
+      case TripStatus.reservado: c = Colors.grey; label = 'Reservado'; break;
       default: c = Colors.grey; label = estado; break;
     }
     return Container(
@@ -240,6 +241,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
       case TripStatus.esperaConfirmacion: c = _primaryBlue; label = 'Esperando confirmación'; break;
       case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
+      case TripStatus.reservado: c = _textGrey; label = 'Reservado'; break;
       case TripStatus.cancelado: c = Colors.red; label = 'Cancelado'; break;
       default: c = _textGrey; label = estado; break;
     }

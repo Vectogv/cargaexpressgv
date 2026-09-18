@@ -9,6 +9,7 @@ import 'api/chat_service.dart';
 import 'api/driver_service.dart';
 import 'api/profile_service.dart';
 import 'api/dispute_service.dart';
+import 'api/favorite_service.dart';
 import 'socket_service_client.dart';
 
 class ApiClient {
@@ -168,17 +169,22 @@ class ApiClient {
   Future<String> uploadDocumentLicencia(Uint8List bytes, String filename) => DriverService.uploadDocumentLicencia(bytes, filename);
   Future<String> uploadDocumentVehiculo(Uint8List bytes, String filename) => DriverService.uploadDocumentVehiculo(bytes, filename);
   Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) => DriverService.uploadDocumentDriverPhoto(bytes, filename);
+  Future<String> uploadVehiclePhoto(Uint8List bytes, String filename) => DriverService.uploadVehiclePhoto(bytes, filename);
 
   // --- Trips ---
 
   Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) => TripService.requestTrip(data);
   Future<Map<String, dynamic>?> getActiveTrip() => TripService.getActiveTrip();
-  Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20}) => TripService.getTripHistory(page: page, limit: limit);
+  Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20, String? estado}) => TripService.getTripHistory(page: page, limit: limit, estado: estado);
   Future<Map<String, dynamic>> getTripDetail(dynamic id) => TripService.getTripDetail(id);
   Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) => TripService.getNearbyTrips(lat, lng, radio: radio);
   Future<void> startTrip(dynamic id) => TripService.startTrip(id);
   Future<void> confirmArrival(dynamic id) => TripService.confirmArrival(id);
   Future<void> confirmPickup(dynamic id) => TripService.confirmPickup(id);
+  Future<Map<String, dynamic>> reserveTrip(Map<String, dynamic> data) => TripService.reserveTrip(data);
+  Future<List<Map<String, dynamic>>> getReservations({int page = 1, int limit = 20, String? estado}) => TripService.getReservations(page: page, limit: limit, estado: estado);
+  Future<void> declineTrip(dynamic id) => TripService.declineTrip(id);
+  Future<Map<String, dynamic>> disputeAppeal(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeAppeal(id, motivo: motivo, descripcion: descripcion);
   Future<void> completeTrip(dynamic id, {num? montoFinal}) => TripService.completeTrip(id, montoFinal: montoFinal);
   Future<void> finalizeTrip(dynamic id, {num? montoFinal}) => TripService.finalizeTrip(id, montoFinal: montoFinal);
   Future<void> cancelTrip(dynamic id, {String? motivo}) => TripService.cancelTrip(id, motivo: motivo);
@@ -193,6 +199,28 @@ class ApiClient {
       DisputeService.createDispute(tripId: tripId, problema: problema, descripcion: descripcion, fotos: fotos);
   Future<Map<String, dynamic>> getDispute(dynamic id) => DisputeService.getDispute(id);
   Future<Map<String, dynamic>> submitVersion(dynamic id, String version) => DisputeService.submitVersion(id, version);
+
+  // --- Favorites ---
+
+  Future<List<Map<String, dynamic>>> getFavorites() => FavoriteService.getFavorites();
+  Future<Map<String, dynamic>> createFavorite({
+    required String nombre,
+    required String origenDireccion,
+    required double origenLat,
+    required double origenLng,
+    required String destinoDireccion,
+    required double destinoLat,
+    required double destinoLng,
+  }) => FavoriteService.createFavorite(
+        nombre: nombre,
+        origenDireccion: origenDireccion,
+        origenLat: origenLat,
+        origenLng: origenLng,
+        destinoDireccion: destinoDireccion,
+        destinoLat: destinoLat,
+        destinoLng: destinoLng,
+      );
+  Future<void> deleteFavorite(dynamic id) => FavoriteService.deleteFavorite(id);
 
   // --- Offers ---
 

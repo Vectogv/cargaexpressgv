@@ -1,6 +1,5 @@
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
-import '../api_client.dart';
+
 import 'http_client.dart';
 
 class DriverService {
@@ -40,16 +39,7 @@ class DriverService {
   }
 
   static Future<List<int>> getEarningsPdf({String periodo = 'todo'}) async {
-    final headers = <String, String>{'Content-Type': 'application/json'};
-    if (ApiClient.instance.token != null) {
-      headers['Authorization'] = 'Bearer ${ApiClient.instance.token}';
-    }
-    final res = await http.get(
-      Uri.parse('${HttpClient.baseUrl}/api/drivers/earnings/pdf?periodo=$periodo'),
-      headers: headers,
-    );
-    if (res.statusCode != 200) throw Exception('Error al descargar PDF');
-    return res.bodyBytes.toList();
+    return HttpClient.getBytes('/api/drivers/earnings/pdf?periodo=$periodo', auth: true);
   }
 
   static Future<String> uploadDocumentCedula(Uint8List bytes, String filename) async {
@@ -64,6 +54,11 @@ class DriverService {
 
   static Future<String> uploadDocumentVehiculo(Uint8List bytes, String filename) async {
     final data = await HttpClient.uploadFile('/api/drivers/verification/vehiculo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
+    return data['fotoVehiculo'] as String? ?? '';
+  }
+
+  static Future<String> uploadVehiclePhoto(Uint8List bytes, String filename) async {
+    final data = await HttpClient.uploadFile('/api/drivers/vehicle-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
     return data['fotoVehiculo'] as String? ?? '';
   }
 

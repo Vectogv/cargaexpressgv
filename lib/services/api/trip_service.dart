@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
-import '../api_client.dart';
+
 import 'http_client.dart';
 
 class TripService {
@@ -11,23 +9,19 @@ class TripService {
   }
 
   static Future<Map<String, dynamic>?> getActiveTrip() async {
-    final headers = <String, String>{'Content-Type': 'application/json'};
-    if (ApiClient.instance.token != null) {
-      headers['Authorization'] = 'Bearer ${ApiClient.instance.token}';
+    try {
+      return await HttpClient.get('/api/trips/active', auth: true);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
     }
-    final res = await http.get(
-      Uri.parse('${HttpClient.baseUrl}/api/trips/active'),
-      headers: headers,
-    );
-    if (res.statusCode == 404) return null;
-    if (res.statusCode != 200) {
-      throw Exception(_extractError(jsonDecode(res.body)));
-    }
-    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  static Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20}) async {
-    final data = await HttpClient.get('/api/trips/history?page=$page&limit=$limit', auth: true);
+  static Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20, String? estado}) async {
+    final params = <String, String>{'page': '$page', 'limit': '$limit'};
+    if (estado != null) params['estado'] = estado;
+    final query = params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+    final data = await HttpClient.get('/api/trips/history?$query', auth: true);
     return (data['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
   }
 
@@ -49,8 +43,28 @@ class TripService {
     await HttpClient.post('/api/trips/$id/confirm-arrival', auth: true);
   }
 
+  static Future<Map<String, dynamic>> reserveTrip(Map<String, dynamic> data) async {
+    return HttpClient.post('/api/trips/reserve', body: data, auth: true, idempotent: true);
+  }
+
+  static Future<List<Map<String, dynamic>>> getReservations({int page = 1, int limit = 20, String? estado}) async {
+    final params = <String, String>{'page': '$page', 'limit': '$limit'};
+    if (estado != null) params['estado'] = estado;
+    final query = params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+    final data = await HttpClient.get('/api/trips/reservations?$query', auth: true);
+    return (data['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+  }
+
+  static Future<void> declineTrip(dynamic id) async {
+    await HttpClient.post('/api/trips/$id/decline', auth: true);
+  }
+
   static Future<void> confirmPickup(dynamic id) async {
     await HttpClient.post('/api/trips/$id/confirm-pickup', auth: true);
+  }
+
+  static Future<Map<String, dynamic>> disputeAppeal(dynamic id, {required String motivo, String? descripcion}) async {
+    return HttpClient.post('/api/trips/$id/dispute/appeal', body: {'motivo': motivo, 'descripcion': descripcion}, auth: true);
   }
 
   static Future<void> completeTrip(dynamic id, {num? montoFinal}) async {
@@ -90,17 +104,5 @@ class TripService {
   static Future<String> disputePhoto(dynamic tripId, Uint8List bytes, String filename) async {
     final data = await HttpClient.uploadFile('/api/trips/$tripId/dispute/support', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
     return data['soporte'] as String? ?? data['url'] as String? ?? '';
-  }
-
-  static String _extractError(dynamic data) {
-    if (data is Map) {
-      if (data['message'] != null) return data['message'] as String;
-      final errors = data['errors'];
-      if (errors is List && errors.isNotEmpty) {
-        return (errors[0] as Map<String, dynamic>)['message'] as String? ?? 'Error desconocido';
-      }
-      if (data['error'] != null) return data['error'] as String;
-    }
-    return 'Error desconocido';
   }
 }

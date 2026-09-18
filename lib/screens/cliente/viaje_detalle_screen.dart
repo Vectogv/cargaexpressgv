@@ -50,6 +50,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   String _estadoLabel(String estado) {
     switch (estado) {
       case 'buscando_conductor': return 'Buscando conductor';
+      case 'reservado': return 'Reservado';
       case 'aceptado': return 'Aceptado';
       case 'en_curso': return 'En curso';
       case 'esperando_confirmacion': return 'Esperando confirmación';
@@ -62,6 +63,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   Color _estadoColor(String estado) {
     switch (estado) {
       case 'buscando_conductor': return const Color(0xFFFF9800);
+      case 'reservado': return const Color(0xFF9E9E9E);
       case 'aceptado': return const Color(0xFF1E88E5);
       case 'en_curso': return const Color(0xFF1565C0);
       case 'esperando_confirmacion':
