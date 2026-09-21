@@ -11,9 +11,11 @@ class TripStatus {
   static const String enCurso = 'en_curso';
   static const String entregado = 'entregado';
   static const String esperaConfirmacion = 'esperando_confirmacion';
+  static const String pendienteConfirmacion = 'pendiente_confirmacion';
   static const String finalizado = 'finalizado';
   static const String cancelado = 'cancelado';
   static const String rechazado = 'rechazado';
   static const String disputa = 'disputa';
+  static const String enDisputa = 'en_disputa';
   static const String sos = 'sos';
 }

@@ -67,24 +67,36 @@ class TripService {
     return HttpClient.post('/api/trips/$id/dispute/appeal', body: {'motivo': motivo, 'descripcion': descripcion}, auth: true);
   }
 
-  static Future<void> completeTrip(dynamic id, {num? montoFinal}) async {
+  static Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
+    if (justificacion != null) body['justificacion'] = justificacion;
     await HttpClient.post('/api/trips/$id/complete', body: body, auth: true, idempotent: true);
   }
 
-  static Future<void> finalizeTrip(dynamic id, {num? montoFinal}) async {
+  static Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
+    if (justificacion != null) body['justificacion'] = justificacion;
     await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true, idempotent: true);
   }
 
-  static Future<void> cancelTrip(dynamic id, {String? motivo}) async {
-    await HttpClient.post('/api/trips/$id/cancel', body: {'motivo': motivo}, auth: true);
+  static Future<void> cancelTrip(dynamic id, {String? motivo, String? justificacion}) async {
+    final body = <String, dynamic>{};
+    if (motivo != null) body['motivo'] = motivo;
+    if (justificacion != null) body['justificacion'] = justificacion;
+    await HttpClient.post('/api/trips/$id/cancel', body: body, auth: true);
   }
 
-  static Future<void> requestCancellation(dynamic id, {String? motivo}) async {
-    await HttpClient.post('/api/trips/$id/request-cancellation', body: {'motivo': motivo}, auth: true);
+  static Future<void> requestCancellation(dynamic id, {String? motivo, String? justificacion}) async {
+    final body = <String, dynamic>{};
+    if (motivo != null) body['motivo'] = motivo;
+    if (justificacion != null) body['justificacion'] = justificacion;
+    await HttpClient.post('/api/trips/$id/request-cancellation', body: body, auth: true);
+  }
+
+  static Future<Map<String, dynamic>> confirmClose(dynamic id, {required bool confirmar, String? motivo}) async {
+    return HttpClient.post('/api/trips/$id/confirm-close', body: {'confirmar': confirmar, if (motivo != null) 'motivo': motivo}, auth: true);
   }
 
   static Future<Map<String, dynamic>> disputeTrip(dynamic id, {required String motivo, String? descripcion}) async {

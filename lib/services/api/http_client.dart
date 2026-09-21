@@ -197,7 +197,8 @@ class HttpClient {
       } catch (_) {
         data = null;
       }
-      throw ApiException(_extractError(data), statusCode: res.statusCode);
+      final code = data is Map ? data['code'] as String? : null;
+      throw ApiException(_extractError(data), statusCode: res.statusCode, code: code);
     }
     return res.bodyBytes.toList();
   }
@@ -245,8 +246,9 @@ class HttpClient {
     }
     if (res.statusCode != 200 && res.statusCode != 201) {
       final error = _extractError(data);
+      final code = data is Map ? data['code'] as String? : null;
       LoggerService.instance.error('HttpClient: ${res.statusCode} ${res.request?.url.path ?? ''} - $error');
-      throw ApiException(error, statusCode: res.statusCode);
+      throw ApiException(error, statusCode: res.statusCode, code: code);
     }
     return data as Map<String, dynamic>;
   }
@@ -270,8 +272,9 @@ class HttpClient {
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
+  final String? code;
 
-  ApiException(this.message, {this.statusCode});
+  ApiException(this.message, {this.statusCode, this.code});
 
   @override
   String toString() => 'Exception: $message';

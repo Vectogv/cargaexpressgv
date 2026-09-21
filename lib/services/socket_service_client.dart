@@ -44,6 +44,7 @@ class SocketServiceClient {
   final _finalizeRequestCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeResponseCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _closeRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _typingStartCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _typingStopCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _messageReadCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -89,6 +90,7 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onFinalizeRequest => _finalizeRequestCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeResponse => _finalizeResponseCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeCancelled => _finalizeCancelledCtrl.stream;
+  Stream<Map<String, dynamic>> get onCloseRejected => _closeRejectedCtrl.stream;
   Stream<Map<String, dynamic>> get onTypingStart => _typingStartCtrl.stream;
   Stream<Map<String, dynamic>> get onTypingStop => _typingStopCtrl.stream;
   Stream<Map<String, dynamic>> get onMessageRead => _messageReadCtrl.stream;
@@ -356,6 +358,10 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_finalizeRequestCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn('trip:close_rejected', (data) {
+        if (data is Map) safeAdd(_closeRejectedCtrl, Map<String, dynamic>.from(data));
+      });
+
       safeOn('trip:finalize_response', (data) {
         if (data is Map) safeAdd(_finalizeResponseCtrl, Map<String, dynamic>.from(data));
       });
@@ -531,6 +537,7 @@ class SocketServiceClient {
     _finalizeRequestCtrl.close();
     _finalizeResponseCtrl.close();
     _finalizeCancelledCtrl.close();
+    _closeRejectedCtrl.close();
     _typingStartCtrl.close();
     _typingStopCtrl.close();
     _messageReadCtrl.close();

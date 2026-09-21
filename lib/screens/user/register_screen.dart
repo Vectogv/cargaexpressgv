@@ -53,6 +53,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _showSnack('Completa los datos del conductor');
       return;
     }
+    final edad = int.tryParse(_edadCtrl.text.trim());
+    if (edad == null) {
+      _showSnack('La edad es obligatoria');
+      return;
+    }
+    if (edad < 18) {
+      _showSnack('Debes ser mayor de 18 años para registrarte');
+      return;
+    }
 
     setState(() => _loading = true);
 
@@ -66,9 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_telefonoCtrl.text.trim().isNotEmpty) {
       body['telefono'] = _telefonoCtrl.text.trim();
     }
-    if (_edadCtrl.text.trim().isNotEmpty) {
-      body['edad'] = int.tryParse(_edadCtrl.text.trim()) ?? 0;
-    }
+    body['edad'] = edad;
     if (_ciudadCtrl.text.trim().isNotEmpty) {
       body['ciudad'] = _ciudadCtrl.text.trim();
     }
@@ -208,7 +215,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 12),
             _buildField(
               controller: _edadCtrl,
-              label: 'Edad',
+              label: 'Edad *',
               keyboardType: TextInputType.number,
             ),
 

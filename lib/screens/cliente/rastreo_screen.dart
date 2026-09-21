@@ -8,6 +8,8 @@ import '../../models/trip.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/api/offer_service.dart';
+import '../../services/api/http_client.dart';
+import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
@@ -67,6 +69,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   bool _conductorEnLaZonaShown = false;
   double _driverLat = 0;
   double _driverLng = 0;
+  Map<String, dynamic>? _pendingFinalizeRequest;
 
   @override
   void initState() {
@@ -293,6 +296,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     _finalizeRequestSub = SocketServiceClient.instance.onFinalizeRequest.listen((data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        _pendingFinalizeRequest = Map<String, dynamic>.from(data);
         _showFinalizeConfirmation();
       });
     });
@@ -461,6 +465,22 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         );
       }
       _safePopUntilFirst();
+    } on ApiException catch (e) {
+      if (e.code == 'CONDUCTOR_CERCA') {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se puede cancelar: el conductor está a menos de 1 km del origen.')),
+        );
+      } else if (e.code == 'JUSTIFICACION_REQUERIDA') {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Justificaci\u00f3n requerida: ${e.message}')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cancelar: ${e.message}')),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al cancelar: $e')),
@@ -485,6 +505,10 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     if (_finalizeShown) return;
     _finalizeShown = true;
     final conductor = _trip?.conductor;
+    final requestData = _pendingFinalizeRequest ?? {};
+    final fueraDeRango = requestData['fueraDeRango'] == true;
+    final distanciaKm = (requestData['distanciaKm'] as num?)?.toDouble() ?? 0.0;
+    final justificacionConductor = requestData['justificacion'] as String?;
 
     // Primero mostrar LlegadaAlDestinoScreen
     _safePush(LlegadaAlDestinoScreen(
@@ -495,21 +519,33 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => ConfirmarEntregaScreen(
             montoFinal: _montoFinalLabel(),
-            onConfirmar: () {
+            fueraDeRango: fueraDeRango,
+            distanciaKm: distanciaKm,
+            justificacionConductor: justificacionConductor,
+            onConfirmar: () async {
               _isNavigating = true;
-              // Finalizar por API como respaldo: si el conductor ya finalizó,
-              // el backend responde 422/tolerado y se ignora (idempotente).
-              final monto = _trip?.precioFinal ?? _trip?.precioEstimado;
-              if (monto != null) {
-                unawaited(
-                  TripService.finalizeTrip(_trip?.id ?? '', montoFinal: monto)
-                      .catchError((_) {}),
+              try {
+                final tripId = _trip?.id ?? '';
+                if (tripId.isNotEmpty) {
+                  await ApiClient.instance.confirmClose(tripId, confirmar: true);
+                }
+              } on ApiException catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error al confirmar: ${e.message}')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error al confirmar: $e')),
                 );
               }
+              // Emitir socket por compatibilidad
               SocketServiceClient.instance.emit('trip:finalize_response', {
                 'accepted': true,
                 'tripId': _trip?.id,
               });
+              if (!mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(
                   builder: (_) => ViajeFinalizado(
@@ -520,13 +556,31 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
                 (route) => route.isFirst,
               );
             },
-            onReportar: () {
+            onRechazar: (motivo) async {
               _isNavigating = true;
+              try {
+                final tripId = _trip?.id ?? '';
+                if (tripId.isNotEmpty) {
+                  await ApiClient.instance.confirmClose(tripId, confirmar: false, motivo: motivo);
+                }
+              } on ApiException catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error al rechazar: ${e.message}')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error al rechazar: $e')),
+                );
+              }
+              // Emitir socket por compatibilidad
               SocketServiceClient.instance.emit('trip:finalize_response', {
                 'accepted': false,
-                'motivo': 'Cliente reportó un problema',
+                'motivo': motivo,
                 'tripId': _trip?.id,
               });
+              if (!mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(
                   builder: (_) => ReportarProblemaScreen(

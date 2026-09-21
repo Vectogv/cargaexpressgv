@@ -2,14 +2,20 @@ import 'package:flutter/material.dart';
 
 class ConfirmarEntregaScreen extends StatefulWidget {
   final VoidCallback onConfirmar;
-  final VoidCallback onReportar;
+  final Function(String motivo)? onRechazar;
   final String? montoFinal;
+  final bool fueraDeRango;
+  final double distanciaKm;
+  final String? justificacionConductor;
 
   const ConfirmarEntregaScreen({
     super.key,
     required this.onConfirmar,
-    required this.onReportar,
+    this.onRechazar,
     this.montoFinal,
+    this.fueraDeRango = false,
+    this.distanciaKm = 0.0,
+    this.justificacionConductor,
   });
 
   @override
@@ -25,10 +31,45 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
     widget.onConfirmar();
   }
 
-  Future<void> _handleReportar() async {
+  Future<void> _handleRechazar() async {
     if (_loading) return;
-    setState(() => _loading = true);
-    widget.onReportar();
+    final motivo = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rechazar entrega'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Por favor indica el motivo del rechazo:'),
+            const SizedBox(height: 16),
+            TextField(
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Motivo...',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.all(12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 'Cliente rechazó la entrega'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600),
+            child: const Text('Confirmar rechazo'),
+          ),
+        ],
+      ),
+    );
+    
+    if (motivo != null && motivo.isNotEmpty) {
+      setState(() => _loading = true);
+      widget.onRechazar?.call(motivo);
+    }
   }
 
   @override
@@ -62,6 +103,40 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (widget.fueraDeRango) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Advertencia: El conductor está fuera de rango (${widget.distanciaKm.toStringAsFixed(1)} km del destino)',
+                              style: TextStyle(fontSize: 13, color: Colors.amber.shade900, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (widget.justificacionConductor != null && widget.justificacionConductor!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Justificación del conductor: ${widget.justificacionConductor}',
+                          style: TextStyle(fontSize: 12, color: Colors.amber.shade800),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
               if (widget.montoFinal != null && widget.montoFinal!.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(
@@ -100,7 +175,7 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
                 width: double.infinity,
                 height: 52,
                 child: OutlinedButton(
-                  onPressed: _loading ? null : _handleReportar,
+                  onPressed: _loading ? null : _handleRechazar,
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFFF97316), width: 1.5),
                     shape: RoundedRectangleBorder(
@@ -110,7 +185,7 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
                   child: _loading
                       ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFFF97316)))
                       : const Text(
-                          'Reportar un problema',
+                          'Rechazar entrega',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

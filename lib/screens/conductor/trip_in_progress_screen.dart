@@ -11,6 +11,7 @@ import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
 import '../../models/user.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
 import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
@@ -58,6 +59,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   Timer? _elapsedTimer;
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
   StreamSubscription<Map<String, dynamic>>? _driverStopGpsSub;
+  StreamSubscription<Map<String, dynamic>>? _closeRejectedSub;
   StreamSubscription<bool>? _lifecycleSub;
   final MapController _mapController = MapController();
   Timer? _tripStateTimer;
@@ -85,6 +87,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     _gpsSubscription = NotificationService.instance.onNotification.listen(_onSocketEvent);
     _finalizeResponseSub = SocketServiceClient.instance.onFinalizeResponse.listen(_onFinalizeResponse);
+    _closeRejectedSub = SocketServiceClient.instance.onCloseRejected.listen(_onCloseRejected);
     _driverStopGpsSub = SocketServiceClient.instance.onDriverStopGps.listen((_) {
       _stopGpsTimer();
     });
@@ -132,6 +135,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _elapsedTimer?.cancel();
     _gpsSubscription?.cancel();
     _finalizeResponseSub?.cancel();
+    _closeRejectedSub?.cancel();
     _driverStopGpsSub?.cancel();
     _tripStateTimer?.cancel();
     _cancelCountdown();
@@ -390,6 +394,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
+  void _onCloseRejected(Map<String, dynamic> data) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _snack('El cliente rechaz\u00f3 el cierre. El viaje est\u00e1 en disputa.');
+      setState(() => _isFinalizing = false);
+    });
+  }
+
   Future<String?> _takeDeliveryPhoto() async {
     try {
       final picker = ImagePicker();
@@ -406,21 +419,31 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   // El backend exige llegar a 'esperando_confirmacion' ANTES de finalizar:
   // en_curso -> entregado -> esperando_confirmacion -> finalizado.
-  // POST /api/trips/:id/complete {montoFinal} hace en_curso/entregado ->
+  // POST /api/trips/:id/complete {montoFinal, justificacion?} hace en_curso/entregado ->
   // esperando_confirmacion automáticamente. Devuelve false si no se pudo
   // completar (se aborta la solicitud de finalización).
-  Future<bool> _completeTripIfNeeded(num? montoFinalOverride) async {
+  Future<bool> _completeTripIfNeeded(num? montoFinalOverride, {String? justificacion}) async {
     final t = _trip;
     if (t == null) return true;
     if (t.estado != TripStatus.enCurso && t.estado != TripStatus.entregado) return true;
     final montoFinal = montoFinalOverride ?? t.precioFinal ?? t.precioEstimado;
     try {
-      await ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal);
+      await ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion);
       final json = t.toJson();
       json['precioFinal'] = montoFinal;
       json['estado'] = TripStatus.esperaConfirmacion;
       _trip = Trip.fromJson(json);
       return true;
+    } on ApiException catch (e) {
+      LoggerService.instance.error('trip_in_progress: completeTrip error', e);
+      if (e.code == 'JUSTIFICACION_REQUERIDA') {
+        if (mounted) _snack('Justificaci\u00f3n requerida (m\u00ednimo 10 caracteres). Distancia: ${e.message}');
+      } else if (e.code == 'FUERA_DE_RANGO_ORIGEN') {
+        if (mounted) _snack('Fuera de rango del origen. Distancia: ${e.message}');
+      } else {
+        if (mounted) _snack('Error al completar la entrega: ${e.toString().replaceFirst("Exception: ", "")}');
+      }
+      return false;
     } catch (e) {
       LoggerService.instance.error('trip_in_progress: completeTrip error', e);
       if (mounted) _snack('Error al completar la entrega: ${e.toString().replaceFirst("Exception: ", "")}');
@@ -518,7 +541,74 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     // solicitar la confirmación/finalización al cliente.
     final montoFinal = await _promptMontoFinal();
     if (!mounted) return;
-    final completado = await _completeTripIfNeeded(montoFinal);
+
+    // Pedir justificación para el cierre (antifraude)
+    String? justificacion;
+    bool needsJustificacion = true;
+    while (needsJustificacion && mounted) {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            String? localJustificacion;
+            return AlertDialog(
+              title: const Text('Justificación de cierre'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('El cierre del viaje requiere una justificación (mínimo 10 caracteres).'),
+                  const SizedBox(height: 16),
+                  TextField(
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Motivo del cierre...',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    onChanged: (v) {
+                      localJustificacion = v.trim();
+                      setDialogState(() {});
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: (localJustificacion != null && localJustificacion!.length >= 10)
+                      ? () => Navigator.pop(ctx, localJustificacion)
+                      : null,
+                  child: const Text('Continuar'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      
+      if (result == null) {
+        if (mounted) setState(() => _actionLoading = false);
+        return;
+      }
+      
+      justificacion = result;
+      final completado = await _completeTripIfNeeded(montoFinal, justificacion: justificacion);
+      
+      if (!completado) {
+        // Check if it was a JUSTIFICACION_REQUERIDA error - we already showed the dialog
+        // If it was FUERA_DE_RANGO_ORIGEN, we showed the error but don't retry
+        if (mounted) setState(() => _actionLoading = false);
+        return;
+      }
+      
+      needsJustificacion = false;
+    }
+    
+    if (!mounted) return;
+    final completado = await _completeTripIfNeeded(montoFinal, justificacion: justificacion);
     if (!completado) {
       if (mounted) setState(() => _actionLoading = false);
       return;
@@ -1462,6 +1552,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
     final motivoCtrl = TextEditingController();
     String? motivoSeleccionado;
+    String? justificacion;
 
     final confirmado = await showDialog<bool>(
       context: context,
@@ -1498,10 +1589,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   controller: motivoCtrl,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    hintText: 'Describe el problema (opcional)',
+                    hintText: 'Justificaci\u00f3n (m\u00ednimo 10 caracteres)',
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.all(12),
                   ),
+                  onChanged: (v) {
+                    justificacion = v.trim();
+                    setDialogState(() {});
+                  },
                 ),
               ],
             ],
@@ -1509,7 +1604,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
             ElevatedButton(
-              onPressed: motivoSeleccionado == null ? null : () => Navigator.pop(ctx, true),
+              onPressed: (motivoSeleccionado != null && justificacion != null && justificacion!.length >= 10)
+                  ? () => Navigator.pop(ctx, true)
+                  : null,
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
               child: const Text('Cancelar viaje'),
             ),
@@ -1518,16 +1615,27 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       ),
     );
 
-    if (confirmado != true || motivoSeleccionado == null) return;
+    if (confirmado != true || motivoSeleccionado == null || justificacion == null || justificacion!.length < 10) {
+      return;
+    }
 
     FraudDetectionService.instance.checkCancellation(ApiClient.instance.userId ?? '');
 
     try {
       final desc = motivoCtrl.text.trim();
-      await ApiClient.instance.cancelTrip(t.id, motivo: desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado);
+      final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
+      await ApiClient.instance.cancelTrip(t.id, motivo: motivo, justificacion: justificacion);
       if (mounted) {
         _snack('Viaje cancelado. Se ha notificado al cliente.');
         Navigator.pop(context);
+      }
+    } on ApiException catch (e) {
+      if (e.code == 'CONDUCTOR_CERCA') {
+        _snack('No se puede cancelar: el conductor est\u00e1 a menos de 1 km del origen.');
+      } else if (e.code == 'JUSTIFICACION_REQUERIDA') {
+        _snack('Justificaci\u00f3n requerida (m\u00ednimo 10 caracteres).');
+      } else {
+        _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
       }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');

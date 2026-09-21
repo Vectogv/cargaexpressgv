@@ -130,6 +130,8 @@ void main() {
         expect(TripModel(id: '1', estado: 'completado').estadoLabel, 'completado');
         expect(TripModel(id: '1', estado: 'finalizado').estadoLabel, 'Finalizado');
         expect(TripModel(id: '1', estado: 'cancelado').estadoLabel, 'Cancelado');
+        expect(TripModel(id: '1', estado: 'pendiente_confirmacion').estadoLabel, 'Pendiente de confirmación');
+        expect(TripModel(id: '1', estado: 'en_disputa').estadoLabel, 'En disputa');
       });
 
       test('returns estado value for unknown state', () {
@@ -149,6 +151,8 @@ void main() {
         expect(TripModel(id: '1', estado: 'completado').estadoColor, Colors.grey);
         expect(TripModel(id: '1', estado: 'finalizado').estadoColor, Colors.grey);
         expect(TripModel(id: '1', estado: 'cancelado').estadoColor, Colors.red);
+        expect(TripModel(id: '1', estado: 'pendiente_confirmacion').estadoColor, Colors.amber);
+        expect(TripModel(id: '1', estado: 'en_disputa').estadoColor, Colors.purple);
       });
 
       test('returns grey for null estado', () {

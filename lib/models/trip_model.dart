@@ -62,6 +62,8 @@ class TripModel {
         return 'Entregado';
       case TripStatus.esperaConfirmacion:
         return 'Esperando confirmación';
+      case TripStatus.pendienteConfirmacion:
+        return 'Pendiente de confirmación';
       case TripStatus.finalizado:
         return 'Finalizado';
       case TripStatus.cancelado:
@@ -69,6 +71,8 @@ class TripModel {
       case TripStatus.rechazado:
         return 'Rechazado';
       case TripStatus.disputa:
+        return 'En disputa';
+      case TripStatus.enDisputa:
         return 'En disputa';
       case TripStatus.sos:
         return 'Emergencia';
@@ -97,6 +101,8 @@ class TripModel {
         return Colors.teal;
       case TripStatus.esperaConfirmacion:
         return Colors.amber;
+      case TripStatus.pendienteConfirmacion:
+        return Colors.amber;
       case TripStatus.finalizado:
         return Colors.grey;
       case TripStatus.cancelado:
@@ -104,6 +110,8 @@ class TripModel {
       case TripStatus.rechazado:
         return Colors.deepOrange;
       case TripStatus.disputa:
+        return Colors.purple;
+      case TripStatus.enDisputa:
         return Colors.purple;
       case TripStatus.sos:
         return Colors.redAccent;

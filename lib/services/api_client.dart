@@ -185,10 +185,11 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> getReservations({int page = 1, int limit = 20, String? estado}) => TripService.getReservations(page: page, limit: limit, estado: estado);
   Future<void> declineTrip(dynamic id) => TripService.declineTrip(id);
   Future<Map<String, dynamic>> disputeAppeal(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeAppeal(id, motivo: motivo, descripcion: descripcion);
-  Future<void> completeTrip(dynamic id, {num? montoFinal}) => TripService.completeTrip(id, montoFinal: montoFinal);
-  Future<void> finalizeTrip(dynamic id, {num? montoFinal}) => TripService.finalizeTrip(id, montoFinal: montoFinal);
-  Future<void> cancelTrip(dynamic id, {String? motivo}) => TripService.cancelTrip(id, motivo: motivo);
-  Future<void> requestCancellation(dynamic id, {String? motivo}) => TripService.requestCancellation(id, motivo: motivo);
+  Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion}) => TripService.completeTrip(id, montoFinal: montoFinal, justificacion: justificacion);
+  Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion}) => TripService.finalizeTrip(id, montoFinal: montoFinal, justificacion: justificacion);
+  Future<void> cancelTrip(dynamic id, {String? motivo, String? justificacion}) => TripService.cancelTrip(id, motivo: motivo, justificacion: justificacion);
+  Future<void> requestCancellation(dynamic id, {String? motivo, String? justificacion}) => TripService.requestCancellation(id, motivo: motivo, justificacion: justificacion);
+  Future<Map<String, dynamic>> confirmClose(dynamic id, {required bool confirmar, String? motivo}) => TripService.confirmClose(id, confirmar: confirmar, motivo: motivo);
   Future<Map<String, dynamic>> disputeTrip(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeTrip(id, motivo: motivo, descripcion: descripcion);
   Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) => TripService.rateTrip(id, puntaje, comentario: comentario);
   Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) => TripService.deliveryPhoto(tripId, bytes, filename);
