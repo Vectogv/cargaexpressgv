@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
+import '../../services/location_permission.dart';
 import '../../services/logger_service.dart';
 import 'rastreo_screen.dart';
 
@@ -88,6 +89,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   Future<void> _getCurrentLocation({bool isOrigen = true}) async {
     setState(() => _loadingLocation = true);
     try {
+      await LocationPermissionHelper.ensure();
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );

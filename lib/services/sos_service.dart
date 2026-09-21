@@ -1,12 +1,14 @@
 import 'package:geolocator/geolocator.dart';
 import 'api/http_client.dart';
 import '../models/sos_alert_model.dart';
+import 'location_permission.dart';
 import 'logger_service.dart';
 
 class SosService {
   static Future<SosAlertModel> sendAlert({String? tripId, String? motivo}) async {
     Position pos;
     try {
+      await LocationPermissionHelper.ensure();
       pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
     } catch (e) {
       LoggerService.instance.error('SosService: GPS error, using fallback position', e);
