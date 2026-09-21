@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/environment.dart';
@@ -10,6 +11,7 @@ import 'api/driver_service.dart';
 import 'api/profile_service.dart';
 import 'api/dispute_service.dart';
 import 'api/favorite_service.dart';
+import 'map_config.dart';
 import 'socket_service_client.dart';
 
 class ApiClient {
@@ -59,6 +61,7 @@ class ApiClient {
     final auth = await AuthService.login(email, password);
     await _saveTokens(auth.token, auth.refreshToken);
     await saveProfile(auth);
+    unawaited(MapConfig.ensureLoaded());
     return auth;
   }
 
@@ -66,6 +69,7 @@ class ApiClient {
     final auth = await AuthService.register(body);
     await _saveTokens(auth.token, auth.refreshToken);
     await saveProfile(auth);
+    unawaited(MapConfig.ensureLoaded());
     return auth;
   }
 

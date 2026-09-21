@@ -269,15 +269,7 @@ void _recoverSession() {
   }
 }
 
-Future<void> _loadConfig() async {
-  try {
-    final token = await ApiClient.instance.fetchMapboxToken();
-    MapConfig.mapboxAccessToken = token;
-  } catch (_) {
-    LoggerService.instance
-        .debug('Mapbox token not available, using OSM fallback');
-  }
-}
+Future<void> _loadConfig() => MapConfig.ensureLoaded();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App widget
