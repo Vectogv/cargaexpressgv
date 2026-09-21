@@ -298,7 +298,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Tocar en el mapa para ${isOrigen ? "origen" : "destino"}'),
+        // Ancho explícito: AlertDialog mide el ancho intrínseco del contenido y FlutterMap no lo soporta.
         content: SizedBox(
+          width: double.maxFinite,
           height: 300,
           child: FlutterMap(
             options: MapOptions(
