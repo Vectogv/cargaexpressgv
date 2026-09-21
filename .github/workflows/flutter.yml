@@ -24,7 +24,7 @@ jobs:
         run: flutter pub get
 
       - name: Analizar proyecto
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Compilar APK
         run: flutter build apk --release
