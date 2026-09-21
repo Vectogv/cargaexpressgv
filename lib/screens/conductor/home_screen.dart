@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
 import '../../widgets/carga_express_bottom_nav.dart';
@@ -9,6 +11,8 @@ import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/driver_location_service.dart';
+import '../../services/api/driver_service.dart';
+import '../../services/map_config.dart';
 import '../user/auth_screen.dart';
 import 'trip_in_progress_screen.dart';
 import 'offers_screen.dart';
@@ -36,6 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _statusLoading = false;
   Map<String, dynamic>? _activeTrip;
   Map<String, dynamic>? _profile;
+  Map<String, dynamic>? _stats;
+  Timer? _uiTimer;
 
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
@@ -107,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _socketSub?.cancel();
     _tripSub?.cancel();
+    _uiTimer?.cancel();
     super.dispose();
   }
 
@@ -115,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final cachedTrip = CacheService.instance.getCachedActiveTrip();
     if (cachedTrip != null) {
       final estado = cachedTrip['estado'] as String?;
-      if (estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso || estado == TripStatus.entregado || estado == TripStatus.esperaConfirmacion) {
+      if (estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso || estado == TripStatus.entregado || estado == TripStatus.esperaConfirmacion || estado == TripStatus.pendienteConfirmacion) {
         if (mounted) setState(() => _activeTrip = cachedTrip);
         _redirectToActiveTrip();
         return;
@@ -176,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final trip = await ApiClient.instance.getActiveTrip();
       if (trip != null) {
         final estado = trip['estado'] as String?;
-        final activeStates = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion];
+        final activeStates = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion, TripStatus.pendienteConfirmacion];
         if (activeStates.contains(estado)) {
           CacheService.instance.cacheActiveTrip(trip);
           if (mounted) setState(() => _activeTrip = trip);
@@ -199,6 +206,20 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('Error cargando perfil: $e');
     }
+    unawaited(_loadStats());
+    // Refresca el mapa (posición del conductor) y el resumen mientras la pantalla está abierta.
+    _uiTimer ??= Timer.periodic(const Duration(seconds: 20), (t) {
+      if (!mounted) return;
+      if (t.tick % 3 == 0) unawaited(_loadStats());
+      setState(() {});
+    });
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final stats = await DriverService.getTodayStats();
+      if (mounted) setState(() => _stats = stats);
+    } catch (_) {}
   }
 
   Future<void> _toggleStatus() async {
@@ -520,66 +541,117 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader() {
+    final nombre = (_profile?['nombre'] as String?)?.trim();
+    final saludo = (nombre == null || nombre.isEmpty) ? 'Hola, conductor' : 'Hola, ${nombre.split(' ').first}';
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      padding: const EdgeInsets.only(left: 4, right: 12, top: 6, bottom: 6),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_primaryBlue, _accentBlue],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 18),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                  ),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    child: Text(
+                      _initials(nombre),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(saludo,
+                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+                            overflow: TextOverflow.ellipsis),
+                        Text(_statusLabel(),
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  if (_activeTrip != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _accentGreen.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text('Viaje activo',
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _buildOnlineToggle(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOnlineToggle() {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
       decoration: BoxDecoration(
-        color: _primaryBlue,
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
-            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _online ? const Color(0xFF4ADE80) : Colors.white38,
+              boxShadow: _online
+                  ? [BoxShadow(color: const Color(0xFF4ADE80).withValues(alpha: 0.6), blurRadius: 8)]
+                  : null,
+            ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        _statusLabel(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (_activeTrip != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _accentGreen.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text(
-                          'Activo',
-                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                Text(_online ? 'Conectado' : 'Desconectado',
+                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                Text(_online ? 'Recibiendo solicitudes cercanas' : 'No recibirás solicitudes',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12)),
               ],
             ),
           ),
           if (_statusLoading)
-            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+            )
           else
             Switch(
               value: _online,
               onChanged: (_) => _toggleStatus(),
               activeThumbColor: Colors.white,
-              activeTrackColor: _accentBlue,
+              activeTrackColor: _accentGreen,
               inactiveThumbColor: Colors.white,
               inactiveTrackColor: Colors.white24,
             ),
@@ -603,6 +675,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case TripStatus.enCurso: estadoLabel = 'En curso'; break;
       case TripStatus.entregado: estadoLabel = 'Entregado'; break;
       case TripStatus.esperaConfirmacion: estadoLabel = 'Esperando confirmación'; break;
+      case TripStatus.pendienteConfirmacion: estadoLabel = 'Esperando confirmación del cliente'; break;
       case TripStatus.reservado: estadoLabel = 'Reservado'; break;
       default: estadoLabel = 'Activo';
     }
@@ -753,121 +826,243 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-          Center(
-            child: Text(
-              'Viajes disponibles',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
-              ),
-            ),
-          ),
+          _buildStatsRow(),
+          const SizedBox(height: 16),
+          _buildMapCard(),
           const SizedBox(height: 16),
           _buildWaitingCard(),
+          const SizedBox(height: 20),
+          const Text('Accesos rápidos',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
+          const SizedBox(height: 10),
+          _buildQuickActions(),
         ],
       ),
     );
   }
 
+  num? _num(dynamic v) => v == null ? null : num.tryParse(v.toString());
+
+  String _money(num? v) {
+    if (v == null) return '\$ 0';
+    final s = v.round().toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
+      b.write(s[i]);
+    }
+    return '\$ $b';
+  }
+
+  Widget _buildStatsRow() {
+    final rating = _num(_stats?['calificacion']);
+    return Row(
+      children: [
+        _statTile(Icons.payments_rounded, 'Hoy', _money(_num(_stats?['netaHoy'])), const Color(0xFF16A34A)),
+        const SizedBox(width: 10),
+        _statTile(Icons.local_shipping_rounded, 'Viajes hoy', '${_num(_stats?['viajesHoy'])?.toInt() ?? 0}', _accentBlue),
+        const SizedBox(width: 10),
+        _statTile(Icons.star_rounded, 'Calificación',
+            rating == null || rating == 0 ? '—' : rating.toStringAsFixed(1), const Color(0xFFF59E0B)),
+      ],
+    );
+  }
+
+  Widget _statTile(IconData icon, String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(height: 10),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textDark)),
+            ),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapCard() {
+    final lat = DriverLocationService.instance.lastLat;
+    final lng = DriverLocationService.instance.lastLng;
+    final tienePosicion = lat != null && lng != null;
+    // Sin posición aún: centro de Cali como referencia.
+    final centro = tienePosicion ? LatLng(lat, lng) : const LatLng(3.4516, -76.5320);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 220,
+        child: Stack(
+          children: [
+            FlutterMap(
+              key: ValueKey('${centro.latitude},${centro.longitude}'),
+              options: MapOptions(
+                initialCenter: centro,
+                initialZoom: 15,
+                interactionOptions: const InteractionOptions(flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag),
+              ),
+              children: [
+                TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app'),
+                if (tienePosicion)
+                  MarkerLayer(markers: [
+                    Marker(
+                      point: centro,
+                      width: 44,
+                      height: 44,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _accentBlue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [BoxShadow(color: _accentBlue.withValues(alpha: 0.45), blurRadius: 12, spreadRadius: 3)],
+                        ),
+                        child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ]),
+              ],
+            ),
+            if (!_online)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  alignment: Alignment.center,
+                  child: const Text('Conéctate para recibir viajes cerca de ti',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: _textDark)),
+                ),
+              ),
+            Positioned(
+              left: 12,
+              top: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)],
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(tienePosicion ? Icons.my_location : Icons.location_searching, size: 14, color: _accentBlue),
+                  const SizedBox(width: 6),
+                  Text(tienePosicion ? 'Tu ubicación' : 'Buscando tu ubicación...',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+                ]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWaitingCard() {
+    final online = _online;
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: _white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
       ),
-      child: Column(
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: (online ? _accentBlue : _textGrey).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(online ? Icons.radar_rounded : Icons.power_settings_new_rounded,
+                color: online ? _accentBlue : _textGrey, size: 28),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Esperando solicitudes...',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
+                Text(online ? 'Esperando solicitudes' : 'Estás desconectado',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark)),
+                const SizedBox(height: 4),
                 Text(
-                  'Te notificaremos cuando\nhaya un nuevo envío.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _textSecondary,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
+                  online
+                      ? 'Te avisaremos al instante cuando haya un envío cerca de ti.'
+                      : 'Conéctate para empezar a recibir envíos.',
+                  style: const TextStyle(fontSize: 13, color: _textSecondary, height: 1.4),
                 ),
               ],
             ),
           ),
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(16),
-              bottomRight: Radius.circular(16),
+          if (!online) ...[
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _statusLoading ? null : _toggleStatus,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Conectarme'),
             ),
-            child: SizedBox(
-              height: 260,
-              child: Stack(
-                children: [
-                  CustomPaint(
-                    size: const Size(double.infinity, 260),
-                    painter: _MockMapPainter(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    final acciones = [
+      (Icons.receipt_long_rounded, 'Mis viajes', 11, const Color(0xFF2563EB)),
+      (Icons.bar_chart_rounded, 'Ingresos', 4, const Color(0xFF16A34A)),
+      (Icons.description_rounded, 'Documentos', 10, const Color(0xFFF59E0B)),
+      (Icons.person_rounded, 'Perfil', 9, const Color(0xFF7C3AED)),
+    ];
+    return Row(
+      children: [
+        for (var i = 0; i < acciones.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: Material(
+              color: _white,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _navigate(acciones[i].$3),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Column(
+                    children: [
+                      Icon(acciones[i].$1, color: acciones[i].$4, size: 26),
+                      const SizedBox(height: 6),
+                      Text(acciones[i].$2,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark),
+                          overflow: TextOverflow.ellipsis),
+                    ],
                   ),
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: _accentBlue,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _accentBlue.withValues(alpha: 0.4),
-                                blurRadius: 10,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.navigation,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                        Container(
-                          width: 60,
-                          height: 60,
-                          margin: const EdgeInsets.only(top: 4),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _accentBlue.withValues(alpha: 0.12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -878,59 +1073,3 @@ class _HomeScreenState extends State<HomeScreen> {
     return name[0].toUpperCase();
   }
 }
-
-class _MockMapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = const Color(0xFFE8F0E9),
-    );
-
-    final roadPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round;
-
-    final minorRoadPaint = Paint()
-      ..color = const Color(0xFFF3F4F6)
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round;
-
-    final blockPaint = Paint()..color = const Color(0xFFD4E6D5);
-
-    final blocks = [
-      Rect.fromLTWH(10, 20, 100, 70),
-      Rect.fromLTWH(130, 20, 80, 70),
-      Rect.fromLTWH(230, 20, 110, 70),
-      Rect.fromLTWH(10, 120, 100, 60),
-      Rect.fromLTWH(130, 120, 80, 60),
-      Rect.fromLTWH(230, 120, 110, 60),
-      Rect.fromLTWH(10, 210, 100, 50),
-      Rect.fromLTWH(130, 210, 80, 50),
-      Rect.fromLTWH(230, 210, 110, 50),
-    ];
-
-    for (final block in blocks) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(block, const Radius.circular(4)),
-        blockPaint,
-      );
-    }
-
-    for (double y in [105.0, 195.0]) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), roadPaint);
-    }
-    canvas.drawLine(Offset(0, 15), Offset(size.width, 15), minorRoadPaint);
-
-    for (double x in [120.0, 220.0]) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), roadPaint);
-    }
-    canvas.drawLine(Offset(5, 0), Offset(5, size.height), minorRoadPaint);
-    canvas.drawLine(Offset(size.width - 5, 0), Offset(size.width - 5, size.height), minorRoadPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
