@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
 import '../../widgets/carga_express_bottom_nav.dart';
+import '../../widgets/solicitud_viaje_sheet.dart';
 import '../../models/trip.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
@@ -281,35 +282,22 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_activeBannerIds.contains(tripId)) return; // deduplicar
     _activeBannerIds.add(tripId);
 
-    final origenRaw = event['origen'];
-    String origenTxt = '';
-    if (origenRaw is String) {
-      origenTxt = origenRaw;
-    } else if (origenRaw is Map) {
-      origenTxt = (origenRaw['direccion'] as String?) ?? '';
-    }
-    final precioRaw = event['precioEstimado'];
-    final precioTxt = precioRaw is num
-        ? '\$${precioRaw.toStringAsFixed(0)}'
-        : (precioRaw != null ? '\$$precioRaw' : '');
-    final msg = 'Nuevo viaje: ${origenTxt.isNotEmpty ? origenTxt : 'solicitud cerca de ti'}'
-        '${precioTxt.isNotEmpty ? ' — $precioTxt' : ''}';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(seconds: 25),
-        action: SnackBarAction(
-          label: 'Ver',
-          onPressed: () {
-            _offeredTripIds.add(tripId);       // antes de navegar
-            _activeBannerIds.remove(tripId);
-            _resetNearbyNotificationState();
-            _openTripDetail(tripId);
-          },
-        ),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SolicitudViajeSheet(
+        tripId: tripId,
+        resumen: event,
+        conductorLat: DriverLocationService.instance.lastLat,
+        conductorLng: DriverLocationService.instance.lastLng,
+        onVer: () {
+          _offeredTripIds.add(tripId); // antes de navegar
+          _resetNearbyNotificationState();
+          _openTripDetail(tripId);
+        },
       ),
-    );
+    ).whenComplete(() => _activeBannerIds.remove(tripId));
   }
 
   Future<void> _openTripDetail(String tripId) async {
