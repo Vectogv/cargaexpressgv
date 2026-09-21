@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'api_client.dart';
+import 'api/http_client.dart' show ApiException;
 import 'background_location_service.dart';
 import 'fraud_detection_service.dart';
 import 'logger_service.dart';
@@ -261,5 +262,36 @@ class DriverLocationService {
   void dispose() {
     stop();
     _tripStreamController.close();
+  }
+
+  /// Toma el GPS actual y lo envía al backend ya (sin el throttle de 5 s).
+  /// Si el backend limita la frecuencia (429), espera y reintenta una vez.
+  Future<void> sendNow() async {
+    final pos = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+    _lastLat = pos.latitude;
+    _lastLng = pos.longitude;
+    try {
+      await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+    } on ApiException catch (e) {
+      if (e.statusCode != 429) rethrow;
+      await Future.delayed(const Duration(milliseconds: 4500));
+      await ApiClient.instance.updateLocation(pos.latitude, pos.longitude);
+    }
+    _lastLocationSent = DateTime.now();
+  }
+
+  /// Ejecuta una acción del conductor que valida su ubicación en el backend
+  /// (ofertar, recoger, cerrar, cancelar). Si responde UBICACION_NO_RECIENTE,
+  /// envía el GPS actual y reintenta una sola vez.
+  Future<T> conUbicacionFresca<T>(Future<T> Function() accion) async {
+    try {
+      return await accion();
+    } on ApiException catch (e) {
+      if (e.code != 'UBICACION_NO_RECIENTE') rethrow;
+      await sendNow();
+      return accion();
+    }
   }
 }

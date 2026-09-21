@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_client.dart';
+import '../../services/driver_location_service.dart';
 import '../../services/api/http_client.dart';
 
 class HacerOfertaScreen extends StatefulWidget {
@@ -88,7 +89,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
     }
     setState(() => _sending = true);
     try {
-      await ApiClient.instance.makeOffer(widget.tripId, monto, placa: widget.placa, mensaje: _mensajeController.text);
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.makeOffer(widget.tripId, monto, placa: widget.placa, mensaje: _mensajeController.text));
       if (mounted) Navigator.of(context).pop(_formatValue(_ofertaActual));
     } on ApiException catch (e) {
       if (e.statusCode == 429) {

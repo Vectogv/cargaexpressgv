@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -26,14 +27,14 @@ class HttpClient {
     String path, {
     required bool auth,
   }) async {
-    var res = await request().timeout(_timeout);
+    var res = await _send(request);
     if (res.statusCode == 401 && auth) {
       _refreshing ??= _refreshSession();
       try {
         final ok = await _refreshing;
         if (ok == true) {
           LoggerService.instance.info('HttpClient: token refrescado, reintentando $path');
-          res = await request().timeout(_timeout);
+          res = await _send(request);
         } else {
           LoggerService.instance.error('HttpClient: refresh fall\u00f3, sesi\u00f3n expirada');
           ErrorHandlerService.instance.emitSessionExpired();
@@ -44,6 +45,18 @@ class HttpClient {
       }
     }
     return res;
+  }
+
+  /// Traduce fallos de red a un ApiException con mensaje legible para el usuario
+  /// (en vez de mostrar "TimeoutException after..." o "ClientException: ...").
+  static Future<http.Response> _send(Future<http.Response> Function() request) async {
+    try {
+      return await request().timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException('El servidor tardó demasiado en responder. Intenta de nuevo.', code: 'TIMEOUT');
+    } on http.ClientException {
+      throw ApiException('Sin conexión a internet. Revisa tu red e intenta de nuevo.', code: 'SIN_CONEXION');
+    }
   }
 
   static Future<bool> _refreshSession() async {

@@ -428,7 +428,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (t.estado != TripStatus.enCurso && t.estado != TripStatus.entregado) return true;
     final montoFinal = montoFinalOverride ?? t.precioFinal ?? t.precioEstimado;
     try {
-      await ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion);
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion));
       final json = t.toJson();
       json['precioFinal'] = montoFinal;
       json['estado'] = TripStatus.esperaConfirmacion;
@@ -810,7 +810,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
     try {
-      await ApiClient.instance.startTrip(_trip!.id);
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.startTrip(_trip!.id));
       final json = _trip!.toJson();
       json['estado'] = TripStatus.enCurso;
       _trip = Trip.fromJson(json);
@@ -828,7 +828,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
     try {
-      await ApiClient.instance.confirmArrival(_trip!.id);
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.confirmArrival(_trip!.id));
       final json = _trip!.toJson();
       json['estado'] = TripStatus.enCamino;
       _trip = Trip.fromJson(json);
@@ -845,7 +845,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
     try {
-      await ApiClient.instance.confirmPickup(_trip!.id);
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.confirmPickup(_trip!.id));
       final json = _trip!.toJson();
       json['estado'] = TripStatus.llegada;
       _trip = Trip.fromJson(json);
@@ -865,7 +865,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     try {
       final t = _trip!;
       final montoFinal = t.precioFinal ?? t.precioEstimado;
-      await ApiClient.instance.finalizeTrip(t.id, montoFinal: montoFinal);
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.finalizeTrip(t.id, montoFinal: montoFinal));
       final json = t.toJson();
       json['estado'] = TripStatus.finalizado;
       _trip = Trip.fromJson(json);
@@ -1624,7 +1624,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     try {
       final desc = motivoCtrl.text.trim();
       final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
-      await ApiClient.instance.cancelTrip(t.id, motivo: motivo, justificacion: justificacion);
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.cancelTrip(t.id, motivo: motivo, justificacion: justificacion));
       if (mounted) {
         _snack('Viaje cancelado. Se ha notificado al cliente.');
         Navigator.pop(context);
