@@ -20,8 +20,8 @@ subprojects {
 // evaluationDependsOn(":app") para registrar el hook antes de evaluar los subproyectos.
 subprojects {
     afterEvaluate {
-        (extensions.findByName("android") as? com.android.build.gradle.BaseExtension)
-            ?.compileSdkVersion(36)
+        extensions.findByType(com.android.build.api.dsl.LibraryExtension::class.java)
+            ?.compileSdk = 36
     }
 }
 subprojects {
