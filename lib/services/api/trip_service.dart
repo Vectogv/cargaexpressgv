@@ -29,6 +29,13 @@ class TripService {
     return HttpClient.get('/api/trips/$id', auth: true);
   }
 
+  /// Vehículos disponibles cerca del origen mientras se busca conductor.
+  /// Respuesta: {radioKm, conductores: [{lat, lng, tipoVehiculo, distanciaKm}]}.
+  static Future<List<Map<String, dynamic>>> getNearbyDrivers(dynamic tripId) async {
+    final data = await HttpClient.get('/api/trips/$tripId/nearby-drivers', auth: true);
+    return (data['conductores'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+  }
+
   static Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) async {
     // Tolerar ambos contratos: array plano `[...]` (api_spec) o `{data: [...]}` (mock/backend).
     final list = await HttpClient.getList('/api/trips/nearby?lat=$lat&lng=$lng&radio=$radio', auth: true);

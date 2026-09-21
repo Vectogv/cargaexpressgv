@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/trip.dart';
@@ -10,6 +12,7 @@ import '../../services/api/trip_service.dart';
 import '../../services/api/offer_service.dart';
 import '../../services/api/http_client.dart';
 import '../../services/api_client.dart';
+import '../../services/map_config.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
@@ -65,6 +68,8 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   Timer? _pollingTimer;
   Timer? _fallbackPollingTimer;
   Timer? _proximityTimer;
+  Timer? _cercanosTimer;
+  List<Map<String, dynamic>> _cercanos = [];
   bool _proximityAlertShown = false;
   bool _conductorEnLaZonaShown = false;
   double _driverLat = 0;
@@ -350,6 +355,25 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
         }
       } catch (_) {}
     });
+    _startCercanosPolling();
+  }
+
+  /// Refresca cada 10 s los vehículos disponibles a <= 2 km del origen mientras se busca conductor.
+  void _startCercanosPolling() {
+    _cercanosTimer?.cancel();
+    _refreshCercanos();
+    _cercanosTimer = Timer.periodic(const Duration(seconds: 10), (_) => _refreshCercanos());
+  }
+
+  Future<void> _refreshCercanos() async {
+    if (!mounted || _status != TripStatus.buscando || _trip == null) {
+      _cercanosTimer?.cancel();
+      return;
+    }
+    try {
+      final cercanos = await TripService.getNearbyDrivers(_trip!.id);
+      if (mounted) setState(() => _cercanos = cercanos);
+    } catch (_) {}
   }
 
   void _startFallbackPolling() {
@@ -615,6 +639,7 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _cercanosTimer?.cancel();
     _fallbackPollingTimer?.cancel();
     _proximityTimer?.cancel();
     _positionSub?.cancel();
@@ -813,12 +838,62 @@ class _RastreoScreenState extends State<RastreoScreen> with SingleTickerProvider
     );
   }
 
+  Widget _buildNearbyMap() {
+    final origen = _trip?.origen;
+    if (origen == null) return _buildPulseAnimation();
+    final centro = LatLng(origen.lat, origen.lng);
+    return Column(
+      children: [
+        SizedBox(
+          height: 260,
+          child: FlutterMap(
+            options: MapOptions(initialCenter: centro, initialZoom: 14),
+            children: [
+              TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app'),
+              CircleLayer(circles: [
+                CircleMarker(
+                  point: centro,
+                  radius: 2000,
+                  useRadiusInMeter: true,
+                  color: const Color(0x1A2563EB),
+                  borderColor: const Color(0x662563EB),
+                  borderStrokeWidth: 1,
+                ),
+              ]),
+              MarkerLayer(markers: [
+                for (final c in _cercanos)
+                  Marker(
+                    point: LatLng((c['lat'] as num).toDouble(), (c['lng'] as num).toDouble()),
+                    width: 34,
+                    height: 34,
+                    child: const Icon(Icons.local_shipping, color: Color(0xFF1A1A2E), size: 28),
+                  ),
+                Marker(
+                  point: centro,
+                  width: 36,
+                  height: 36,
+                  child: const Icon(Icons.location_on, color: Colors.red, size: 36),
+                ),
+              ]),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _cercanos.isEmpty
+              ? 'Aún no hay vehículos disponibles a menos de 2 km'
+              : '${_cercanos.length} vehículo(s) disponible(s) a menos de 2 km',
+          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSearchContent() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Spacer(),
-        _buildPulseAnimation(),
+        _buildNearbyMap(),
         const SizedBox(height: 24),
         const Text(
           'Buscando conductor disponible...',
