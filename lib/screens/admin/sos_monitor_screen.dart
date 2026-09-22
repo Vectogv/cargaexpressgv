@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api/http_client.dart';
 import '../../models/sos_alert_model.dart';
+import 'admin_common.dart';
 
 class SosMonitorScreen extends StatefulWidget {
   const SosMonitorScreen({super.key});
@@ -12,6 +13,7 @@ class SosMonitorScreen extends StatefulWidget {
 class _SosMonitorScreenState extends State<SosMonitorScreen> {
   List<SosAlertModel> _alerts = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -24,12 +26,18 @@ class _SosMonitorScreenState extends State<SosMonitorScreen> {
       final list = await HttpClient.getList('/api/sos', auth: true);
       if (mounted) {
         setState(() {
-          _alerts = list.cast<Map<String, dynamic>>().map((e) => SosAlertModel.fromJson(e)).toList();
+          _alerts = adminMapList(list).map(SosAlertModel.fromJson).toList();
+          _error = null;
           _loading = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = adminErrorText(e);
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -71,7 +79,11 @@ class _SosMonitorScreenState extends State<SosMonitorScreen> {
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.shield_outlined, size: 64, color: Colors.grey.shade300),
                     const SizedBox(height: 12),
-                    const Text('No hay alertas SOS', style: TextStyle(fontSize: 16, color: Colors.black45)),
+                    Text(
+                      _error ?? 'No hay alertas SOS',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: _error != null ? Colors.red : Colors.black45),
+                    ),
                   ]),
                 )
               : RefreshIndicator(

@@ -1,13 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
-
-Map<String, String> get _authHeaders => {
-  'Content-Type': 'application/json',
-  'Authorization': 'Bearer ${ApiClient.instance.token}',
-};
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 enum TicketStatus { exitoso, rechazado, pendiente, enProceso }
 
@@ -44,28 +38,39 @@ class Ticket {
     required this.date,
   });
 
+  /// Backend (GET /api/admin/reports): {id, viajeId, conductorId, clienteId,
+  /// motivo, descripcion, estado: pendiente|resuelto, cliente{nombre,email},
+  /// conductor{nombre,placa}, viaje{origen,destino,estado}, createdAt}
   factory Ticket.fromJson(Map<String, dynamic> json) {
+    final cliente = json['cliente'] is Map ? json['cliente'] as Map : const {};
+    final conductor = json['conductor'] is Map ? json['conductor'] as Map : const {};
+    final partes = <String>[
+      if (json['descripcion'] != null && json['descripcion'].toString().isNotEmpty)
+        json['descripcion'].toString(),
+      if (cliente['nombre'] != null) 'Cliente: ${cliente['nombre']}',
+      if (conductor['nombre'] != null) 'Conductor: ${conductor['nombre']} ${conductor['placa'] ?? ''}'.trim(),
+      if (json['viajeId'] != null) 'Viaje #${json['viajeId']}',
+    ];
     return Ticket(
       id: json['id']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
-      status: _parseStatus(json['status']?.toString()),
-      resolution: json['resolution']?.toString() ?? '',
-      date: json['date'] != null
-          ? DateTime.tryParse(json['date'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      title: json['motivo']?.toString() ?? 'Reporte',
+      status: _parseStatus(json['estado']?.toString()),
+      resolution: partes.join('\n'),
+      date: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
     );
   }
 
   static TicketStatus _parseStatus(String? s) {
     switch (s) {
+      case 'resuelto':
       case 'exitoso':
         return TicketStatus.exitoso;
       case 'rechazado':
         return TicketStatus.rechazado;
-      case 'pendiente':
-        return TicketStatus.pendiente;
+      case 'en_revision':
       case 'enProceso':
         return TicketStatus.enProceso;
+      case 'pendiente':
       default:
         return TicketStatus.pendiente;
     }
@@ -88,30 +93,6 @@ final List<ChatMessage> _mockMessages = [
   ),
 ];
 
-final List<Ticket> _mockTickets = [
-  Ticket(
-    id: 'T-001',
-    title: 'Ticket Core 1',
-    status: TicketStatus.exitoso,
-    resolution: 'Soporte y Reportes',
-    date: DateTime(2023, 11, 23),
-  ),
-  Ticket(
-    id: 'T-002',
-    title: 'Ticket Core 2',
-    status: TicketStatus.rechazado,
-    resolution: 'Retorte',
-    date: DateTime(2024, 11, 21),
-  ),
-  Ticket(
-    id: 'T-003',
-    title: 'Ticket Core 3',
-    status: TicketStatus.enProceso,
-    resolution: 'En revisión',
-    date: DateTime(2024, 12, 1),
-  ),
-];
-
 class SupportReportsScreen extends StatefulWidget {
   const SupportReportsScreen({super.key});
 
@@ -125,14 +106,14 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
   final ScrollController _scrollController = ScrollController();
   late TabController _tabController;
   late List<ChatMessage> _chatMessages;
-  late List<Ticket> _tickets;
+  List<Ticket> _tickets = [];
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _chatMessages = List.from(_mockMessages);
-    _tickets = List.from(_mockTickets);
     _tabController = TabController(length: 2, vsync: this);
     _fetchTickets();
   }
@@ -148,22 +129,17 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
   Future<void> _fetchTickets() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/reports'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(res.body);
-        setState(() {
-          _tickets = data.map((e) => Ticket.fromJson(e)).toList();
-          _isLoading = false;
-        });
-      } else {
-        throw Exception('Error al obtener tickets');
-      }
-    } catch (_) {
+      final data = await HttpClient.getList('/api/admin/reports', auth: true);
+      if (!mounted) return;
       setState(() {
-        _tickets = List.from(_mockTickets);
+        _tickets = adminMapList(data).map(Ticket.fromJson).toList();
+        _error = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
         _isLoading = false;
       });
     }
@@ -171,19 +147,11 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
 
   Future<void> _resolveTicket(String id) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/reports/$id/resolve'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        _fetchTickets();
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al resolver el ticket, usa el fallback')),
-        );
-      }
+      await HttpClient.put('/api/admin/reports/$id/resolve', auth: true);
+      adminSnack(this, 'Reporte marcado como resuelto');
+      _fetchTickets();
+    } catch (e) {
+      adminSnack(this, adminErrorText(e), error: true);
     }
   }
 
@@ -202,10 +170,9 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
       _inputController.clear();
     });
 
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      setState(() {});
-      _scrollToBottom();
+    // Desplazar tras el siguiente frame (sin reconstruir toda la pantalla).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToBottom();
     });
   }
 
@@ -432,6 +399,23 @@ class _SupportReportsScreenState extends State<SupportReportsScreen>
   Widget _buildTicketsTab() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (_tickets.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _fetchTickets,
+        child: ListView(
+          padding: const EdgeInsets.all(32),
+          children: [
+            Center(
+              child: Text(
+                _error ?? 'Sin reportes',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _error != null ? Colors.red : Colors.black54),
+              ),
+            ),
+          ],
+        ),
+      );
     }
     return RefreshIndicator(
       onRefresh: _fetchTickets,
@@ -843,7 +827,7 @@ class _TicketCard extends StatelessWidget {
                   const SizedBox(height: 5),
                   _DetailRow(
                     icon: Icons.handshake_outlined,
-                    label: 'Resolución',
+                    label: 'Detalle',
                     value: ticket.resolution,
                   ),
                   const SizedBox(height: 5),

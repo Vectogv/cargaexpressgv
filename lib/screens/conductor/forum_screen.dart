@@ -54,9 +54,12 @@ class _ForumScreenState extends State<ForumScreen> {
         ],
       ),
     );
-    if (result != true || textCtrl.text.trim().isEmpty) return;
+    final contenido = textCtrl.text.trim();
+    // Liberar tras la animación de cierre del diálogo (el TextField aún vive).
+    Future<void>.delayed(const Duration(seconds: 1), textCtrl.dispose);
+    if (result != true || contenido.isEmpty) return;
     try {
-      await ApiClient.instance.createForumPost({'contenido': textCtrl.text.trim()});
+      await ApiClient.instance.createForumPost({'contenido': contenido});
       _fetchPosts();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));

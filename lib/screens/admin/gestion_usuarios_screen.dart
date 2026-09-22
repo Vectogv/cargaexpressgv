@@ -1,9 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import '../../services/api_client.dart';
-import '../../services/error_handler_service.dart';
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -15,7 +14,24 @@ class UsersScreen extends StatefulWidget {
 class _UsersScreenState extends State<UsersScreen> {
   List<dynamic> _users = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _page = 1;
+  String? _error;
   String _searchQuery = '';
+  Timer? _searchDebounce;
+  final _searchCtrl = TextEditingController();
+  // Controladores del diálogo de edición: viven con la pantalla para no
+  // liberarlos mientras el diálogo aún anima su cierre.
+  final _editNombre = TextEditingController();
+  final _editApellido = TextEditingController();
+  final _editEmail = TextEditingController();
+
+  /// El backend limita `limit` a 100; la paginación total va en cabeceras
+  /// (X-Total-Count) que HttpClient.getList no expone, así que se pagina
+  /// hasta recibir una página incompleta.
+  static const _pageSize = 100;
+  static const _roles = {'admin', 'cliente', 'conductor', 'moderador', 'lider'};
 
   // ── Design tokens ──────────────────────────────────────────────
   static const _bg       = Color(0xFF0D1117);
@@ -31,22 +47,8 @@ class _UsersScreenState extends State<UsersScreen> {
   static const _textPri  = Color(0xFFE6EDF3);
   static const _textSec  = Color(0xFF8B949E);
 
-  Map<String, String> get _authHeaders => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ${ApiClient.instance.token}',
-  };
-
   /// Id de usuario tolerante al contrato Mongo (`_id`) y al alias (`id`).
   dynamic _userId(dynamic user) => user['_id'] ?? user['id'];
-
-  List<dynamic> get _filtered => _searchQuery.isEmpty
-      ? _users
-      : _users.where((u) {
-          final q = _searchQuery.toLowerCase();
-          return '${u['nombre']} ${u['apellido']} ${u['email']} ${u['rol']}'
-              .toLowerCase()
-              .contains(q);
-        }).toList();
 
   @override
   void initState() {
@@ -54,45 +56,89 @@ class _UsersScreenState extends State<UsersScreen> {
     _fetchUsers();
   }
 
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtrl.dispose();
+    _editNombre.dispose();
+    _editApellido.dispose();
+    _editEmail.dispose();
+    super.dispose();
+  }
+
+  /// La búsqueda se hace en el backend (`search` por nombre/apellido/email/
+  /// teléfono); si el texto es un rol exacto se envía como `rol`.
+  String _query(int page) {
+    final q = _searchQuery.trim().toLowerCase();
+    final params = <String, String>{'page': '$page', 'limit': '$_pageSize'};
+    if (q.isNotEmpty) {
+      if (_roles.contains(q)) {
+        params['rol'] = q;
+      } else {
+        params['search'] = _searchQuery.trim();
+      }
+    }
+    return Uri(path: '/api/admin/users', queryParameters: params).toString();
+  }
+
+  /// Descarta respuestas de búsquedas anteriores que lleguen tarde.
+  int _reqSeq = 0;
+
   Future<void> _fetchUsers() async {
+    final seq = ++_reqSeq;
     setState(() => _loading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 401) {
-        ErrorHandlerService.instance.emitSessionExpired();
-        return;
-      }
-      if (res.statusCode == 200) {
-        setState(() {
-          final decoded = jsonDecode(res.body);
-          if (decoded is List) {
-            _users = decoded;
-          } else if (decoded is Map && decoded['data'] is List) {
-            _users = decoded['data'] as List;
-          } else {
-            _users = [];
-          }
-          _loading = false;
-        });
-      } else {
-        setState(() => _loading = false);
-      }
-    } catch (_) {
-      setState(() => _loading = false);
+      final data = await HttpClient.getList(_query(1), auth: true);
+      if (!mounted || seq != _reqSeq) return;
+      setState(() {
+        _users = data;
+        _page = 1;
+        _hasMore = data.length >= _pageSize;
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted || seq != _reqSeq) return;
+      setState(() {
+        _error = adminErrorText(e);
+        _loading = false;
+      });
     }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final seq = _reqSeq;
+      final data = await HttpClient.getList(_query(_page + 1), auth: true);
+      if (!mounted || seq != _reqSeq) return;
+      setState(() {
+        _users = [..._users, ...data];
+        _page += 1;
+        _hasMore = data.length >= _pageSize;
+      });
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  void _onSearchChanged(String v) {
+    setState(() => _searchQuery = v);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), _fetchUsers);
   }
 
   Future<void> _toggleSuspend(dynamic user) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/suspend'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) _fetchUsers();
-    } catch (_) {}
+      final res = await HttpClient.put('/api/admin/users/${_userId(user)}/suspend', auth: true);
+      _showSnack(res['suspendido'] == true ? 'Usuario suspendido' : 'Usuario reactivado', _amber);
+      _fetchUsers();
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
+    }
   }
 
   Future<void> _deleteUser(dynamic user) async {
@@ -105,21 +151,18 @@ class _UsersScreenState extends State<UsersScreen> {
     );
     if (confirm != true) return;
     try {
-      final res = await http.delete(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        _fetchUsers();
-        _showSnack('Usuario eliminado', _red);
-      }
-    } catch (_) {}
+      await HttpClient.delete('/api/admin/users/${_userId(user)}', auth: true);
+      _fetchUsers();
+      _showSnack('Usuario eliminado', _red);
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
+    }
   }
 
   Future<void> _editUser(dynamic user) async {
-    final nombreCtrl   = TextEditingController(text: user['nombre']   ?? '');
-    final apellidoCtrl = TextEditingController(text: user['apellido'] ?? '');
-    final emailCtrl    = TextEditingController(text: user['email']    ?? '');
+    final nombreCtrl   = _editNombre..text = user['nombre']?.toString() ?? '';
+    final apellidoCtrl = _editApellido..text = user['apellido']?.toString() ?? '';
+    final emailCtrl    = _editEmail..text = user['email']?.toString() ?? '';
 
     final result = await showDialog<bool>(
       context: context,
@@ -145,18 +188,20 @@ class _UsersScreenState extends State<UsersScreen> {
     );
     if (result != true) return;
     try {
-      await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}'),
-        headers: _authHeaders,
-        body: jsonEncode({
-          'nombre':   nombreCtrl.text,
-          'apellido': apellidoCtrl.text,
-          'email':    emailCtrl.text,
-        }),
+      await HttpClient.put(
+        '/api/admin/users/${_userId(user)}',
+        body: {
+          'nombre':   nombreCtrl.text.trim(),
+          'apellido': apellidoCtrl.text.trim(),
+          'email':    emailCtrl.text.trim(),
+        },
+        auth: true,
       );
       _fetchUsers();
       _showSnack('Usuario actualizado', _blue);
-    } catch (_) {}
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
+    }
   }
 
   Future<void> _updateAvatar(dynamic user) async {
@@ -167,22 +212,18 @@ class _UsersScreenState extends State<UsersScreen> {
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     try {
-      final request = http.MultipartRequest(
-        'PUT',
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/avatar'),
-      )
-        ..headers.addAll(_authHeaders)
-        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: picked.name));
-      final streamed = await request.send();
-      final res = await http.Response.fromStream(streamed);
-      if (res.statusCode == 200) {
-        _fetchUsers();
-        _showSnack('Avatar actualizado', _teal);
-      } else {
-        _showSnack('Error al actualizar avatar (${res.statusCode})', _red);
-      }
-    } catch (_) {
-      _showSnack('Error de conexión al actualizar avatar', _red);
+      await HttpClient.uploadFile(
+        '/api/admin/users/${_userId(user)}/avatar',
+        bytes: bytes,
+        filename: picked.name,
+        fieldName: 'file',
+        auth: true,
+        method: 'PUT',
+      );
+      _fetchUsers();
+      _showSnack('Avatar actualizado', _teal);
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
     }
   }
 
@@ -196,56 +237,86 @@ class _UsersScreenState extends State<UsersScreen> {
     );
     if (confirm != true) return;
     try {
-      await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/clear-debt'),
-        headers: _authHeaders,
-      );
+      await HttpClient.put('/api/admin/users/${_userId(user)}/clear-debt', auth: true);
       _fetchUsers();
       _showSnack('Deuda limpiada', _amber);
-    } catch (_) {}
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
+    }
   }
 
+  /// PUT /users/:id/moderator {esModerador, zonaModerador}. Sin body el
+  /// backend no cambia nada, así que se pide la zona (cali|popayan|pasto)
+  /// o se quita el rol si ya es moderador.
   Future<void> _assignModerator(dynamic user) async {
-    final confirm = await _showConfirmDialog(
-      title: 'Asignar moderador',
-      message: '¿Asignar a ${user['nombre']} ${user['apellido']} como moderador?',
-      confirmLabel: 'Asignar',
-      confirmColor: _purple,
-      icon: Icons.verified_user_rounded,
+    final esModerador = user['esModerador'] == true;
+    final zona = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        backgroundColor: _surface,
+        title: Text(
+          esModerador ? 'Moderador (${user['zonaModerador'] ?? 'sin zona'})' : 'Asignar moderador',
+          style: const TextStyle(color: _textPri, fontSize: 16),
+        ),
+        children: [
+          for (final z in const ['cali', 'popayan', 'pasto'])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, z),
+              child: Text('Zona: $z', style: const TextStyle(color: _textPri)),
+            ),
+          if (esModerador)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Quitar rol de moderador', style: TextStyle(color: _red)),
+            ),
+        ],
+      ),
     );
-    if (confirm != true) return;
+    if (zona == null) return;
+    final quitar = zona.isEmpty;
     try {
-      await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/moderator'),
-        headers: _authHeaders,
+      await HttpClient.put(
+        '/api/admin/users/${_userId(user)}/moderator',
+        body: quitar ? {'esModerador': false} : {'esModerador': true, 'zonaModerador': zona},
+        auth: true,
       );
       _fetchUsers();
-      _showSnack('Moderador asignado', _purple);
-    } catch (_) {}
+      _showSnack(quitar ? 'Moderador removido' : 'Moderador asignado ($zona)', _purple);
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
+    }
   }
 
+  /// PUT /users/:id/leader {esLider}: alterna el rol de líder.
   Future<void> _assignLeader(dynamic user) async {
+    final esLider = user['esLider'] == true;
     final confirm = await _showConfirmDialog(
-      title: 'Asignar líder',
-      message: '¿Asignar a ${user['nombre']} ${user['apellido']} como líder?',
-      confirmLabel: 'Asignar',
+      title: esLider ? 'Quitar líder' : 'Asignar líder',
+      message: esLider
+          ? '¿Quitar a ${user['nombre']} ${user['apellido']} el rol de líder?'
+          : '¿Asignar a ${user['nombre']} ${user['apellido']} como líder?',
+      confirmLabel: esLider ? 'Quitar' : 'Asignar',
       confirmColor: _amber,
       icon: Icons.emoji_events_rounded,
     );
     if (confirm != true) return;
     try {
-      await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users/${_userId(user)}/leader'),
-        headers: _authHeaders,
+      await HttpClient.put(
+        '/api/admin/users/${_userId(user)}/leader',
+        body: {'esLider': !esLider},
+        auth: true,
       );
       _fetchUsers();
-      _showSnack('Líder asignado', _amber);
-    } catch (_) {}
+      _showSnack(esLider ? 'Líder removido' : 'Líder asignado', _amber);
+    } catch (e) {
+      _showSnack(adminErrorText(e), _red);
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────
 
   void _showSnack(String msg, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, style: const TextStyle(color: Colors.white)),
@@ -337,7 +408,7 @@ class _UsersScreenState extends State<UsersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final users = _filtered;
+    final users = _users;
 
     return Scaffold(
       backgroundColor: _bg,
@@ -373,7 +444,7 @@ class _UsersScreenState extends State<UsersScreen> {
       body: Column(
         children: [
           // ── Stats bar ───────────────────────────────────────────
-          if (!_loading && _users.isNotEmpty)
+          if (_users.isNotEmpty)
             Container(
               color: _surface,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -381,7 +452,7 @@ class _UsersScreenState extends State<UsersScreen> {
                 children: [
                   _StatChip(
                     label: 'Total',
-                    value: '${_users.length}',
+                    value: '${_users.length}${_hasMore ? '+' : ''}',
                     color: _blue,
                   ),
                   const SizedBox(width: 8),
@@ -401,12 +472,13 @@ class _UsersScreenState extends State<UsersScreen> {
             ),
 
           // ── Search bar ─────────────────────────────────────────
-          if (!_loading && _users.isNotEmpty)
-            Container(
+          // Siempre visible: la búsqueda es en el backend y puede dar 0 resultados.
+          Container(
               color: _surface,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: TextField(
-                onChanged: (v) => setState(() => _searchQuery = v),
+                controller: _searchCtrl,
+                onChanged: _onSearchChanged,
                 style: const TextStyle(color: _textPri, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Buscar por nombre, email o rol…',
@@ -415,7 +487,10 @@ class _UsersScreenState extends State<UsersScreen> {
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.close_rounded, color: _textSec, size: 16),
-                          onPressed: () => setState(() => _searchQuery = ''),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _onSearchChanged('');
+                          },
                         )
                       : null,
                   filled: true,
@@ -456,8 +531,12 @@ class _UsersScreenState extends State<UsersScreen> {
                             Icon(Icons.search_off_rounded, size: 48, color: _textSec.withValues(alpha: .4)),
                             const SizedBox(height: 12),
                             Text(
-                              _searchQuery.isEmpty ? 'No hay usuarios' : 'Sin resultados',
-                              style: TextStyle(color: _textSec.withValues(alpha: .7), fontSize: 15),
+                              _error ?? (_searchQuery.isEmpty ? 'No hay usuarios' : 'Sin resultados'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _error != null ? _red : _textSec.withValues(alpha: .7),
+                                fontSize: 15,
+                              ),
                             ),
                           ],
                         ),
@@ -468,11 +547,28 @@ class _UsersScreenState extends State<UsersScreen> {
                         backgroundColor: _card,
                         child: ListView.separated(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          itemCount: users.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (_, i) => _UserCard(
+                          itemCount: users.length + (_hasMore ? 1 : 0),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (_, i) => i == users.length
+                              ? Center(
+                                  child: _loadingMore
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(8),
+                                          child: CircularProgressIndicator(color: _blue, strokeWidth: 2),
+                                        )
+                                      : TextButton(
+                                          onPressed: _loadMore,
+                                          child: const Text('Cargar más', style: TextStyle(color: _blue)),
+                                        ),
+                                )
+                              : _UserCard(
                             user: users[i],
-                            roleBadge: _roleBadge(users[i]['rol'] as String? ?? 'usuario'),
+                            // Backend: rol + flags esModerador/esLider.
+                            roleBadge: _roleBadge(users[i]['esModerador'] == true
+                                ? 'moderador'
+                                : users[i]['esLider'] == true
+                                    ? 'lider'
+                                    : users[i]['rol'] as String? ?? 'usuario'),
                             actionBtn: _actionBtn,
                             onEdit: _editUser,
                             onAvatar: _updateAvatar,
@@ -681,14 +777,14 @@ class _UserCard extends StatelessWidget {
                   actionBtn(
                     icon: Icons.verified_user_rounded,
                     color: _purple,
-                    tooltip: 'Asignar moderador',
+                    tooltip: user['esModerador'] == true ? 'Moderador (zona / quitar)' : 'Asignar moderador',
                     onTap: () => onModerator(user),
                   ),
                 if (!isAdmin)
                   actionBtn(
                     icon: Icons.emoji_events_rounded,
                     color: _amber,
-                    tooltip: 'Asignar líder',
+                    tooltip: user['esLider'] == true ? 'Quitar líder' : 'Asignar líder',
                     onTap: () => onLeader(user),
                   ),
                 actionBtn(

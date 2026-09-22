@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/media_image.dart';
 
 class EntregaConfirmadaScreen extends StatelessWidget {
   final String nombreCliente;
@@ -102,11 +103,6 @@ class EntregaConfirmadaScreen extends StatelessWidget {
   }
 
   Widget _buildClienteCard() {
-    final parts = nombreCliente.trim().split(' ');
-    final initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : parts[0][0].toUpperCase();
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
@@ -123,18 +119,13 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
+          MediaAvatar(
+            path: avatarUrl,
+            name: nombreCliente,
             radius: 26,
             backgroundColor: const Color(0xFFD1FAE5),
-            backgroundImage:
-                avatarUrl != null ? NetworkImage(avatarUrl!) : null,
-            child: avatarUrl == null
-                ? Text(initials,
-                    style: const TextStyle(
-                        color: _greenDark,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16))
-                : null,
+            foregroundColor: _greenDark,
+            fontSize: 16,
           ),
           const SizedBox(width: 12),
           Expanded(

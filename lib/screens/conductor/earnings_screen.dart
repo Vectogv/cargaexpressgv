@@ -118,12 +118,18 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
   Future<void> _uploadProof() async {
     if (_uploading) return;
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
-    if (picked == null) return;
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 75,
+    );
+    if (picked == null || !mounted) return;
     setState(() => _uploading = true);
     try {
       final bytes = await picked.readAsBytes();
-      await PaymentService.uploadProof(bytes: bytes, filename: picked.name);
+      // image_picker la recomprime a JPEG → extensión .jpg.
+      await PaymentService.uploadProof(bytes: bytes, filename: 'comprobante_${DateTime.now().millisecondsSinceEpoch}.jpg');
       if (mounted) {
         setState(() {
           _debt = Map<String, dynamic>.from(_debt ?? {});

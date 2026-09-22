@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 class GestionConductoresScreen extends StatefulWidget {
   const GestionConductoresScreen({super.key});
@@ -36,10 +34,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     super.dispose();
   }
 
-  Map<String, String> get _authHeaders => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ${ApiClient.instance.token}',
-  };
+  String? _error;
 
   Future<void> _fetchAll() async {
     setState(() => _loading = true);
@@ -47,35 +42,30 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     if (mounted) setState(() => _loading = false);
   }
 
-  /// Tolerancia al formato de lista: acepta `[...]` y `{"data": [...]}`.
-  List<Map<String, dynamic>> _parseList(String body) {
-    return List<Map<String, dynamic>>.from(
-      HttpClient.parseListLenient(jsonDecode(body)).whereType<Map>(),
-    );
-  }
-
   Future<void> _fetchConductores() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/drivers'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() => _conductores = _parseList(res.body));
-      }
-    } catch (_) {}
+      final data = await HttpClient.getList('/api/admin/drivers', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _conductores = adminMapList(data);
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = adminErrorText(e));
+    }
   }
 
   Future<void> _fetchVerificaciones() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/verifications'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() => _verificaciones = _parseList(res.body));
-      }
-    } catch (_) {}
+      final data = await HttpClient.getList('/api/admin/verifications', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _verificaciones = adminMapList(data);
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = adminErrorText(e));
+    }
   }
 
   List<Map<String, dynamic>> get _filtrados {
@@ -91,31 +81,25 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
 
   Future<void> _aprobarVerificacion(dynamic conductorId) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/verifications/$conductorId/approve'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        _verificaciones.removeWhere((v) => (v['_id'] ?? v['id'])?.toString() == conductorId?.toString());
-        _showSnack('Conductor verificado correctamente');
-        _fetchConductores();
-        if (mounted) setState(() {});
-      } else {
-        _showSnack('Error al aprobar');
-      }
-    } catch (_) {
-      _showSnack('Error de conexión');
+      await HttpClient.put('/api/admin/verifications/$conductorId/approve', auth: true);
+      if (!mounted) return;
+      setState(() => _verificaciones.removeWhere(
+          (v) => (v['_id'] ?? v['id'])?.toString() == conductorId?.toString()));
+      _showSnack('Conductor verificado correctamente');
+      _fetchConductores();
+    } catch (e) {
+      _showSnack(adminErrorText(e), error: true);
     }
   }
 
   Future<void> _rechazarVerificacion(dynamic conductorId) async {
-    final textCtrl = TextEditingController();
+    var notaText = ''; // sin controller: nada que liberar al cerrar el diálogo
     final nota = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Motivo del rechazo'),
         content: TextField(
-          controller: textCtrl,
+          onChanged: (v) => notaText = v,
           autofocus: true,
           maxLines: 3,
           decoration: const InputDecoration(
@@ -126,7 +110,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, textCtrl.text.trim()),
+            onPressed: () => Navigator.pop(ctx, notaText.trim()),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Rechazar', style: TextStyle(color: Colors.white)),
           ),
@@ -136,21 +120,18 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     if (nota == null || nota.isEmpty) return;
 
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/verifications/$conductorId/reject'),
-        headers: _authHeaders,
-        body: jsonEncode({'nota': nota}),
+      await HttpClient.put(
+        '/api/admin/verifications/$conductorId/reject',
+        body: {'nota': nota},
+        auth: true,
       );
-      if (res.statusCode == 200) {
-        _verificaciones.removeWhere((v) => (v['_id'] ?? v['id'])?.toString() == conductorId?.toString());
-        _showSnack('Conductor rechazado');
-        _fetchConductores();
-        if (mounted) setState(() {});
-      } else {
-        _showSnack('Error al rechazar');
-      }
-    } catch (_) {
-      _showSnack('Error de conexión');
+      if (!mounted) return;
+      setState(() => _verificaciones.removeWhere(
+          (v) => (v['_id'] ?? v['id'])?.toString() == conductorId?.toString()));
+      _showSnack('Conductor rechazado');
+      _fetchConductores();
+    } catch (e) {
+      _showSnack(adminErrorText(e), error: true);
     }
   }
 
@@ -164,7 +145,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
 
     showDialog(
       context: context,
-      builder: (_) => Dialog(
+      builder: (dialogCtx) => Dialog(
         insetPadding: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
@@ -189,25 +170,10 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
                     Text(doc.label,
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
                     const SizedBox(height: 8),
+                    // Cédula/licencia llegan como URL relativa firmada (1 h).
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        '${ApiClient.baseUrl}${doc.url}',
-                        height: 200,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          height: 200,
-                          color: const Color(0xFFF2F2F7),
-                          child: const Center(child: Text('Imagen no disponible', style: TextStyle(color: Colors.black45))),
-                        ),
-                        loadingBuilder: (_, child, progress) => progress == null ? child : const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      ),
+                      child: AdminDocImage(doc.url, height: 200, width: double.infinity),
                     ),
                   ],
                 ),
@@ -216,7 +182,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(dialogCtx),
                   child: const Text('Cerrar'),
                 ),
               ),
@@ -227,10 +193,7 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     );
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
-  }
+  void _showSnack(String msg, {bool error = false}) => adminSnack(this, msg, error: error);
 
   @override
   Widget build(BuildContext context) {
@@ -253,27 +216,34 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     );
   }
 
+  Widget _emptyOrError(String emptyText) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _error ?? emptyText,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _error != null ? Colors.red : Colors.black45),
+          ),
+        ),
+      );
+
   Widget _buildConductoresList() {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_filtrados.isEmpty) {
-      return const Center(child: Text('Sin conductores', style: TextStyle(color: Colors.black45)));
-    }
+    final filtrados = _filtrados;
+    if (filtrados.isEmpty) return _emptyOrError('Sin conductores');
     return RefreshIndicator(
       onRefresh: _fetchConductores,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _filtrados.length,
-        itemBuilder: (_, i) => _ConductorCard(conductor: _filtrados[i]),
+        itemCount: filtrados.length,
+        itemBuilder: (_, i) => _ConductorCard(conductor: filtrados[i]),
       ),
     );
   }
 
   Widget _buildVerificacionesList() {
-    if (_verificaciones.isEmpty) {
-      return const Center(
-        child: Text('Sin verificaciones pendientes', style: TextStyle(color: Colors.black45)),
-      );
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_verificaciones.isEmpty) return _emptyOrError('Sin verificaciones pendientes');
     return RefreshIndicator(
       onRefresh: _fetchVerificaciones,
       child: ListView.builder(
@@ -351,12 +321,14 @@ class _GestionConductoresScreenState extends State<GestionConductoresScreen>
     );
   }
 
+  static const _filtros = [
+    {'key': 'todos', 'label': 'Todos'},
+    {'key': 'online', 'label': 'Online'},
+    {'key': 'offline', 'label': 'Offline'},
+  ];
+
   Widget _buildFiltros() {
-    final filtros = [
-      {'key': 'todos', 'label': 'Todos'},
-      {'key': 'online', 'label': 'Online'},
-      {'key': 'offline', 'label': 'Offline'},
-    ];
+    const filtros = _filtros;
     return SizedBox(
       height: 38,
       child: ListView.builder(

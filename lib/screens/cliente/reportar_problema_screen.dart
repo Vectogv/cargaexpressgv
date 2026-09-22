@@ -1,8 +1,10 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'disputa_creada_screen.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
+import '../../services/api/trip_service.dart';
 
 class ReportarProblemaScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -23,7 +25,101 @@ class ReportarProblemaScreen extends StatefulWidget {
 class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
   String _selectedProblem = 'La carga lleg\u00f3 da\u00f1ada';
   final TextEditingController _descController = TextEditingController();
-  final List<String?> _photos = [null, null];
+  // Cada foto se sube al elegirla (POST /api/trips/:id/dispute/support) y su
+  // ruta se envía en `fotos` al crear la disputa. Los bytes sirven para la
+  // miniatura local.
+  final List<({String path, Uint8List bytes})?> _photos = [null, null];
+  bool _uploading = false;
+  bool _submitting = false;
+
+  Future<void> _pickPhoto() async {
+    if (_uploading) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final i = _photos.indexWhere((p) => p == null);
+    if (i < 0) {
+      messenger.showSnackBar(const SnackBar(content: Text('M\u00e1ximo 2 fotos')));
+      return;
+    }
+    final tripId = widget.trip?['id'] ?? widget.trip?['_id'];
+    if (tripId == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('No hay un viaje activo')));
+      return;
+    }
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 75,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _uploading = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final path = await TripService.disputePhoto(
+        tripId,
+        bytes,
+        'soporte_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      if (!mounted) return;
+      if (path.isEmpty) {
+        messenger.showSnackBar(const SnackBar(content: Text('No se pudo subir la foto.')));
+        return;
+      }
+      setState(() => _photos[i] = (path: path, bytes: bytes));
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Error al subir la foto: ${e.toString().replaceFirst("Exception: ", "")}')));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _submit() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    if (widget.trip == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('No hay un viaje activo')));
+      return;
+    }
+    if (_descController.text.trim().isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('Por favor describe el problema')));
+      return;
+    }
+    if (_uploading) {
+      messenger.showSnackBar(const SnackBar(content: Text('Espera a que termine de subir la foto')));
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      final result = await ApiClient.instance.createDispute(
+        tripId: widget.trip?['id'],
+        problema: _selectedProblem,
+        descripcion: _descController.text.trim(),
+        fotos: [for (final p in _photos) if (p != null) p.path],
+      );
+      final numero = result['numero_disputa'] as String? ?? 'DSP-00001';
+      final disputeId = result['id']?.toString() ?? result['_id']?.toString() ?? '';
+      if (!mounted) return;
+      widget.onSubmitted();
+      navigator.pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => DisputaCreadaScreen(
+            disputeNumber: numero,
+            disputeId: disputeId,
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   static const _problems = [
     'La carga lleg\u00f3 da\u00f1ada',
@@ -192,22 +288,13 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                         height: 80,
                         color: p != null ? const Color(0xFFE5E7EB) : const Color(0xFFD4C5A9),
                         child: p != null
-                            ? Image.file(File(p), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Color(0xFF6B7280)))
+                            ? Image.memory(p.bytes, fit: BoxFit.cover, cacheWidth: 240, errorBuilder: (_, _, _) => const Icon(Icons.broken_image, color: Color(0xFF6B7280)))
                             : CustomPaint(painter: _BoxPhotoPainter()),
                       ),
                     ),
                   )),
                   GestureDetector(
-                    onTap: () async {
-                      final picker = ImagePicker();
-                      final picked = await picker.pickImage(source: ImageSource.gallery);
-                      if (picked != null) {
-                        final i = _photos.indexWhere((p) => p == null);
-                        if (i >= 0) {
-                          setState(() => _photos[i] = picked.path);
-                        }
-                      }
-                    },
+                    onTap: _pickPhoto,
                     child: Container(
                       width: 80,
                       height: 80,
@@ -216,11 +303,13 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
                       ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Color(0xFF6B7280),
-                        size: 30,
-                      ),
+                      child: _uploading
+                          ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)))
+                          : const Icon(
+                              Icons.add,
+                              color: Color(0xFF6B7280),
+                              size: 30,
+                            ),
                     ),
                   ),
                 ],
@@ -230,47 +319,7 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () async {
-                    if (widget.trip == null) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('No hay un viaje activo')),
-                      );
-                      return;
-                    }
-                    if (_descController.text.trim().isEmpty) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Por favor describe el problema')),
-                      );
-                      return;
-                    }
-                    try {
-                      final result = await ApiClient.instance.createDispute(
-                        tripId: widget.trip?['id'],
-                        problema: _selectedProblem,
-                        descripcion: _descController.text.trim(),
-                      );
-                      final numero = result['numero_disputa'] as String? ?? 'DSP-00001';
-                      final disputeId = result['id']?.toString() ?? result['_id']?.toString() ?? '';
-                      if (!mounted) return;
-                      widget.onSubmitted();
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DisputaCreadaScreen(
-                            disputeNumber: numero,
-                            disputeId: disputeId,
-                          ),
-                        ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
-                      );
-                    }
-                  },
+                  onPressed: _submitting ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFEF4444),
                     foregroundColor: Colors.white,
@@ -279,10 +328,12 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Enviar reporte',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+                  child: _submitting
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text(
+                          'Enviar reporte',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
                 ),
               ),
               const SizedBox(height: 24),

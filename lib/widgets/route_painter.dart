@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class RoutePainter extends CustomPainter {
+  const RoutePainter();
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
@@ -133,6 +135,8 @@ class RoutePainter extends CustomPainter {
 }
 
 class OnTheWayPainter extends CustomPainter {
+  const OnTheWayPainter();
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
@@ -250,6 +254,8 @@ class OnTheWayPainter extends CustomPainter {
 }
 
 class ArrivalMapPainter extends CustomPainter {
+  const ArrivalMapPainter();
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;

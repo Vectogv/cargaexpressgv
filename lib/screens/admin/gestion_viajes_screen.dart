@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
-import '../../services/error_handler_service.dart';
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
+
+/// Montos: el backend puede serializar decimales como texto.
+num? _asNum(dynamic v) => v is num ? v : num.tryParse('${v ?? ''}');
+
+String _initialsOf(String name) {
+  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  return parts.isNotEmpty ? parts[0][0].toUpperCase() : '?';
+}
 
 class ViajesScreen extends StatefulWidget {
   const ViajesScreen({super.key});
@@ -19,6 +26,8 @@ class _ViajesScreenState extends State<ViajesScreen> {
   int _tabIndex = 0;
   List<Map<String, dynamic>> _solicitudes = [];
   bool _loadingSolicitudes = false;
+  String? _error;
+  String? _errorSolicitudes;
 
   static const _estados = [
     {'key': 'todos', 'label': 'Todos'},
@@ -29,11 +38,6 @@ class _ViajesScreenState extends State<ViajesScreen> {
     {'key': 'cancelado', 'label': 'Cancelado'},
   ];
 
-  Map<String, String> get _authHeaders => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ${ApiClient.instance.token}',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -43,86 +47,67 @@ class _ViajesScreenState extends State<ViajesScreen> {
   Future<void> _fetchViajes() async {
     setState(() => _loading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/trips'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 401) {
-        ErrorHandlerService.instance.emitSessionExpired();
-        return;
-      }
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        if (mounted) setState(() { _viajes = List<Map<String, dynamic>>.from(data); _loading = false; });
-      } else {
-        if (mounted) setState(() => _loading = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      final data = await HttpClient.getList('/api/admin/trips', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _viajes = adminMapList(data);
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
+        _loading = false;
+      });
     }
   }
 
   Future<void> _fetchSolicitudes() async {
     setState(() => _loadingSolicitudes = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/cancellation-requests'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        final List<dynamic> data;
-        if (decoded is List) {
-          data = decoded;
-        } else if (decoded is Map && decoded['data'] is List) {
-          data = decoded['data'] as List<dynamic>;
-        } else {
-          data = [];
-        }
-        if (mounted) setState(() { _solicitudes = List<Map<String, dynamic>>.from(data.whereType<Map<String, dynamic>>()); _loadingSolicitudes = false; });
-      } else {
-        if (mounted) setState(() => _loadingSolicitudes = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingSolicitudes = false);
+      final data = await HttpClient.getList('/api/admin/cancellation-requests', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _solicitudes = adminMapList(data);
+        _errorSolicitudes = null;
+        _loadingSolicitudes = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorSolicitudes = adminErrorText(e);
+        _loadingSolicitudes = false;
+      });
     }
   }
 
+  /// El backend acepta el id de la solicitud o el del viaje.
   Future<void> _aprovarSolicitud(dynamic tripId) async {
     try {
-      await http.post(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/cancellation-requests/$tripId/approve'),
-        headers: _authHeaders,
-      );
-      if (mounted) {
-        _snack('Viaje cancelado');
-        _fetchSolicitudes();
-        _fetchViajes();
-      }
-    } catch (_) {
-      if (mounted) _snack('Error al aprobar cancelación');
+      await HttpClient.post('/api/admin/cancellation-requests/$tripId/approve', auth: true);
+      if (!mounted) return;
+      _snack('Viaje cancelado');
+      _fetchSolicitudes();
+      _fetchViajes();
+    } catch (e) {
+      _snack(adminErrorText(e), error: true);
     }
   }
 
   Future<void> _rechazarSolicitud(dynamic tripId) async {
     try {
-      await http.post(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/cancellation-requests/$tripId/reject'),
-        headers: _authHeaders,
-      );
-      if (mounted) {
-        _snack('Solicitud rechazada');
-        _fetchSolicitudes();
-        _fetchViajes();
-      }
-    } catch (_) {
-      if (mounted) _snack('Error al rechazar solicitud');
+      await HttpClient.post('/api/admin/cancellation-requests/$tripId/reject', auth: true);
+      if (!mounted) return;
+      _snack('Solicitud rechazada');
+      _fetchSolicitudes();
+      _fetchViajes();
+    } catch (e) {
+      _snack(adminErrorText(e), error: true);
     }
   }
 
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
+  void _snack(String msg, {bool error = false}) => adminSnack(this, msg, error: error);
 
   void _onTabChanged(int i) {
     setState(() => _tabIndex = i);
@@ -153,18 +138,28 @@ class _ViajesScreenState extends State<ViajesScreen> {
   }
 
   Widget _buildViajesTab() {
-    return _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _filtrados.isEmpty
-            ? const Center(child: Text('Sin viajes', style: TextStyle(color: Colors.black45)))
-            : RefreshIndicator(
-                onRefresh: _fetchViajes,
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  itemCount: _filtrados.length,
-                  itemBuilder: (_, i) => _ViajeCard(viaje: _filtrados[i]),
-                ),
-              );
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    final filtrados = _filtrados;
+    if (filtrados.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _error ?? 'Sin viajes',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _error != null ? Colors.red : Colors.black45),
+          ),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _fetchViajes,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        itemCount: filtrados.length,
+        itemBuilder: (_, i) => _ViajeCard(viaje: filtrados[i]),
+      ),
+    );
   }
 
   Widget _buildSolicitudesTab() {
@@ -177,7 +172,11 @@ class _ViajesScreenState extends State<ViajesScreen> {
                   children: [
                     Icon(Icons.check_circle_outline, size: 64, color: Colors.grey.shade300),
                     const SizedBox(height: 12),
-                    const Text('No hay solicitudes de cancelación pendientes', style: TextStyle(color: Colors.black45)),
+                    Text(
+                      _errorSolicitudes ?? 'No hay solicitudes de cancelación pendientes',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: _errorSolicitudes != null ? Colors.red : Colors.black45),
+                    ),
                   ],
                 ),
               )
@@ -351,8 +350,8 @@ class _ViajeCard extends StatelessWidget {
     final origen = viaje['origenDireccion'] as String? ?? '';
     final destino = viaje['destinoDireccion'] as String? ?? '';
     final carga = viaje['carga'] as String? ?? '';
-    final precioEstimado = viaje['precioEstimado'];
-    final precioFinal = viaje['precioFinal'];
+    final precioEstimado = _asNum(viaje['precioEstimado']);
+    final precioFinal = _asNum(viaje['precioFinal']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -389,7 +388,8 @@ class _ViajeCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Row(
               children: [
-                _buildRoute(origen, destino),
+                // Expanded: la ruta contiene un Expanded interno y necesita ancho acotado.
+                Expanded(child: _buildRoute(origen, destino)),
               ],
             ),
           ),
@@ -409,10 +409,10 @@ class _ViajeCard extends StatelessWidget {
             child: Row(
               children: [
                 if (precioEstimado != null)
-                  Text('\$${(precioEstimado as num).toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
+                  Text('\$${precioEstimado.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
                 if (precioEstimado != null && precioFinal != null) const SizedBox(width: 4),
                 if (precioFinal != null)
-                  Text('\$${(precioFinal as num).toStringAsFixed(0)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF4CAF50))),
+                  Text('\$${precioFinal.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
               ],
             ),
           ),
@@ -438,7 +438,13 @@ class _ViajeCard extends StatelessWidget {
                   const Text('Sin conductor asignado', style: TextStyle(fontSize: 12, color: Colors.black38)),
                 const Spacer(),
                 if (cliente != null)
-                  Text(cliente['nombre'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.black45)),
+                  Flexible(
+                    child: Text(
+                      '${cliente['nombre'] ?? ''} ${cliente['apellido'] ?? ''}'.trim(),
+                      style: const TextStyle(fontSize: 12, color: Colors.black45),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -476,11 +482,7 @@ class _ViajeCard extends StatelessWidget {
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
+  String _initials(String name) => _initialsOf(name);
 }
 
 class _SolicitudCancelacionCard extends StatelessWidget {
@@ -630,9 +632,5 @@ class _SolicitudCancelacionCard extends StatelessWidget {
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
+  String _initials(String name) => _initialsOf(name);
 }

@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
-import 'dart:convert';
+import 'dart:async';
 import 'dart:math';
-import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
-import '../../services/error_handler_service.dart';
+import '../../services/api/http_client.dart';
 import 'gestion_usuarios_screen.dart';
 import 'gestion_conductores_screen.dart';
 import 'gestion_viajes_screen.dart';
@@ -28,63 +27,49 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   bool _loading = true;
+  String? _error;
+  /// GET /api/admin/dashboard → {totalUsers, totalDrivers, activeVehicles,
+  /// todayShipments, totalEarnings, todayEarnings, monthEarnings}
   Map<String, dynamic> _data = {};
   int _unreadCount = 0;
+  StreamSubscription? _notifSub;
 
   @override
   void initState() {
     super.initState();
     NotificationService.instance.init();
     _unreadCount = NotificationService.instance.unreadCount;
-    NotificationService.instance.onNotification.listen((_) {
+    _notifSub = NotificationService.instance.onNotification.listen((_) {
       if (mounted) setState(() => _unreadCount = NotificationService.instance.unreadCount);
     });
     _fetchDashboard();
   }
 
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
+  }
+
   Future<void> _fetchDashboard() async {
     try {
-      final api = ApiClient.instance;
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/dashboard'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${api.token}',
-        },
-      );
-      if (res.statusCode == 401) {
-        ErrorHandlerService.instance.emitSessionExpired();
-        return;
-      }
-      if (res.statusCode == 200) {
-        setState(() {
-          _data = jsonDecode(res.body);
-          _loading = false;
-        });
-      } else {
-        _useFallback();
-      }
-    } catch (_) {
-      _useFallback();
+      final data = await HttpClient.get('/api/admin/dashboard', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _data = data;
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e is ApiException ? e.message : e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
     }
   }
 
-  void _useFallback() {
-    setState(() {
-      _data = {
-        'usuariosActivos': 445,
-        'conductoresOnline': 10,
-        'viajesDelDia': 346,
-        'ingresosTotales': 867.38,
-        'recentActivity': [
-          {'label': 'Usuarios Activos', 'sub': '5 minutos', 'time': '7 days', 'icon': 'person'},
-          {'label': 'Conductores Online', 'sub': '3 conductores', 'time': '3 days', 'icon': 'drive'},
-          {'label': 'Conductores Plan', 'sub': '', 'time': '3 docs', 'icon': 'plan'},
-        ],
-      };
-      _loading = false;
-    });
-  }
+  static num _num(dynamic v) => v is num ? v : num.tryParse('${v ?? ''}') ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +79,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : Column(
+            : _error != null && _data.isEmpty
+                ? Column(
+                    children: [
+                      _buildTopBar(),
+                      Expanded(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
+                                const SizedBox(height: 8),
+                                Text(_error!, textAlign: TextAlign.center),
+                                const SizedBox(height: 12),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    setState(() => _loading = true);
+                                    _fetchDashboard();
+                                  },
+                                  child: const Text('Reintentar'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
                 children: [
                   _buildTopBar(),
                   Expanded(
@@ -108,9 +122,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               Expanded(
                                 child: _StatCard(
-                                  title: 'Usuarios Activos',
+                                  title: 'Usuarios',
                                   value:
-                                      '${_data['usuariosActivos'] ?? 0}',
+                                      '${_num(_data['totalUsers'])}',
                                   child: const _BarMiniChart(),
                                 ),
                               ),
@@ -119,7 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 child: _StatCard(
                                   title: 'Conductores Online',
                                   value:
-                                      '${_data['conductoresOnline'] ?? 0}',
+                                      '${_num(_data['activeVehicles'])}',
                                   child: const _DotMapWidget(),
                                 ),
                               ),
@@ -132,7 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 child: _StatCard(
                                   title: 'Viajes del Día',
                                   value:
-                                      '${_data['viajesDelDia'] ?? 0}',
+                                      '${_num(_data['todayShipments'])}',
                                   child: const _LineMiniChart(
                                       color: Color(0xFF4FC3F7)),
                                 ),
@@ -142,7 +156,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 child: _StatCard(
                                   title: 'Ingresos Totales',
                                   value:
-                                      '\$${(_data['ingresosTotales'] ?? 0.0).toStringAsFixed(2)}',
+                                      '\$${_num(_data['totalEarnings']).toStringAsFixed(2)}',
                                   child: const _LineMiniChart(
                                       color: Color(0xFF66BB6A)),
                                 ),
@@ -151,7 +165,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           const SizedBox(height: 20),
                           const Text(
-                            'Recent Activity',
+                            'Resumen de ingresos',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
@@ -387,7 +401,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _logout() async {
     await ApiClient.instance.logout();
-    if (!context.mounted) return;
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const AuthScreen()),
@@ -396,24 +410,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildActivityList() {
-    final activities = _data['recentActivity'] as List? ?? [];
-    if (activities.isEmpty) {
-      return const _ActivityTile(
-        iconType: 'person',
-        label: 'Sin actividad reciente',
-        sub: '',
-        time: '',
-      );
-    }
     return Column(
-      children: activities.map<Widget>((item) {
-        return _ActivityTile(
-          iconType: item['icon'] ?? 'person',
-          label: item['label'] ?? '',
-          sub: item['sub'] ?? '',
-          time: item['time'] ?? '',
-        );
-      }).toList(),
+      children: [
+        _ActivityTile(
+          iconType: 'plan',
+          label: 'Ingresos de hoy',
+          sub: '',
+          time: '\$${_num(_data['todayEarnings']).toStringAsFixed(2)}',
+        ),
+        _ActivityTile(
+          iconType: 'plan',
+          label: 'Ingresos del mes',
+          sub: '',
+          time: '\$${_num(_data['monthEarnings']).toStringAsFixed(2)}',
+        ),
+        _ActivityTile(
+          iconType: 'drive',
+          label: 'Conductores registrados',
+          sub: '${_num(_data['activeVehicles'])} en línea',
+          time: '${_num(_data['totalDrivers'])}',
+        ),
+      ],
     );
   }
 

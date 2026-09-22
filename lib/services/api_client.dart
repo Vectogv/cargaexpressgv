@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/environment.dart';
 import 'auth_response.dart';
 import 'api/auth_service.dart';
+import 'api/http_client.dart' show ApiException;
 import 'api/trip_service.dart';
 import 'api/offer_service.dart';
 import 'api/chat_service.dart';
@@ -73,10 +74,27 @@ class ApiClient {
     return auth;
   }
 
+  /// `true` si el backend rechazó explícitamente el refresh token (sesión
+  /// terminada). Errores de red, timeouts, 429 y 5xx NO cuentan: la sesión se
+  /// conserva y se reintenta más tarde.
+  static bool isRefreshRejection(ApiException e) {
+    final status = e.statusCode;
+    return status == 400 || status == 401 || status == 422;
+  }
+
+  /// Renueva el access token. Los refresh tokens son de un solo uso: usar
+  /// `HttpClient.refreshSessionShared()` para compartir la renovación en vuelo
+  /// entre peticiones concurrentes en vez de llamar a este método en paralelo.
+  ///
+  /// Sólo limpia la sesión si el backend rechaza el refresh token
+  /// (400/401/422); ante fallos transitorios conserva los tokens y relanza.
   Future<AuthResponse> refreshToken() async {
-    if (_refreshToken == null) throw Exception('No hay refresh token');
+    final current = _refreshToken;
+    if (current == null) {
+      throw ApiException('No hay refresh token', statusCode: 401, code: 'SIN_REFRESH_TOKEN');
+    }
     try {
-      final auth = await AuthService.refreshToken(_refreshToken!);
+      final auth = await AuthService.refreshToken(current);
       // El endpoint de refresh (según el contrato) sólo devuelve token/refreshToken.
       // Actualizamos únicamente los tokens y conservamos el perfil en memoria.
       if (auth.token.isNotEmpty) _token = auth.token;
@@ -89,15 +107,31 @@ class ApiClient {
         await prefs.setString(_refreshTokenKey, _refreshToken!);
       }
       return auth;
-    } catch (_) {
-      await clearTokens();
+    } on ApiException catch (e) {
+      if (isRefreshRejection(e)) await clearTokens();
       rethrow;
     }
   }
 
-  Future<void> logout() async {
+  /// Relee los tokens desde SharedPreferences (otro isolate pudo rotarlos).
+  /// Lo usa el isolate del servicio de ubicación en segundo plano, que nunca
+  /// renueva tokens por su cuenta.
+  Future<void> reloadTokens() async {
+    final prefs = await SharedPreferences.getInstance();
     try {
-      await AuthService.logout();
+      await prefs.reload();
+    } catch (_) {}
+    _token = prefs.getString(_tokenKey);
+    _refreshToken = prefs.getString(_refreshTokenKey);
+  }
+
+  /// Cierra sesión: revoca el refresh token en el backend (sin bloquear si no
+  /// hay red) y limpia la sesión local.
+  Future<void> logout() async {
+    final refresh = _refreshToken;
+    try {
+      await AuthService.logout(refreshToken: refresh)
+          .timeout(const Duration(seconds: 5));
     } catch (_) {}
     await clearTokens();
   }
@@ -177,7 +211,7 @@ class ApiClient {
 
   // --- Trips ---
 
-  Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) => TripService.requestTrip(data);
+  Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data, {String? idempotencyKey}) => TripService.requestTrip(data, idempotencyKey: idempotencyKey);
   Future<Map<String, dynamic>?> getActiveTrip() => TripService.getActiveTrip();
   Future<List<Map<String, dynamic>>> getTripHistory({int page = 1, int limit = 20, String? estado}) => TripService.getTripHistory(page: page, limit: limit, estado: estado);
   Future<Map<String, dynamic>> getTripDetail(dynamic id) => TripService.getTripDetail(id);
@@ -185,15 +219,15 @@ class ApiClient {
   Future<void> startTrip(dynamic id) => TripService.startTrip(id);
   Future<void> confirmArrival(dynamic id) => TripService.confirmArrival(id);
   Future<void> confirmPickup(dynamic id) => TripService.confirmPickup(id);
-  Future<Map<String, dynamic>> reserveTrip(Map<String, dynamic> data) => TripService.reserveTrip(data);
+  Future<Map<String, dynamic>> reserveTrip(Map<String, dynamic> data, {String? idempotencyKey}) => TripService.reserveTrip(data, idempotencyKey: idempotencyKey);
   Future<List<Map<String, dynamic>>> getReservations({int page = 1, int limit = 20, String? estado}) => TripService.getReservations(page: page, limit: limit, estado: estado);
   Future<void> declineTrip(dynamic id) => TripService.declineTrip(id);
   Future<Map<String, dynamic>> disputeAppeal(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeAppeal(id, motivo: motivo, descripcion: descripcion);
-  Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion}) => TripService.completeTrip(id, montoFinal: montoFinal, justificacion: justificacion);
-  Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion}) => TripService.finalizeTrip(id, montoFinal: montoFinal, justificacion: justificacion);
+  Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) => TripService.completeTrip(id, montoFinal: montoFinal, justificacion: justificacion, idempotencyKey: idempotencyKey);
+  Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) => TripService.finalizeTrip(id, montoFinal: montoFinal, justificacion: justificacion, idempotencyKey: idempotencyKey);
   Future<void> cancelTrip(dynamic id, {String? motivo, String? justificacion}) => TripService.cancelTrip(id, motivo: motivo, justificacion: justificacion);
   Future<void> requestCancellation(dynamic id, {String? motivo, String? justificacion}) => TripService.requestCancellation(id, motivo: motivo, justificacion: justificacion);
-  Future<Map<String, dynamic>> confirmClose(dynamic id, {required bool confirmar, String? motivo}) => TripService.confirmClose(id, confirmar: confirmar, motivo: motivo);
+  Future<Map<String, dynamic>> confirmClose(dynamic id, {required bool confirmar, String? motivo, String? idempotencyKey}) => TripService.confirmClose(id, confirmar: confirmar, motivo: motivo, idempotencyKey: idempotencyKey);
   Future<Map<String, dynamic>> disputeTrip(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeTrip(id, motivo: motivo, descripcion: descripcion);
   Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) => TripService.rateTrip(id, puntaje, comentario: comentario);
   Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) => TripService.deliveryPhoto(tripId, bytes, filename);

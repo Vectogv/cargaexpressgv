@@ -169,6 +169,8 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
                       ? null
                       : () async {
                           setState(() => _submitting = true);
+                          final navigator = Navigator.of(context);
+                          final messenger = ScaffoldMessenger.of(context);
                           try {
                             await ApiClient.instance.rateTrip(
                               widget.tripId,
@@ -176,12 +178,12 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
                               comentario: _commentController.text,
                             );
                             if (!mounted) return;
-                            Navigator.of(context).popUntil((route) => route.isFirst);
+                            navigator.popUntil((route) => route.isFirst);
                             widget.onSubmitted();
                           } catch (e) {
                             if (!mounted) return;
                             setState(() => _submitting = false);
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
                             );
                           }

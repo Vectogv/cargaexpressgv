@@ -11,7 +11,6 @@ import 'services/api_client.dart';
 import 'services/map_config.dart';
 import 'services/notification_service.dart';
 import 'services/socket_service_client.dart';
-import 'services/dio_client.dart';
 import 'services/cache_service.dart';
 import 'services/analytics_service.dart';
 import 'services/logger_service.dart';
@@ -19,6 +18,7 @@ import 'services/network_monitor_service.dart';
 import 'services/app_lifecycle_service.dart';
 import 'services/error_handler_service.dart';
 import 'services/session_monitor_service.dart';
+import 'services/session_events.dart';
 import 'providers/notification_provider.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/admin/admin_live_screen.dart';
@@ -93,18 +93,11 @@ void main() {
 void _setupErrorHandlers() {
   ErrorHandlerService.instance.init();
 
-  // Sesión expirada (401 sin refresh válido): volver al login limpiando la
-  // pila completa. Un segundo evento reemplaza [AuthScreen] por [AuthScreen],
-  // así que es idempotente.
-  ErrorHandlerService.instance.onAuthExpired.listen((_) {
-    final nav = _navigatorKey.currentState;
-    if (nav == null) return;
-    LoggerService.instance.info('Session expired: redirecting to login');
-    nav.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const AuthScreen()),
-      (route) => false,
-    );
-  });
+  // Sesión expirada (refresh inválido) o cuenta suspendida (403
+  // CUENTA_SUSPENDIDA / socket): volver al login limpiando la pila completa y
+  // mostrar el motivo. ErrorHandlerService.emitSessionExpired() también
+  // publica aquí. Varios eventos seguidos se colapsan en uno.
+  SessionEvents.instance.stream.listen(_onSessionEvent);
 
   FlutterError.onError = (details) {
     LoggerService.instance.error(
@@ -164,6 +157,53 @@ void _setupErrorHandlers() {
   };
 }
 
+final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+DateTime? _lastSessionEventAt;
+
+Future<void> _onSessionEvent(SessionEvent event) async {
+  final now = DateTime.now();
+  if (_lastSessionEventAt != null &&
+      now.difference(_lastSessionEventAt!) < const Duration(seconds: 3)) {
+    return;
+  }
+  _lastSessionEventAt = now;
+  LoggerService.instance.info('Session event: ${event.type}');
+
+  SessionMonitorService.instance.stop();
+  if (ApiClient.instance.token != null) {
+    try {
+      await ApiClient.instance.clearTokens();
+    } catch (e) {
+      LoggerService.instance.error('clearTokens on session event failed', e);
+    }
+  }
+
+  final nav = _navigatorKey.currentState;
+  if (nav == null) return;
+  nav.pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const AuthScreen()),
+    (route) => false,
+  );
+
+  final suspended = event.type == SessionEventType.suspended;
+  final message = (event.message != null && event.message!.trim().isNotEmpty)
+      ? event.message!
+      : suspended
+          ? 'Tu cuenta está suspendida. Contacta a soporte.'
+          : 'Tu sesión expiró. Inicia sesión nuevamente.';
+  final messenger = _scaffoldMessengerKey.currentState;
+  messenger?.hideCurrentSnackBar();
+  messenger?.showSnackBar(
+    SnackBar(
+      content: Text(message),
+      backgroundColor: suspended ? Colors.red.shade700 : null,
+      behavior: SnackBarBehavior.floating,
+      duration: Duration(seconds: suspended ? 8 : 4),
+    ),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Inicialización de servicios — todos awaited en secuencia.
 // Los que pueden fallar de forma aislada se envuelven en try/catch.
@@ -201,12 +241,6 @@ Future<void> _initServices() async {
     await CacheService.instance.init();
   } catch (e) {
     LoggerService.instance.error('CacheService init error', e);
-  }
-
-  try {
-    DioClient.instance.init();
-  } catch (e) {
-    LoggerService.instance.error('DioClient init error', e);
   }
 
   try {
@@ -285,6 +319,7 @@ class MainApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: _navigatorKey,
+        scaffoldMessengerKey: _scaffoldMessengerKey,
         debugShowCheckedModeBanner: false,
         title: 'CargaExpress',
         theme: ThemeData(

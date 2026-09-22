@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
+import '../../widgets/media_image.dart';
 import '../user/auth_screen.dart';
 
 class PerfilScreen extends StatefulWidget {
@@ -38,19 +40,26 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   Future<void> _pickAvatar() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked == null) return;
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 75,
+    );
+    if (picked == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final bytes = await picked.readAsBytes();
-      final url = await ApiClient.instance.uploadAvatar(bytes, picked.name);
+      // Comprimida a JPEG por image_picker → extensión .jpg.
+      final url = await ApiClient.instance.uploadAvatar(bytes, 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg');
       if (mounted && url.isNotEmpty) {
         setState(() { _profile?['avatar'] = url; });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar actualizado')));
+        messenger.showSnackBar(const SnackBar(content: Text('Avatar actualizado')));
       }
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
-      }
+      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
     }
   }
 
@@ -159,25 +168,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
             onTap: _pickAvatar,
             child: Stack(
               children: [
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: avatar != null && avatar.isNotEmpty ? Colors.transparent : _primaryDark,
-                    border: Border.all(color: Colors.grey.shade200, width: 2),
-                    image: avatar != null && avatar.isNotEmpty
-                        ? DecorationImage(image: NetworkImage(avatar), fit: BoxFit.cover)
-                        : null,
-                  ),
-                  child: avatar == null || avatar.isEmpty
-                      ? Center(
-                          child: Text(
-                            _initials(nombre),
-                            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-                          ),
-                        )
-                      : null,
+                MediaAvatar(
+                  path: avatar,
+                  name: nombre,
+                  radius: 35,
+                  backgroundColor: _primaryDark,
+                  foregroundColor: Colors.white,
+                  fontSize: 22,
+                  border: Border.all(color: Colors.grey.shade200, width: 2),
                 ),
                 Positioned(
                   bottom: 0,
@@ -231,12 +229,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
         ],
       ),
     );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
   Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap) {

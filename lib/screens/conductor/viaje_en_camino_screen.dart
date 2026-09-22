@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/media_image.dart';
 import '../../widgets/route_painter.dart';
 
 class ViajeEnCaminoScreen extends StatelessWidget {
@@ -76,7 +77,9 @@ class ViajeEnCaminoScreen extends StatelessWidget {
       height: 280,
       child: Stack(
         children: [
-          Positioned.fill(child: CustomPaint(painter: OnTheWayPainter())),
+          // RepaintBoundary: el mapa ilustrado es estático; no repintarlo cuando
+          // el panel se reconstruye con cada actualización de GPS.
+          const Positioned.fill(child: RepaintBoundary(child: CustomPaint(painter: OnTheWayPainter()))),
           if (onBack != null)
             Positioned(
               top: 0,
@@ -127,21 +130,15 @@ class ViajeEnCaminoScreen extends StatelessWidget {
   }
 
   Widget _buildClienteRow() {
-    final parts = nombreCliente.trim().split(' ');
-    final initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : parts[0][0].toUpperCase();
-
     return Row(
       children: [
-        CircleAvatar(
+        MediaAvatar(
+          path: avatarUrl,
+          name: nombreCliente,
           radius: 26,
           backgroundColor: const Color(0xFFD1FAE5),
-          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
-          child: avatarUrl == null
-              ? Text(initials,
-                  style: const TextStyle(color: _greenDark, fontWeight: FontWeight.w700, fontSize: 16))
-              : null,
+          foregroundColor: _greenDark,
+          fontSize: 16,
         ),
         const SizedBox(width: 12),
         Expanded(

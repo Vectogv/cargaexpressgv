@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/media_image.dart';
 
 class LlegadaAlDestinoScreen extends StatelessWidget {
   final Map<String, dynamic> conductor;
@@ -285,15 +286,12 @@ class _EvidencePhoto extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (fotoUrl != null && fotoUrl!.isNotEmpty) {
-      return ClipRRect(
+      return MediaImage(
+        path: fotoUrl,
+        width: double.infinity,
+        height: 160,
         borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          fotoUrl!,
-          width: double.infinity,
-          height: 160,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildMockPhoto(),
-        ),
+        placeholder: _buildMockPhoto(),
       );
     }
     return _buildMockPhoto();

@@ -1,12 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
-
-Map<String, String> get _authHeaders => {
-  'Content-Type': 'application/json',
-  'Authorization': 'Bearer ${ApiClient.instance.token}',
-};
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 enum ReportStatus { pendiente, revisado, resuelto, rechazado }
 
@@ -27,16 +21,21 @@ class ModeratorReport {
     required this.status,
   });
 
+  /// Backend: {id, moderadorId, conductorId, descripcion, estado,
+  /// moderador{nombre}, conductor{placa,nombre}, createdAt}
   factory ModeratorReport.fromJson(Map<String, dynamic> json) {
+    final moderador = json['moderador'] is Map ? json['moderador'] as Map : const {};
+    final conductor = json['conductor'] is Map ? json['conductor'] as Map : const {};
+    final conductorTxt = [conductor['nombre'], conductor['placa']]
+        .where((e) => e != null && e.toString().isNotEmpty)
+        .join(' · ');
     return ModeratorReport(
       id: json['id']?.toString() ?? '',
-      moderatorName: json['moderatorName']?.toString() ?? json['moderator_name']?.toString() ?? '',
-      reportType: json['reportType']?.toString() ?? json['report_type']?.toString() ?? '',
-      description: json['description']?.toString() ?? '',
-      date: json['date'] != null
-          ? DateTime.tryParse(json['date'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      status: _parseStatus(json['status']?.toString()),
+      moderatorName: moderador['nombre']?.toString() ?? 'Moderador #${json['moderadorId'] ?? ''}',
+      reportType: conductorTxt.isNotEmpty ? 'Conductor: $conductorTxt' : 'Reporte de conductor',
+      description: json['descripcion']?.toString() ?? '',
+      date: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+      status: _parseStatus(json['estado']?.toString()),
     );
   }
 
@@ -56,49 +55,6 @@ class ModeratorReport {
   }
 }
 
-final List<ModeratorReport> _mockReports = [
-  ModeratorReport(
-    id: 'MR-001',
-    moderatorName: 'Carlos López',
-    reportType: 'Contenido inapropiado',
-    description: 'El usuario publicó contenido ofensivo en la sección de comentarios del viaje #1234.',
-    date: DateTime(2024, 12, 1),
-    status: ReportStatus.pendiente,
-  ),
-  ModeratorReport(
-    id: 'MR-002',
-    moderatorName: 'Ana Martínez',
-    reportType: 'Conflicto entre usuarios',
-    description: 'Dos conductores tuvieron una discusión en la plataforma por la asignación de una ruta.',
-    date: DateTime(2024, 11, 28),
-    status: ReportStatus.revisado,
-  ),
-  ModeratorReport(
-    id: 'MR-003',
-    moderatorName: 'Pedro Ramírez',
-    reportType: 'Solicitud de revisión',
-    description: 'Solicita revisión de la decisión tomada sobre la cancelación del viaje #5678.',
-    date: DateTime(2024, 11, 25),
-    status: ReportStatus.resuelto,
-  ),
-  ModeratorReport(
-    id: 'MR-004',
-    moderatorName: 'Sofía García',
-    reportType: 'Reporte de spam',
-    description: 'Múltiples usuarios reportaron mensajes publicitarios no autorizados en el chat general.',
-    date: DateTime(2024, 11, 22),
-    status: ReportStatus.rechazado,
-  ),
-  ModeratorReport(
-    id: 'MR-005',
-    moderatorName: 'Luis Hernández',
-    reportType: 'Error del sistema',
-    description: 'La aplicación muestra un error al intentar cargar el historial de viajes del mes actual.',
-    date: DateTime(2024, 11, 20),
-    status: ReportStatus.pendiente,
-  ),
-];
-
 class ModeratorReportsScreen extends StatefulWidget {
   const ModeratorReportsScreen({super.key});
 
@@ -107,35 +63,30 @@ class ModeratorReportsScreen extends StatefulWidget {
 }
 
 class _ModeratorReportsScreenState extends State<ModeratorReportsScreen> {
-  late List<ModeratorReport> _reports;
+  List<ModeratorReport> _reports = [];
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _reports = List.from(_mockReports);
     _fetchReports();
   }
 
   Future<void> _fetchReports() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/moderator-reports'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(res.body);
-        setState(() {
-          _reports = data.map((e) => ModeratorReport.fromJson(e)).toList();
-          _isLoading = false;
-        });
-      } else {
-        throw Exception('Error al obtener reportes');
-      }
-    } catch (_) {
+      final data = await HttpClient.getList('/api/admin/moderator-reports', auth: true);
+      if (!mounted) return;
       setState(() {
-        _reports = List.from(_mockReports);
+        _reports = adminMapList(data).map(ModeratorReport.fromJson).toList();
+        _error = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
         _isLoading = false;
       });
     }
@@ -169,7 +120,20 @@ class _ModeratorReportsScreenState extends State<ModeratorReportsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _fetchReports,
-              child: ListView.builder(
+              child: _reports.isEmpty
+                  ? ListView(
+                      padding: const EdgeInsets.all(32),
+                      children: [
+                        Center(
+                          child: Text(
+                            _error ?? 'Sin reportes de moderadores',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: _error != null ? Colors.red : Colors.black54),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 itemCount: _reports.length,
                 itemBuilder: (context, index) => _ReportCard(

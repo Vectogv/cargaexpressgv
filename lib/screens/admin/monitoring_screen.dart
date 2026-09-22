@@ -35,12 +35,13 @@ class _MonitoringScreenState extends State<MonitoringScreen>
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
 
+    // Los logs llegan en ráfagas (cada petición HTTP registra): se agrupan y
+    // se reconstruye como mucho cada 300 ms en vez de una vez por log.
     _logSub = LoggerService.instance.onLog.listen((log) {
       if (!mounted) return;
-      setState(() {
-        _liveLogs.insert(0, log);
-        if (_liveLogs.length > 200) _liveLogs.removeLast();
-      });
+      _liveLogs.insert(0, log);
+      if (_liveLogs.length > 200) _liveLogs.removeLast();
+      _scheduleRebuild();
     });
 
     _fraudSub = FraudDetectionService.instance.onFraudAlert.listen((alert) {
@@ -54,8 +55,18 @@ class _MonitoringScreenState extends State<MonitoringScreen>
     });
   }
 
+  Timer? _rebuildTimer;
+
+  void _scheduleRebuild() {
+    if (_rebuildTimer?.isActive ?? false) return;
+    _rebuildTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
+    _rebuildTimer?.cancel();
     _tabCtrl.dispose();
     _logSub?.cancel();
     _fraudSub?.cancel();

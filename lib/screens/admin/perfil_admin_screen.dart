@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
-
-Map<String, String> get _authHeaders => {
-  'Content-Type': 'application/json',
-  'Authorization': 'Bearer ${ApiClient.instance.token}',
-};
+import 'package:image_picker/image_picker.dart';
+import '../../core/media.dart';
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,7 +13,14 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
+  bool _uploading = false;
+  String? _error;
+  /// GET /api/admin/profile → {id, nombre, apellido, email, telefono, avatar, createdAt}
   Map<String, dynamic> _profile = {};
+  // Controladores del diálogo: viven con la pantalla (se liberan en dispose).
+  final _nombreCtrl = TextEditingController();
+  final _apellidoCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -25,41 +28,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fetchProfile();
   }
 
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _apellidoCtrl.dispose();
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchProfile() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/profile'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        setState(() {
-          _profile = jsonDecode(res.body);
-          _loading = false;
-        });
-      } else {
-        _useFallback();
-      }
-    } catch (_) {
-      _useFallback();
+      final data = await HttpClient.get('/api/admin/profile', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _profile = data;
+        _profile['miembro'] = DateTime.tryParse(data['createdAt']?.toString() ?? '')?.year;
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
+        _loading = false;
+      });
     }
   }
 
-  void _useFallback() {
-    setState(() {
-      _profile = {
-        'nombre': 'Admin',
-        'apellido': 'Principal',
-        'email': 'admin@cargaexpress.com',
-        'avatar': null,
-      };
-      _loading = false;
-    });
-  }
-
   Future<void> _editProfile() async {
-    final nombreCtrl = TextEditingController(text: _profile['nombre'] ?? '');
-    final apellidoCtrl = TextEditingController(text: _profile['apellido'] ?? '');
-    final emailCtrl = TextEditingController(text: _profile['email'] ?? '');
+    final nombreCtrl = _nombreCtrl..text = _profile['nombre']?.toString() ?? '';
+    final apellidoCtrl = _apellidoCtrl..text = _profile['apellido']?.toString() ?? '';
+    final emailCtrl = _emailCtrl..text = _profile['email']?.toString() ?? '';
 
     final result = await showDialog<Map<String, String>>(
       context: context,
@@ -105,66 +104,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (result == null) return;
 
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/profile'),
-        headers: _authHeaders,
-        body: jsonEncode(result),
-      );
-      if (res.statusCode == 200) {
-        _fetchProfile();
-      }
-    } catch (_) {
-      setState(() {
-        _profile['nombre'] = result['nombre'];
-        _profile['apellido'] = result['apellido'];
-        _profile['email'] = result['email'];
-      });
+      await HttpClient.put('/api/admin/profile', body: result, auth: true);
+      adminSnack(this, 'Perfil actualizado');
+      _fetchProfile();
+    } catch (e) {
+      adminSnack(this, adminErrorText(e), error: true);
     }
   }
 
+  /// POST /api/admin/profile/avatar es multipart con el campo `file`
+  /// (antes se enviaba una URL en JSON, que el backend ignora).
   Future<void> _uploadAvatar() async {
-    final urlCtrl = TextEditingController();
-
-    final url = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Actualizar Avatar'),
-        content: TextField(
-          controller: urlCtrl,
-          decoration: const InputDecoration(
-            labelText: 'URL de la imagen',
-            hintText: 'https://ejemplo.com/avatar.jpg',
-          ),
-          keyboardType: TextInputType.url,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, urlCtrl.text.trim()),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-
-    if (url == null || url.isEmpty) return;
-
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+    setState(() => _uploading = true);
     try {
-      final res = await http.post(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/profile/avatar'),
-        headers: _authHeaders,
-        body: jsonEncode({'url': url}),
+      final bytes = await picked.readAsBytes();
+      final res = await HttpClient.uploadFile(
+        '/api/admin/profile/avatar',
+        bytes: bytes,
+        filename: picked.name,
+        fieldName: 'file',
+        auth: true,
       );
-      if (res.statusCode == 200) {
-        _fetchProfile();
-      }
-    } catch (_) {
-      setState(() {
-        _profile['avatar'] = url;
-      });
+      if (!mounted) return;
+      setState(() => _profile['avatar'] = res['avatar'] ?? _profile['avatar']);
+      adminSnack(this, 'Avatar actualizado');
+    } catch (e) {
+      adminSnack(this, adminErrorText(e), error: true);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -175,21 +144,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
+            : _error != null && _profile.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() => _loading = true);
+                              _fetchProfile();
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 child: Column(
                   children: [
                     const SizedBox(height: 16),
-                    CircleAvatar(
-                      radius: 56,
-                      backgroundColor: Colors.grey.shade200,
-                      backgroundImage: _profile['avatar'] != null
-                          ? NetworkImage(_profile['avatar'] as String)
-                          : null,
-                      child: _profile['avatar'] == null
-                          ? const Icon(Icons.person, size: 56, color: Colors.white54)
-                          : null,
-                    ),
+                    // Avatar: ruta relativa del backend → resolveMediaUrl.
+                    Builder(builder: (_) {
+                      final avatarUrl = resolveMediaUrl(_profile['avatar']?.toString());
+                      return CircleAvatar(
+                        radius: 56,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                        onBackgroundImageError: avatarUrl != null ? (_, _) {} : null,
+                        child: _uploading
+                            ? const CircularProgressIndicator()
+                            : avatarUrl == null
+                                ? const Icon(Icons.person, size: 56, color: Colors.white54)
+                                : null,
+                      );
+                    }),
                     const SizedBox(height: 20),
                     Text(
                       '${_profile['nombre'] ?? ''} ${_profile['apellido'] ?? ''}',

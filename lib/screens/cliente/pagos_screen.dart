@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api/payment_service.dart';
@@ -43,12 +42,18 @@ class _PagosScreenState extends State<PagosScreen> {
   }
 
   Future<void> _uploadProof() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 75,
+    );
     if (picked == null || !mounted) return;
     setState(() { _uploading = true; _proofMessage = null; });
     try {
-      final bytes = await File(picked.path).readAsBytes();
-      await PaymentService.uploadProof(bytes: bytes, filename: picked.name);
+      final bytes = await picked.readAsBytes();
+      // image_picker la recomprime a JPEG → extensión .jpg.
+      await PaymentService.uploadProof(bytes: bytes, filename: 'comprobante_${DateTime.now().millisecondsSinceEpoch}.jpg');
       if (!mounted) return;
       setState(() {
         _proofMessage = 'Comprobante recibido. El administrador lo verificar\u00e1 en breve.';
