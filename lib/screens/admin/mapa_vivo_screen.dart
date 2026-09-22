@@ -1,15 +1,17 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
 import '../../services/logger_service.dart';
+import 'admin_common.dart';
 
+/// Mapa en vivo de conductores.
+///
+/// GET /api/admin/trips no trae coordenadas: la posición sale de
+/// GET /api/admin/drivers (`ultimaUbicacion {lat,lng}`) y se cruza con los
+/// viajes activos (`conductorId`) para mostrar estado y destino.
 class MapaVivoScreen extends StatefulWidget {
   const MapaVivoScreen({super.key});
 
@@ -17,117 +19,100 @@ class MapaVivoScreen extends StatefulWidget {
   State<MapaVivoScreen> createState() => _MapaVivoScreenState();
 }
 
-class _MapaVivoScreenState extends State<MapaVivoScreen> {
-  bool _loading = true;
-  bool _mapError = false;
+class _MapaVivoScreenState extends State<MapaVivoScreen> with VisiblePolling {
+  static const _activeStates = {'aceptado', 'en_curso', 'esperando_confirmacion', 'pendiente'};
 
-  List<Map<String, dynamic>> _trips = [];
+  bool _loading = true;
+  bool _refreshing = false;
+  String? _error;
+  bool _movedToFirst = false;
+
+  /// Marcadores precalculados en cada carga (no en cada build).
+  List<Marker> _markers = const [];
+  LatLng? _firstPoint;
 
   final MapController _mapController = MapController();
-
-  Timer? _refreshTimer;
-
-  Map<String, String> get _authHeaders => {
-        'Content-Type': 'application/json',
-        if (ApiClient.instance.token != null)
-          'Authorization': 'Bearer ${ApiClient.instance.token}',
-      };
 
   @override
   void initState() {
     super.initState();
-
     _fetchTrips();
-
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _fetchTrips(),
-    );
+    // Refresco cada 30 s solo mientras la pantalla está visible.
+    startPolling(const Duration(seconds: 30), _fetchTrips);
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _mapController.dispose();
     super.dispose();
   }
 
+  static double? _toDouble(dynamic v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+
   Future<void> _fetchTrips() async {
-    if (!mounted) return;
-
-    setState(() {
-      _loading = true;
-    });
-
+    if (!mounted || _refreshing) return;
+    _refreshing = true;
     try {
-      final response = await http
-          .get(
-            Uri.parse('${ApiClient.baseUrl}/api/admin/trips'),
-            headers: _authHeaders,
-          )
-          .timeout(const Duration(seconds: 15));
-
+      final results = await Future.wait([
+        HttpClient.getList('/api/admin/drivers?limit=100', auth: true),
+        HttpClient.getList('/api/admin/trips?limit=100', auth: true),
+      ]);
       if (!mounted) return;
+      final drivers = adminMapList(results[0]);
+      final trips = adminMapList(results[1]);
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-
-        if (decoded is List) {
-          final trips = decoded
-              .whereType<Map>()
-              .map(
-                (item) => Map<String, dynamic>.from(item),
-              )
-              .toList();
-
-          setState(() {
-            _trips = trips;
-            _loading = false;
-            _mapError = false;
-          });
-        } else {
-          setState(() {
-            _loading = false;
-            _mapError = true;
-          });
+      final tripByDriver = <String, Map<String, dynamic>>{};
+      for (final t in trips) {
+        final cid = t['conductorId']?.toString();
+        if (cid != null && _activeStates.contains(t['estado']) && !tripByDriver.containsKey(cid)) {
+          tripByDriver[cid] = t;
         }
-      } else {
-        LoggerService.instance.info(
-          'Trips API returned status ${response.statusCode}',
-        );
-
-        setState(() {
-          _loading = false;
-          _mapError = true;
-        });
       }
-    } catch (e, s) {
-      LoggerService.instance.error(
-        'Error fetching live trips',
-        e,
-        s,
-      );
 
-      if (!mounted) return;
+      final markers = <Marker>[];
+      LatLng? first;
+      for (final d in drivers) {
+        final ubic = d['ultimaUbicacion'];
+        if (ubic is! Map) continue;
+        final lat = _toDouble(ubic['lat']);
+        final lng = _toDouble(ubic['lng']);
+        if (lat == null || lng == null || lat.abs() > 90 || lng.abs() > 180) continue;
+        final trip = tripByDriver[d['id']?.toString()];
+        // Solo conductores en línea o con un viaje activo.
+        if (d['online'] != true && trip == null) continue;
+        final usuario = d['usuario'] is Map ? d['usuario'] as Map : const {};
+        final name = '${usuario['nombre'] ?? ''} ${usuario['apellido'] ?? ''}'.trim();
+        final point = LatLng(lat, lng);
+        first ??= point;
+        markers.add(Marker(
+          point: point,
+          width: 200,
+          height: 100,
+          child: _TripMarker(
+            name: name.isNotEmpty ? '$name · ${d['placa'] ?? ''}' : 'Conductor ${d['placa'] ?? ''}',
+            status: trip?['estado']?.toString().replaceAll('_', ' ') ?? 'disponible',
+            destination: trip?['destinoDireccion']?.toString() ?? '',
+          ),
+        ));
+      }
 
       setState(() {
+        _markers = markers;
+        _firstPoint = first;
         _loading = false;
-        _mapError = true;
+        _error = null;
       });
+      if (!_movedToFirst) _moveToFirstTrip();
+    } catch (e, s) {
+      LoggerService.instance.error('Error fetching live map', e, s);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = adminErrorText(e);
+      });
+    } finally {
+      _refreshing = false;
     }
-  }
-
-  List<Map<String, dynamic>> get _activeTrips {
-    return _trips.where((trip) {
-      final lat = trip['lat'];
-      final lng = trip['lng'];
-
-      return lat is num &&
-          lng is num &&
-          lat >= -90 &&
-          lat <= 90 &&
-          lng >= -180 &&
-          lng <= 180;
-    }).toList();
   }
 
   @override
@@ -147,120 +132,61 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
           ),
         ],
       ),
-      body: _loading && _trips.isEmpty
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : _mapError && _trips.isEmpty
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null && _markers.isEmpty
               ? _buildMapError()
-              : RefreshIndicator(
-                  onRefresh: _fetchTrips,
-                  child: _buildMap(),
+              : Stack(
+                  children: [
+                    _buildMap(),
+                    if (_markers.isEmpty)
+                      const Positioned(
+                        left: 16,
+                        right: 16,
+                        top: 12,
+                        child: Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Text('No hay conductores en línea con ubicación reciente.'),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
     );
   }
 
   Widget _buildMap() {
-    final activeTrips = _activeTrips;
-
-    final markers = activeTrips.map((trip) {
-      try {
-        final lat = (trip['lat'] as num).toDouble();
-        final lng = (trip['lng'] as num).toDouble();
-
-        final name = trip['conductor']?.toString() ?? 'Conductor';
-
-        final status = trip['estado']?.toString() ?? '';
-
-        final destination = trip['destino']?.toString() ?? '';
-
-        return Marker(
-          point: LatLng(lat, lng),
-          width: 200,
-          height: 100,
-          child: _TripMarker(
-            name: name,
-            status: status,
-            destination: destination,
-          ),
-        );
-      } catch (e, s) {
-        LoggerService.instance.error(
-          'Error building trip marker',
-          e,
-          s,
-        );
-
-        return null;
-      }
-    }).whereType<Marker>().toList();
-
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: const LatLng(
-          4.711,
-          -74.072,
-        ),
+        initialCenter: _firstPoint ?? const LatLng(3.4516, -76.5320),
         initialZoom: 12,
-        onMapReady: () {
-          if (!mounted) return;
-
-          setState(() {
-            _mapError = false;
-          });
-
-          _moveToFirstTrip();
-        },
+        onMapReady: _moveToFirstTrip,
       ),
       children: [
         TileLayer(
           urlTemplate: MapConfig.tileUrl,
           userAgentPackageName: 'com.cargaexpress.app',
         ),
-
-        if (markers.isNotEmpty)
-          MarkerLayer(
-            markers: markers,
-          ),
+        if (_markers.isNotEmpty) MarkerLayer(markers: _markers),
       ],
     );
   }
 
   void _moveToFirstTrip() {
-    final activeTrips = _activeTrips;
-
-    if (activeTrips.isEmpty) return;
-
-    try {
-      final first = activeTrips.first;
-
-      final lat = (first['lat'] as num).toDouble();
-      final lng = (first['lng'] as num).toDouble();
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-
-        try {
-          _mapController.move(
-            LatLng(lat, lng),
-            12,
-          );
-        } catch (e, s) {
-          LoggerService.instance.error(
-            'Error moving map to first trip',
-            e,
-            s,
-          );
-        }
-      });
-    } catch (e, s) {
-      LoggerService.instance.error(
-        'Error getting first trip location',
-        e,
-        s,
-      );
-    }
+    final first = _firstPoint;
+    if (first == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        _mapController.move(first, 12);
+        _movedToFirst = true;
+      } catch (e) {
+        // El mapa aún no está listo: onMapReady volverá a intentarlo.
+        LoggerService.instance.info('Mapa no listo para mover: $e');
+      }
+    });
   }
 
   Widget _buildMapError() {
@@ -270,35 +196,22 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.map_outlined,
-              size: 64,
-              color: Colors.grey.shade400,
-            ),
+            Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 12),
             const Text(
               'No se pudo cargar el mapa',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              'Verifica tu conexión a internet y vuelve a intentarlo.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-              ),
+              _error ?? 'Verifica tu conexión a internet y vuelve a intentarlo.',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _fetchTrips,
-              icon: const Icon(
-                Icons.refresh,
-                size: 18,
-              ),
+              icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Reintentar'),
             ),
           ],

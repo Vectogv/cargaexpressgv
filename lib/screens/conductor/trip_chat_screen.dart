@@ -87,8 +87,10 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
           }
         }
         await _fetchMessages();
+        // Con socket conectado los mensajes llegan por chat:message (y al
+        // reconectar se recarga): sondear sólo mientras no hay socket.
         _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-          if (mounted) _fetchMessages();
+          if (mounted && !SocketServiceClient.instance.isConnected) _fetchMessages();
         });
       } else {
         if (mounted) setState(() => _loading = false);

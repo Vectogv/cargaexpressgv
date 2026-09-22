@@ -61,12 +61,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     CacheService.instance.setPreference('ubicacion', _ubicacion);
     CacheService.instance.setPreference('visible', _visible);
 
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await ApiClient.instance.updateSettings({
         'notificacionesSonido': _sonido,
         'visibilidad': _visible ? 'visible' : 'oculto',
       });
-    } catch (_) {}
+    } catch (e) {
+      // Antes el error se ignoraba y el usuario creía que se había guardado.
+      messenger.showSnackBar(SnackBar(
+        content: Text('No se pudieron guardar los ajustes: ${e.toString().replaceFirst("Exception: ", "")}'),
+      ));
+    }
   }
 
   @override

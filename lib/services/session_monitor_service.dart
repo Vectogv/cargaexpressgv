@@ -45,21 +45,18 @@ class SessionMonitorService {
         LoggerService.instance.debug('Session health check: OK');
       }
     } catch (e) {
-      LoggerService.instance.warning('Session health check failed, attempting recovery', e);
+      // No se renueva el token aquí: HttpClient ya lo hace ante 401 con una
+      // única renovación compartida (los refresh tokens son de un solo uso y
+      // un refresh paralelo invalidaría la sesión). Un fallo de red/429/5xx
+      // no es un fallo de sesión.
+      LoggerService.instance.warning('Session health check failed', e);
 
       try {
         final cached = cacheService.getCachedProfile();
         if (cached != null) {
-          LoggerService.instance.info('Session recovered from cache');
+          LoggerService.instance.info('Session health check: using cached profile');
         }
       } catch (_) {}
-
-      try {
-        await apiClient.refreshToken();
-        LoggerService.instance.info('Session token refreshed successfully');
-      } catch (e) {
-        LoggerService.instance.error('Session recovery failed', e);
-      }
     }
   }
 

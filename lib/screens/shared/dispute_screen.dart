@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/trip_service.dart';
 import '../../services/logger_service.dart';
 
@@ -23,7 +25,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
   final _descCtrl = TextEditingController();
   String? _selectedType;
   bool _submitting = false;
-  final List<String> _photoUrls = [];
+  // Rutas devueltas por /dispute/support (se envían en `fotos`) + bytes
+  // locales para la miniatura (la URL firmada caduca en 1 h).
+  final List<({String path, Uint8List bytes})> _photos = [];
   bool _uploading = false;
 
   static const List<Map<String, dynamic>> _disputeTypes = [
@@ -44,21 +48,29 @@ class _DisputeScreenState extends State<DisputeScreen> {
   Future<void> _addPhoto() async {
     try {
       final picker = ImagePicker();
-      final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-      if (file == null) return;
+      final file = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
+      );
+      if (file == null || !mounted) return;
       setState(() => _uploading = true);
       final bytes = await file.readAsBytes();
-      final url = await TripService.disputePhoto(
+      final path = await TripService.disputePhoto(
         widget.trip['id'],
         bytes,
         'dispute_${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
-      if (url.isNotEmpty) {
-        setState(() => _photoUrls.add(url));
+      if (path.isNotEmpty && mounted) {
+        setState(() => _photos.add((path: path, bytes: bytes)));
       }
+    } on ApiException catch (e) {
+      LoggerService.instance.error('Error adding dispute photo', e);
+      if (mounted) _snack(e.message);
     } catch (e) {
       LoggerService.instance.error('Error adding dispute photo', e);
-      if (mounted) _snack('Error al subir foto');
+      if (mounted) _snack('Error al subir foto: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -76,15 +88,20 @@ class _DisputeScreenState extends State<DisputeScreen> {
     setState(() => _submitting = true);
     try {
       final typeLabel = _disputeTypes.firstWhere((t) => t['id'] == _selectedType)['label'] as String;
-      await ApiClient.instance.disputeTrip(
-        widget.trip['id'],
-        motivo: typeLabel,
-        descripcion: '${_descCtrl.text.trim()}\nFotos: ${_photoUrls.join(", ")}',
+      // POST /api/disputes acepta `fotos: string[]` (rutas de /dispute/support);
+      // antes las rutas se pegaban en la descripción.
+      await ApiClient.instance.createDispute(
+        tripId: widget.trip['id'],
+        problema: typeLabel,
+        descripcion: _descCtrl.text.trim(),
+        fotos: _photos.map((p) => p.path).toList(),
       );
       if (mounted) {
         _snack('Disputa registrada. El administrador la revisar\u00e1.');
         Navigator.pop(context);
       }
+    } on ApiException catch (e) {
+      if (mounted) _snack(e.message);
     } catch (e) {
       if (mounted) _snack('Error al enviar: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
@@ -151,7 +168,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 children: [
                   Text('ID: ${t['id']}', style: TextStyle(fontSize: 12, color: _textGrey)),
                   const SizedBox(height: 4),
-                  Text('$nombre', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  Text(nombre.toString(), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   if (origen != null) Text('Origen: ${origen['direccion'] ?? ''}', style: TextStyle(fontSize: 12, color: _textGrey)),
                   if (destino != null) Text('Destino: ${destino['direccion'] ?? ''}', style: TextStyle(fontSize: 12, color: _textGrey)),
                 ],
@@ -160,18 +177,25 @@ class _DisputeScreenState extends State<DisputeScreen> {
             const SizedBox(height: 20),
             const Text('Tipo de disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
             const SizedBox(height: 8),
-            ..._disputeTypes.map((type) => RadioListTile<String>(
-              title: Row(children: [
-                Icon(type['icon'] as IconData, size: 20, color: _primaryDark),
-                const SizedBox(width: 10),
-                Text(type['label'] as String, style: const TextStyle(fontSize: 14)),
-              ]),
-              value: type['id'] as String,
+            RadioGroup<String>(
               groupValue: _selectedType,
               onChanged: (v) => setState(() => _selectedType = v),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-            )),
+              child: Column(
+                children: [
+                  for (final type in _disputeTypes)
+                    RadioListTile<String>(
+                      title: Row(children: [
+                        Icon(type['icon'] as IconData, size: 20, color: _primaryDark),
+                        const SizedBox(width: 10),
+                        Text(type['label'] as String, style: const TextStyle(fontSize: 14)),
+                      ]),
+                      value: type['id'] as String,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             const Text('Descripci\u00f3n', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
             const SizedBox(height: 8),
@@ -193,14 +217,22 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
-                    ..._photoUrls.map((url) => Container(
-                      width: 80, height: 80,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
+                    for (final p in _photos)
+                      Container(
+                        width: 80, height: 80,
+                        margin: const EdgeInsets.only(right: 8),
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+                        child: Image.memory(
+                          p.bytes,
+                          fit: BoxFit.cover,
+                          cacheWidth: 240, // miniatura: no decodificar la foto completa
+                          errorBuilder: (_, _, _) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+                          ),
+                        ),
                       ),
-                    )),
                     Container(
                       width: 80, height: 80,
                       decoration: BoxDecoration(

@@ -2,10 +2,14 @@ import 'dart:typed_data';
 
 import 'http_client.dart';
 
+/// Métodos con `idempotencyKey`: las pantallas pueden generar una clave por
+/// acción del usuario (`HttpClient.newIdempotencyKey()`) y reutilizarla en
+/// reintentos para que el backend no duplique la operación. Sin clave se
+/// genera una nueva por llamada.
 class TripService {
-  static Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> requestTrip(Map<String, dynamic> data, {String? idempotencyKey}) async {
     // El contrato del backend exige X-Idempotency-Key para prevenir duplicados.
-    return HttpClient.post('/api/trips/request', body: data, auth: true, idempotent: true);
+    return HttpClient.post('/api/trips/request', body: data, auth: true, idempotent: true, idempotencyKey: idempotencyKey);
   }
 
   static Future<Map<String, dynamic>?> getActiveTrip() async {
@@ -50,8 +54,8 @@ class TripService {
     await HttpClient.post('/api/trips/$id/confirm-arrival', auth: true);
   }
 
-  static Future<Map<String, dynamic>> reserveTrip(Map<String, dynamic> data) async {
-    return HttpClient.post('/api/trips/reserve', body: data, auth: true, idempotent: true);
+  static Future<Map<String, dynamic>> reserveTrip(Map<String, dynamic> data, {String? idempotencyKey}) async {
+    return HttpClient.post('/api/trips/reserve', body: data, auth: true, idempotent: true, idempotencyKey: idempotencyKey);
   }
 
   static Future<List<Map<String, dynamic>>> getReservations({int page = 1, int limit = 20, String? estado}) async {
@@ -74,18 +78,18 @@ class TripService {
     return HttpClient.post('/api/trips/$id/dispute/appeal', body: {'motivo': motivo, 'descripcion': descripcion}, auth: true);
   }
 
-  static Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion}) async {
+  static Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
     if (justificacion != null) body['justificacion'] = justificacion;
-    await HttpClient.post('/api/trips/$id/complete', body: body, auth: true, idempotent: true);
+    await HttpClient.post('/api/trips/$id/complete', body: body, auth: true, idempotent: true, idempotencyKey: idempotencyKey);
   }
 
-  static Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion}) async {
+  static Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
     if (justificacion != null) body['justificacion'] = justificacion;
-    await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true, idempotent: true);
+    await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true, idempotent: true, idempotencyKey: idempotencyKey);
   }
 
   static Future<void> cancelTrip(dynamic id, {String? motivo, String? justificacion}) async {
@@ -102,8 +106,8 @@ class TripService {
     await HttpClient.post('/api/trips/$id/request-cancellation', body: body, auth: true);
   }
 
-  static Future<Map<String, dynamic>> confirmClose(dynamic id, {required bool confirmar, String? motivo}) async {
-    return HttpClient.post('/api/trips/$id/confirm-close', body: {'confirmar': confirmar, if (motivo != null) 'motivo': motivo}, auth: true);
+  static Future<Map<String, dynamic>> confirmClose(dynamic id, {required bool confirmar, String? motivo, String? idempotencyKey}) async {
+    return HttpClient.post('/api/trips/$id/confirm-close', body: {'confirmar': confirmar, if (motivo != null) 'motivo': motivo}, auth: true, idempotencyKey: idempotencyKey);
   }
 
   static Future<Map<String, dynamic>> disputeTrip(dynamic id, {required String motivo, String? descripcion}) async {
@@ -121,7 +125,8 @@ class TripService {
 
   // La subida de fotos de disputa es SOLO de cliente: POST /api/trips/:id/dispute/support
   static Future<String> disputePhoto(dynamic tripId, Uint8List bytes, String filename) async {
-    final data = await HttpClient.uploadFile('/api/trips/$tripId/dispute/support', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
+    // El backend acepta hasta 10 MB (heic/pdf incluidos) para soportes de disputa.
+    final data = await HttpClient.uploadFile('/api/trips/$tripId/dispute/support', bytes: bytes, filename: filename, fieldName: 'file', auth: true, maxBytes: 10 * 1024 * 1024);
     return data['soporte'] as String? ?? data['url'] as String? ?? '';
   }
 }

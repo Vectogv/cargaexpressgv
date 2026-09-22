@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:ui' show DartPluginRegistrant;
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'api/driver_service.dart';
+import 'api/http_client.dart';
+import 'api_client.dart';
 import 'logger_service.dart';
 
 class BackgroundLocationService {
@@ -35,22 +38,62 @@ class BackgroundLocationService {
     }
   }
 
+  /// Punto de entrada del isolate del servicio en segundo plano. Este isolate
+  /// NO comparte memoria con la app: hay que registrar los plugins y cargar la
+  /// sesión desde SharedPreferences. Nunca renueva tokens (los refresh tokens
+  /// son de un solo uso y los rota el isolate principal): ante 401 HttpClient
+  /// relee los tokens y reintenta una vez.
   @pragma('vm:entry-point')
-  static void onStart(ServiceInstance service) {
+  static Future<void> onStart(ServiceInstance service) async {
+    DartPluginRegistrant.ensureInitialized();
+    HttpClient.isBackgroundIsolate = true;
+    try {
+      await ApiClient.instance.init();
+    } catch (e) {
+      LoggerService.instance.error('BackgroundLocationService: ApiClient init error', e);
+    }
+
+    Timer? timer;
+    service.on('stopService').listen((_) {
+      timer?.cancel();
+      service.stopSelf();
+    });
+
     if (service is AndroidServiceInstance) {
-      service.on('stopService').listen((_) {
-        service.stopSelf();
+      service.on('setForegroundText').listen((event) {
+        final title = event?['title']?.toString() ?? 'CargaExpress';
+        final content = event?['content']?.toString() ??
+            'Enviando ubicación en segundo plano';
+        service.setForegroundNotificationInfo(title: title, content: content);
       });
     }
 
-    Timer.periodic(const Duration(seconds: 15), (timer) async {
+    var busy = false;
+    timer = Timer.periodic(const Duration(seconds: 15), (_) async {
+      if (busy) return;
+      busy = true;
       try {
+        if (ApiClient.instance.token == null) {
+          // El usuario pudo iniciar sesión (o renovar) en la app principal.
+          await ApiClient.instance.reloadTokens();
+          if (ApiClient.instance.token == null) return;
+        }
         final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
         );
         await DriverService.updateLocation(pos.latitude, pos.longitude);
+      } on ApiException catch (e) {
+        if (e.code == 'CUENTA_SUSPENDIDA') {
+          LoggerService.instance.warning('BackgroundLocationService: cuenta suspendida, deteniendo');
+          timer?.cancel();
+          service.stopSelf();
+        } else {
+          LoggerService.instance.error('BackgroundLocationService.onStart api error', e);
+        }
       } catch (e) {
         LoggerService.instance.error('BackgroundLocationService.onStart location error', e);
+      } finally {
+        busy = false;
       }
     });
   }

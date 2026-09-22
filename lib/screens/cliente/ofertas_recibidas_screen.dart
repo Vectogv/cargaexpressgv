@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/offer_service.dart';
 import '../../services/socket_service_client.dart';
 import 'oferta_aceptada_screen.dart';
@@ -32,6 +33,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
   bool _offersError = false;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   StreamSubscription<Map<String, dynamic>>? _expirySub;
+  StreamSubscription<Map<String, dynamic>>? _cancelSub;
   Timer? _ticker;
   DateTime _now = DateTime.now();
 
@@ -60,8 +62,21 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
           }
         });
       });
+      // `offer:cancelled {viajeId, ofertaId}`: el conductor re-ofertó o la
+      // oferta dejó de ser válida → quitarla para no aceptar una oferta vieja.
+      _cancelSub = SocketServiceClient.instance.onOfferCancelled.listen((data) {
+        if (!mounted) return;
+        final viajeId = data['viajeId']?.toString();
+        if (viajeId != null && viajeId != widget.tripId.toString()) return;
+        final ofertaId = (data['ofertaId'] ?? data['_id'] ?? data['id'])?.toString();
+        if (ofertaId == null) return;
+        _removeOffer(ofertaId);
+      });
+      // Rebuild cada segundo SOLO si hay alguna oferta con countdown visible.
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _now = DateTime.now());
+        if (!mounted) return;
+        final hasCountdown = _offers.any((o) => o['expiresAt'] is String);
+        if (hasCountdown) setState(() => _now = DateTime.now());
       });
       _fetchOffers();
     }
@@ -71,11 +86,23 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
   void dispose() {
     _socketSub?.cancel();
     _expirySub?.cancel();
+    _cancelSub?.cancel();
     _ticker?.cancel();
     super.dispose();
   }
 
-  Future<void> _fetchOffers() async {
+  void _removeOffer(String offerId) {
+    final idx = _offers.indexWhere((o) => _offerId(o) == offerId);
+    if (idx < 0) return;
+    setState(() {
+      _offers.removeAt(idx);
+      if (_acceptingId == offerId) _acceptingId = null;
+    });
+  }
+
+  /// [replace] = true descarta las ofertas locales y usa sólo las del
+  /// servidor (tras un error al aceptar, la lista local puede estar vieja).
+  Future<void> _fetchOffers({bool replace = false}) async {
     if (_loadingOffers) return;
     setState(() {
       _loadingOffers = true;
@@ -85,6 +112,10 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       final list = await OfferService.getOffers(widget.tripId);
       if (!mounted) return;
       setState(() {
+        if (replace) {
+          _offers = list.map((o) => Map<String, dynamic>.from(o)).toList();
+          return;
+        }
         final ids = <String>{};
         for (final offer in _offers) {
           final id = (offer['_id'] ?? offer['id'])?.toString();
@@ -133,23 +164,23 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
   String? _offerId(Map<String, dynamic> offer) =>
       (offer['_id'] ?? offer['id'])?.toString();
 
-  Future<void> _rechazar(String offerId, int index) async {
+  Future<void> _rechazar(String offerId) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await widget.onReject(offerId);
-      if (mounted) {
-        setState(() => _offers.removeAt(index));
-      }
+      if (mounted) _removeOffer(offerId);
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al rechazar oferta')),
-        );
-      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Error al rechazar oferta')),
+      );
     }
   }
 
   Future<void> _aceptar(String offerId) async {
     setState(() => _acceptingId = offerId);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await widget.onAccept(offerId);
       if (!mounted) return;
@@ -184,13 +215,22 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       if (mounted) {
         setState(() => _acceptingId = null);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _acceptingId = null);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
-        );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _acceptingId = null);
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      // 404: la oferta ya no existe · 409: el conductor ya no está habilitado
+      // · 422: la oferta expiró → quitarla y refrescar desde el servidor.
+      if (e.statusCode == 404 || e.statusCode == 409 || e.statusCode == 422) {
+        _removeOffer(offerId);
+        _fetchOffers(replace: true);
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _acceptingId = null);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
+      );
     }
   }
 
@@ -241,7 +281,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                       const Text('No se pudieron cargar las ofertas', style: TextStyle(color: Colors.black45, fontSize: 15)),
                       const SizedBox(height: 8),
                       TextButton(
-                        onPressed: _fetchOffers,
+                        onPressed: () => _fetchOffers(),
                         child: const Text('Reintentar'),
                       ),
                     ],
@@ -372,7 +412,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: isAccepting || expired ? null : () => _rechazar(offerId ?? '', i),
+                                  onPressed: isAccepting || expired ? null : () => _rechazar(offerId ?? ''),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.black87,
                                     side: const BorderSide(color: Color(0xFFDDDDDD)),
@@ -411,7 +451,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
               padding: const EdgeInsets.only(bottom: 24, top: 8),
               child: Text(
                 'Elige la mejor oferta para ti.',
-                style: TextStyle(fontSize: 13, color: const Color(0xFF2563EB), fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF2563EB), fontWeight: FontWeight.w500),
               ),
             ),
           ],

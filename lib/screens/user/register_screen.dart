@@ -30,6 +30,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _ciudadCtrl = TextEditingController();
   String _tipoVehiculo = 'Motocicleta';
 
+  @override
+  void dispose() {
+    for (final c in [
+      _nombreCtrl, _apellidoCtrl, _emailCtrl, _passCtrl, _telefonoCtrl,
+      _edadCtrl, _cedulaCtrl, _placaCtrl, _capacidadCtrl, _ciudadCtrl,
+    ]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
   final List<String> _tiposVehiculo = [
     'Motocicleta',
     'Sedan',

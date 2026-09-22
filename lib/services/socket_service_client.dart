@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../contracts/socket_events.dart';
+import 'api/http_client.dart';
 import 'api_client.dart';
+import 'error_handler_service.dart';
 import 'logger_service.dart';
 import 'network_monitor_service.dart';
+import 'session_events.dart';
 
 class SocketServiceClient {
   static final SocketServiceClient instance = SocketServiceClient._();
   SocketServiceClient._();
 
-  IO.Socket? _socket;
+  io.Socket? _socket;
   bool _connected = false;
   bool _initialized = false;
 
@@ -29,6 +32,7 @@ class SocketServiceClient {
   final _tripDeliveredCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _offerCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripOfferAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverStopGpsCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverVerificationCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -75,6 +79,10 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onTripDelivered => _tripDeliveredCtrl.stream;
   Stream<Map<String, dynamic>> get onOfferAccepted => _offerAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onOfferRejected => _offerRejectedCtrl.stream;
+
+  /// `offer:cancelled {viajeId, ofertaId}`: el conductor reemplazó su oferta
+  /// (re-ofertó); el cliente debe quitar la oferta anterior de la lista.
+  Stream<Map<String, dynamic>> get onOfferCancelled => _offerCancelledCtrl.stream;
   Stream<Map<String, dynamic>> get onTripOfferAccepted => _tripOfferAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverStopGps => _driverStopGpsCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverVerification => _driverVerificationCtrl.stream;
@@ -148,9 +156,58 @@ class SocketServiceClient {
     _connect();
   }
 
+  /// `true` si el error de conexión indica cuenta suspendida
+  /// (`message == 'Cuenta suspendida'` o `data.code == 'CUENTA_SUSPENDIDA'`).
+  static bool isSuspendedError(dynamic error) {
+    try {
+      if (error is Map) {
+        final data = error['data'];
+        if (data is Map && data['code']?.toString() == 'CUENTA_SUSPENDIDA') return true;
+        if (error['code']?.toString() == 'CUENTA_SUSPENDIDA') return true;
+        final msg = error['message']?.toString() ?? '';
+        if (msg.toLowerCase().contains('cuenta suspendida')) return true;
+      }
+      final text = error?.toString() ?? '';
+      return text.contains('CUENTA_SUSPENDIDA') ||
+          text.toLowerCase().contains('cuenta suspendida');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Se activa al recibir `Cuenta suspendida`: bloquea reconexiones
+  /// automáticas hasta un nuevo login (forceReconnect).
+  bool _suspended = false;
+
+  /// Evita ciclos de refresh si el backend sigue rechazando el token.
+  bool _authRefreshTried = false;
+
+  static bool _isAuthError(dynamic error) {
+    final text = (error is Map ? error['message'] : error)?.toString().toLowerCase() ?? '';
+    return text.contains('token de autenticaci') ||
+        text.contains('expirado') ||
+        text.contains('invalid') ||
+        text.contains('inválido');
+  }
+
+  Future<void> _refreshAndReconnect() async {
+    try {
+      final ok = await HttpClient.refreshSessionShared();
+      if (ok) {
+        _reconnectAttempts = 0;
+        _connect();
+      } else {
+        ErrorHandlerService.instance.emitSessionExpired();
+      }
+    } catch (_) {
+      // Fallo transitorio (red/5xx): reintentar más tarde con backoff.
+      _scheduleReconnect();
+    }
+  }
+
   void _connect() {
+    // Leer SIEMPRE el token actual: tras un refresh el anterior ya no sirve.
     final token = ApiClient.instance.token;
-    final userId = ApiClient.instance.userId;
     final baseUrl = ApiClient.baseUrl;
 
     if (token == null) {
@@ -160,8 +217,10 @@ class SocketServiceClient {
 
     try {
       _socket?.dispose();
-      _socket = IO.io(baseUrl, <String, dynamic>{
+      _socket = io.io(baseUrl, <String, dynamic>{
         'transports': ['websocket'],
+        // El backend lee `auth.token` (preferido) o `query.token` (compat).
+        'auth': {'token': token},
         'query': {'token': token},
         'forceNew': true,
         'reconnection': false,
@@ -190,20 +249,11 @@ class SocketServiceClient {
       safeOn('connect', (_) {
         _connected = true;
         _reconnectAttempts = 0;
+        _authRefreshTried = false;
         safeAdd(_connectionCtrl, true);
+        // El backend une el socket a sus rooms (driver/client/admin/user)
+        // según el usuario autenticado: no hace falta emitir join:*.
         LoggerService.instance.info('SocketServiceClient connected');
-        final rol = ApiClient.instance.rol;
-        if (userId != null) {
-          // Contrato: conductor → join:driver:{userId}, cliente → join:client:{userId}
-          if (rol == 'conductor') {
-            _socket!.emit('join:driver', {'userId': userId});
-          } else {
-            _socket!.emit('join:client', {'userId': userId});
-          }
-        }
-        if (rol == 'admin') {
-          _socket!.emit('admin:join', {});
-        }
       });
 
       safeOn('disconnect', (_) {
@@ -217,6 +267,24 @@ class SocketServiceClient {
         LoggerService.instance.error('SocketServiceClient connect_error', error);
         _connected = false;
         safeAdd(_connectionCtrl, false);
+        if (isSuspendedError(error)) {
+          // Cuenta suspendida: no reintentar; cerrar sesión globalmente.
+          LoggerService.instance.warning('SocketServiceClient: cuenta suspendida, sin reconexión');
+          _suspended = true;
+          disconnect();
+          SessionEvents.instance.emit(const SessionEvent(
+            SessionEventType.suspended,
+            'Tu cuenta está suspendida. Contacta a soporte.',
+          ));
+          return;
+        }
+        if (_isAuthError(error) && !_authRefreshTried) {
+          // Token vencido: renovar (refresh compartido con HttpClient) y
+          // reconectar con el token nuevo.
+          _authRefreshTried = true;
+          unawaited(_refreshAndReconnect());
+          return;
+        }
         _scheduleReconnect();
       });
 
@@ -224,10 +292,8 @@ class SocketServiceClient {
         LoggerService.instance.debug('SocketServiceClient reconnect_attempt');
       });
 
-      safeOn('trip:status', (data) {
-        if (data is Map) safeAdd(_tripStatusCtrl, Map<String, dynamic>.from(data));
-      });
-
+      // El backend emite `trip:status` y `trip:status_changed` con el mismo
+      // payload: escuchar sólo uno para no procesar cada cambio dos veces.
       safeOn(SocketEvents.tripStatusChanged, (data) {
         if (data is Map) safeAdd(_tripStatusCtrl, Map<String, dynamic>.from(data));
       });
@@ -268,6 +334,10 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_offerRejectedCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn('offer:cancelled', (data) {
+        if (data is Map) safeAdd(_offerCancelledCtrl, Map<String, dynamic>.from(data));
+      });
+
       safeOn('trip:offer_accepted', (data) {
         if (data is Map) safeAdd(_tripOfferAcceptedCtrl, Map<String, dynamic>.from(data));
       });
@@ -289,13 +359,6 @@ class SocketServiceClient {
           final info = Map<String, dynamic>.from(data);
           info['__event'] = 'driver:rejected';
           safeAdd(_driverVerificationCtrl, info);
-        }
-      });
-
-      safeOn('message:new', (data) {
-        if (data is Map) {
-          safeAdd(_messageCtrl, Map<String, dynamic>.from(data));
-          _incrementChatUnreadIfOther(data);
         }
       });
 
@@ -441,6 +504,7 @@ class SocketServiceClient {
 
   void _scheduleReconnect() {
     _reconnectTimer?.cancel();
+    if (_suspended) return;
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       LoggerService.instance.warning('SocketServiceClient: max reconnect attempts reached');
       return;
@@ -480,13 +544,19 @@ class SocketServiceClient {
     emit('leave:trip', {'tripId': tripId, 'userId': ApiClient.instance.userId});
   }
 
+  /// Reconecta creando un socket nuevo con el token ACTUAL (el handshake del
+  /// socket anterior conserva el token viejo).
   void reconnect() {
+    if (_suspended) return;
     _reconnectAttempts = 0;
-    _socket?.disconnect();
-    _socket?.connect();
+    _reconnectTimer?.cancel();
+    _connect();
   }
 
+  /// Reconexión tras login/registro/refresh: limpia el bloqueo por suspensión.
   void forceReconnect() {
+    _suspended = false;
+    _authRefreshTried = false;
     _reconnectAttempts = 0;
     _reconnectTimer?.cancel();
     _connect();
@@ -522,6 +592,7 @@ class SocketServiceClient {
     _tripDeliveredCtrl.close();
     _offerAcceptedCtrl.close();
     _offerRejectedCtrl.close();
+    _offerCancelledCtrl.close();
     _tripOfferAcceptedCtrl.close();
     _driverStopGpsCtrl.close();
     _driverVerificationCtrl.close();

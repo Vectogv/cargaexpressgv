@@ -8,6 +8,7 @@ import '../../widgets/carga_express_bottom_nav.dart';
 import '../../widgets/solicitud_viaje_sheet.dart';
 import '../../models/trip.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
@@ -151,16 +152,28 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       if (estado != 'aprobado') return;
-      try { await ApiClient.instance.setDriverStatus(true); } catch (_) {}
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await ApiClient.instance.setDriverStatus(true);
+      } catch (e) {
+        // El backend rechaza (403) si el conductor no está verificado o está
+        // suspendido: no fingir que está en línea.
+        DriverLocationService.instance.pause();
+        if (mounted) setState(() => _online = false);
+        messenger.showSnackBar(SnackBar(
+          content: Text(_errorMessage(e)),
+          backgroundColor: Colors.orange,
+        ));
+        return;
+      }
       if (!await DriverLocationService.instance.start()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Permiso de ubicación denegado. Actívalo en Ajustes.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Permiso de ubicación denegado. Actívalo en Ajustes.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -208,11 +221,12 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('Error cargando perfil: $e');
     }
     unawaited(_loadStats());
-    // Refresca el mapa (posición del conductor) y el resumen mientras la pantalla está abierta.
-    _uiTimer ??= Timer.periodic(const Duration(seconds: 20), (t) {
+    // Refresca el resumen cada minuto. La posición del mapa la refresca el
+    // propio _DriverMiniMap (antes un setState() global cada 20 s reconstruía
+    // toda la pantalla y recreaba el FlutterMap por su ValueKey).
+    _uiTimer ??= Timer.periodic(const Duration(seconds: 60), (_) {
       if (!mounted) return;
-      if (t.tick % 3 == 0) unawaited(_loadStats());
-      setState(() {});
+      unawaited(_loadStats());
     });
   }
 
@@ -255,22 +269,35 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           return; // NO marcar online si GPS falló
         }
-        try { await ApiClient.instance.setDriverStatus(true); } catch (_) {}
+        try {
+          await ApiClient.instance.setDriverStatus(true);
+        } catch (_) {
+          // Revertir: el backend no nos marcó en línea (p.ej. 403 no verificado).
+          DriverLocationService.instance.pause();
+          if (mounted) setState(() => _online = false);
+          rethrow;
+        }
         if (mounted) setState(() => _online = true); // Solo aquí
       } else {
+        // Primero el backend; si falla seguimos en línea (estado coherente).
+        await ApiClient.instance.setDriverStatus(false);
         DriverLocationService.instance.pause();
-        try { await ApiClient.instance.setDriverStatus(false); } catch (_) {}
         if (mounted) setState(() => _online = false);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
-      );
+          SnackBar(content: Text(_errorMessage(e)), backgroundColor: Colors.orange),
+        );
       }
     } finally {
       if (mounted) setState(() => _statusLoading = false);
     }
+  }
+
+  String _errorMessage(Object e) {
+    if (e is ApiException) return e.message;
+    return 'Error: ${e.toString().replaceFirst("Exception: ", "")}';
   }
 
   void _showNewTripBanner(Map<String, dynamic> event) {
@@ -418,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     DriverLocationService.instance.stop();
     await ApiClient.instance.logout();
-    if (!context.mounted) return;
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const AuthScreen()),
@@ -887,78 +914,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMapCard() {
-    final lat = DriverLocationService.instance.lastLat;
-    final lng = DriverLocationService.instance.lastLng;
-    final tienePosicion = lat != null && lng != null;
-    // Sin posición aún: centro de Cali como referencia.
-    final centro = tienePosicion ? LatLng(lat, lng) : const LatLng(3.4516, -76.5320);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 220,
-        child: Stack(
-          children: [
-            FlutterMap(
-              key: ValueKey('${centro.latitude},${centro.longitude}'),
-              options: MapOptions(
-                initialCenter: centro,
-                initialZoom: 15,
-                interactionOptions: const InteractionOptions(flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag),
-              ),
-              children: [
-                TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app'),
-                if (tienePosicion)
-                  MarkerLayer(markers: [
-                    Marker(
-                      point: centro,
-                      width: 44,
-                      height: 44,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _accentBlue,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [BoxShadow(color: _accentBlue.withValues(alpha: 0.45), blurRadius: 12, spreadRadius: 3)],
-                        ),
-                        child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
-                      ),
-                    ),
-                  ]),
-              ],
-            ),
-            if (!_online)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  alignment: Alignment.center,
-                  child: const Text('Conéctate para recibir viajes cerca de ti',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: _textDark)),
-                ),
-              ),
-            Positioned(
-              left: 12,
-              top: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: _white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)],
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(tienePosicion ? Icons.my_location : Icons.location_searching, size: 14, color: _accentBlue),
-                  const SizedBox(width: 6),
-                  Text(tienePosicion ? 'Tu ubicación' : 'Buscando tu ubicación...',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
-                ]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildMapCard() => _DriverMiniMap(online: _online);
 
   Widget _buildWaitingCard() {
     final online = _online;
@@ -1059,5 +1015,132 @@ class _HomeScreenState extends State<HomeScreen> {
     final parts = name.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name[0].toUpperCase();
+  }
+}
+
+/// Mini mapa de la posición del conductor. Aislado en su propio widget para
+/// que el refresco periódico de la posición (cada 10 s) sólo reconstruya el
+/// mapa y lo mueva con [MapController] en vez de reconstruir la pantalla
+/// completa y recrear el FlutterMap (tiles incluidos) con un ValueKey nuevo.
+class _DriverMiniMap extends StatefulWidget {
+  final bool online;
+  const _DriverMiniMap({required this.online});
+
+  @override
+  State<_DriverMiniMap> createState() => _DriverMiniMapState();
+}
+
+class _DriverMiniMapState extends State<_DriverMiniMap> {
+  static const Color _accentBlue = Color(0xFF2563EB);
+  static const Color _textDark = Color(0xFF1A1A2E);
+  static const LatLng _cali = LatLng(3.4516, -76.5320);
+  static const _interaction = InteractionOptions(flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag);
+
+  final MapController _mapController = MapController();
+  Timer? _timer;
+  LatLng? _pos;
+  bool _mapReady = false;
+
+  late final MapOptions _options = MapOptions(
+    initialCenter: _pos ?? _cali,
+    initialZoom: 15,
+    interactionOptions: _interaction,
+    onMapReady: () => _mapReady = true,
+  );
+  late final Widget _tiles = TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app');
+
+  @override
+  void initState() {
+    super.initState();
+    _pos = _read();
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  LatLng? _read() {
+    final lat = DriverLocationService.instance.lastLat;
+    final lng = DriverLocationService.instance.lastLng;
+    return lat != null && lng != null ? LatLng(lat, lng) : null;
+  }
+
+  void _refresh() {
+    if (!mounted) return;
+    final next = _read();
+    if (next == null || next == _pos) return; // sin cambios: no reconstruir
+    setState(() => _pos = next);
+    if (_mapReady) _mapController.move(next, _mapController.camera.zoom);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pos = _pos;
+    final tienePosicion = pos != null;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 220,
+        child: Stack(
+          children: [
+            FlutterMap(
+              mapController: _mapController,
+              options: _options,
+              children: [
+                _tiles,
+                if (tienePosicion)
+                  MarkerLayer(markers: [
+                    Marker(
+                      point: pos,
+                      width: 44,
+                      height: 44,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _accentBlue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [BoxShadow(color: _accentBlue.withValues(alpha: 0.45), blurRadius: 12, spreadRadius: 3)],
+                        ),
+                        child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ]),
+              ],
+            ),
+            if (!widget.online)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  alignment: Alignment.center,
+                  child: const Text('Conéctate para recibir viajes cerca de ti',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: _textDark)),
+                ),
+              ),
+            Positioned(
+              left: 12,
+              top: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)],
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(tienePosicion ? Icons.my_location : Icons.location_searching, size: 14, color: _accentBlue),
+                  const SizedBox(width: 6),
+                  Text(tienePosicion ? 'Tu ubicación' : 'Buscando tu ubicación...',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+                ]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

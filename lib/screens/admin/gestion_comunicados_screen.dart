@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
-
-Map<String, String> get _authHeaders => {
-  'Content-Type': 'application/json',
-  'Authorization': 'Bearer ${ApiClient.instance.token}',
-};
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 class Comunicado {
   final String id;
@@ -26,41 +20,6 @@ class Comunicado {
   });
 }
 
-final List<Comunicado> _mockComunicados = [
-  Comunicado(
-    id: '1',
-    title: 'Actualización de Tarifas',
-    body: 'Se informa a todos los conductores que las tarifas serán actualizadas a partir del próximo mes.',
-    author: 'Admin',
-    status: 'pending',
-    createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-  ),
-  Comunicado(
-    id: '2',
-    title: 'Nueva Zona de Cobertura',
-    body: 'Hemos añadido una nueva zona de cobertura en el sector norte de la ciudad.',
-    author: 'Admin',
-    status: 'approved',
-    createdAt: DateTime.now().subtract(const Duration(days: 1)),
-  ),
-  Comunicado(
-    id: '3',
-    title: 'Mantenimiento del Sistema',
-    body: 'El sistema estará en mantenimiento el próximo domingo de 2:00 AM a 5:00 AM.',
-    author: 'Admin',
-    status: 'rejected',
-    createdAt: DateTime.now().subtract(const Duration(days: 3)),
-  ),
-  Comunicado(
-    id: '4',
-    title: 'Recordatorio de Documentación',
-    body: 'Todos los conductores deben tener su documentación actualizada para seguir operando.',
-    author: 'Admin',
-    status: 'pending',
-    createdAt: DateTime.now().subtract(const Duration(minutes: 45)),
-  ),
-];
-
 class GestionComunicadosScreen extends StatefulWidget {
   const GestionComunicadosScreen({super.key});
 
@@ -71,6 +30,7 @@ class GestionComunicadosScreen extends StatefulWidget {
 class _GestionComunicadosScreenState extends State<GestionComunicadosScreen> {
   bool _loading = true;
   List<Comunicado> _comunicados = [];
+  String? _error;
 
   @override
   void initState() {
@@ -81,29 +41,20 @@ class _GestionComunicadosScreenState extends State<GestionComunicadosScreen> {
   Future<void> _fetchComunicados() async {
     setState(() => _loading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/comunicados'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        setState(() {
-          _comunicados = data.map((e) => _parseComunicado(e)).toList();
-          _loading = false;
-        });
-      } else {
-        _useFallback();
-      }
-    } catch (_) {
-      _useFallback();
+      final data = await HttpClient.getList('/api/admin/comunicados', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _comunicados = adminMapList(data).map(_parseComunicado).toList();
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
+        _loading = false;
+      });
     }
-  }
-
-  void _useFallback() {
-    setState(() {
-      _comunicados = List.from(_mockComunicados);
-      _loading = false;
-    });
   }
 
   Comunicado _parseComunicado(Map<String, dynamic> json) {
@@ -113,49 +64,32 @@ class _GestionComunicadosScreenState extends State<GestionComunicadosScreen> {
       body: json['body'] as String? ?? '',
       author: json['author'] as String? ?? '',
       status: json['status'] as String? ?? 'pending',
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
     );
   }
 
   Future<void> _approveComunicado(String id) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/comunicados/$id/approve'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        _updateLocalStatus(id, 'approved');
-        _showSnackBar('Comunicado aprobado exitosamente', Colors.green);
-      } else {
-        _showSnackBar('Error al aprobar el comunicado', Colors.red);
-      }
-    } catch (_) {
+      await HttpClient.put('/api/admin/comunicados/$id/approve', auth: true);
       _updateLocalStatus(id, 'approved');
       _showSnackBar('Comunicado aprobado exitosamente', Colors.green);
+    } catch (e) {
+      _showSnackBar(adminErrorText(e), Colors.red);
     }
   }
 
   Future<void> _rejectComunicado(String id) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/comunicados/$id/reject'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        _updateLocalStatus(id, 'rejected');
-        _showSnackBar('Comunicado rechazado', Colors.red);
-      } else {
-        _showSnackBar('Error al rechazar el comunicado', Colors.red);
-      }
-    } catch (_) {
+      await HttpClient.put('/api/admin/comunicados/$id/reject', auth: true);
       _updateLocalStatus(id, 'rejected');
       _showSnackBar('Comunicado rechazado', Colors.red);
+    } catch (e) {
+      _showSnackBar(adminErrorText(e), Colors.red);
     }
   }
 
   void _updateLocalStatus(String id, String status) {
+    if (!mounted) return;
     setState(() {
       _comunicados = _comunicados.map((c) {
         if (c.id == id) {
@@ -198,7 +132,20 @@ class _GestionComunicadosScreenState extends State<GestionComunicadosScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _fetchComunicados,
-              child: ListView.builder(
+              child: _comunicados.isEmpty
+                  ? ListView(
+                      padding: const EdgeInsets.all(32),
+                      children: [
+                        Center(
+                          child: Text(
+                            _error ?? 'Sin comunicados',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: _error != null ? Colors.red : Colors.black54),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 itemCount: _comunicados.length,
                 itemBuilder: (_, i) => _ComunicadoCard(

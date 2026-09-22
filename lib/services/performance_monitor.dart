@@ -2,13 +2,14 @@ import 'dart:async';
 import 'dart:collection';
 import 'logger_service.dart';
 
-class _MetricEntry {
+/// Métrica registrada por [PerformanceMonitor].
+class MetricEntry {
   final String label;
   final int durationMs;
   final DateTime timestamp;
   final bool isError;
 
-  _MetricEntry({
+  MetricEntry({
     required this.label,
     required this.durationMs,
     required this.timestamp,
@@ -20,11 +21,11 @@ class PerformanceMonitor {
   static final PerformanceMonitor instance = PerformanceMonitor._();
   PerformanceMonitor._();
 
-  final Queue<_MetricEntry> _metrics = Queue();
+  final Queue<MetricEntry> _metrics = Queue();
   static const int _maxMetrics = 500;
-  final StreamController<List<_MetricEntry>> _metricsCtrl = StreamController<List<_MetricEntry>>.broadcast();
+  final StreamController<List<MetricEntry>> _metricsCtrl = StreamController<List<MetricEntry>>.broadcast();
 
-  Stream<List<_MetricEntry>> get onMetricsUpdate => _metricsCtrl.stream;
+  Stream<List<MetricEntry>> get onMetricsUpdate => _metricsCtrl.stream;
 
   final Map<String, int> _runningTimers = {};
 
@@ -53,7 +54,7 @@ class PerformanceMonitor {
   }
 
   void _addMetric(String label, int durationMs, bool isError) {
-    final entry = _MetricEntry(label: label, durationMs: durationMs, timestamp: DateTime.now(), isError: isError);
+    final entry = MetricEntry(label: label, durationMs: durationMs, timestamp: DateTime.now(), isError: isError);
     _metrics.add(entry);
     if (_metrics.length > _maxMetrics) _metrics.removeFirst();
     if (!_metricsCtrl.isClosed) _metricsCtrl.add(_metrics.toList());

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/media_image.dart';
 
 class CalificarClienteScreen extends StatefulWidget {
   final String nombreCliente;
@@ -92,11 +93,6 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
   }
 
   Widget _buildClienteCard() {
-    final parts = widget.nombreCliente.trim().split(' ');
-    final initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : parts[0][0].toUpperCase();
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
@@ -113,19 +109,13 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
       ),
       child: Row(
         children: [
-          CircleAvatar(
+          MediaAvatar(
+            path: widget.avatarUrl,
+            name: widget.nombreCliente,
             radius: 28,
             backgroundColor: const Color(0xFFD1FAE5),
-            backgroundImage: widget.avatarUrl != null
-                ? NetworkImage(widget.avatarUrl!)
-                : null,
-            child: widget.avatarUrl == null
-                ? Text(initials,
-                    style: const TextStyle(
-                        color: _greenDark,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 17))
-                : null,
+            foregroundColor: _greenDark,
+            fontSize: 17,
           ),
           const SizedBox(width: 14),
           Expanded(

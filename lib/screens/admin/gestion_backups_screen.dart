@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 class BackupLog {
   final String id;
@@ -19,44 +18,6 @@ class BackupLog {
   });
 }
 
-final List<BackupLog> _mockBackups = [
-  BackupLog(
-    id: '1',
-    date: DateTime.now().subtract(const Duration(hours: 2)),
-    filename: 'backup_2026-06-04_060000.sql.gz',
-    description: 'Backup completo de base de datos',
-    status: 'completado',
-  ),
-  BackupLog(
-    id: '2',
-    date: DateTime.now().subtract(const Duration(days: 1)),
-    filename: 'backup_2026-06-03_060000.sql.gz',
-    description: 'Backup completo de base de datos',
-    status: 'completado',
-  ),
-  BackupLog(
-    id: '3',
-    date: DateTime.now().subtract(const Duration(days: 2)),
-    filename: 'backup_2026-06-02_060000.sql.gz',
-    description: 'Backup completo de base de datos',
-    status: 'completado',
-  ),
-  BackupLog(
-    id: '4',
-    date: DateTime.now().subtract(const Duration(days: 3)),
-    filename: 'backup_2026-06-01_060000.sql.gz',
-    description: 'Backup completo de base de datos',
-    status: 'fallido',
-  ),
-  BackupLog(
-    id: '5',
-    date: DateTime.now().subtract(const Duration(days: 4)),
-    filename: 'backup_2026-05-31_060000.sql.gz',
-    description: 'Backup completo de base de datos',
-    status: 'completado',
-  ),
-];
-
 class BackupsScreen extends StatefulWidget {
   const BackupsScreen({super.key});
 
@@ -68,11 +29,7 @@ class _BackupsScreenState extends State<BackupsScreen> {
   bool _loading = true;
   bool _running = false;
   List<BackupLog> _backups = [];
-
-  Map<String, String> get _authHeaders => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ${ApiClient.instance.token}',
-  };
+  String? _error;
 
   @override
   void initState() {
@@ -83,58 +40,51 @@ class _BackupsScreenState extends State<BackupsScreen> {
   Future<void> _fetchBackups() async {
     setState(() => _loading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/backups'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        setState(() {
-          _backups = data.map((e) => _parseBackupLog(e)).toList();
-          _loading = false;
-        });
-      } else {
-        _useFallback();
-      }
-    } catch (_) {
-      _useFallback();
+      final data = await HttpClient.getList('/api/admin/backups', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _backups = adminMapList(data).map(_parseBackupLog).toList();
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
+        _loading = false;
+      });
     }
   }
 
-  void _useFallback() {
-    setState(() {
-      _backups = List.from(_mockBackups);
-      _loading = false;
-    });
-  }
-
+  /// Backend: {id, fecha, estado: exitoso|fallido, archivo, driveId, errorMensaje, createdAt}
   BackupLog _parseBackupLog(Map<String, dynamic> json) {
+    final fecha = (json['fecha'] ?? json['createdAt'])?.toString();
     return BackupLog(
       id: json['id']?.toString() ?? '',
-      date: json['date'] != null
-          ? DateTime.tryParse(json['date'] as String) ?? DateTime.now()
-          : DateTime.now(),
-      filename: json['filename'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      status: json['status'] as String? ?? 'completado',
+      date: (fecha != null ? DateTime.tryParse(fecha)?.toLocal() : null) ?? DateTime.now(),
+      filename: json['archivo']?.toString() ?? '',
+      description: json['errorMensaje']?.toString() ??
+          (json['driveId'] != null ? 'Subido a Drive (${json['driveId']})' : ''),
+      status: json['estado']?.toString() ?? 'exitoso',
     );
   }
 
   Future<void> _runManualBackup() async {
     setState(() => _running = true);
     try {
-      await http.post(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/backups/run'),
-        headers: _authHeaders,
-        body: '{}',
-      );
-    } catch (_) {}
+      final res = await HttpClient.post('/api/admin/backups/run', body: const {}, auth: true);
+      adminSnack(this, res['message']?.toString() ?? 'Respaldo manual completado');
+    } catch (e) {
+      adminSnack(this, adminErrorText(e), error: true);
+    }
+    if (!mounted) return;
     setState(() => _running = false);
     await _fetchBackups();
   }
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
+      case 'exitoso':
       case 'completado':
         return const Color(0xFF34C759);
       case 'fallido':
@@ -150,6 +100,7 @@ class _BackupsScreenState extends State<BackupsScreen> {
 
   IconData _statusIcon(String status) {
     switch (status.toLowerCase()) {
+      case 'exitoso':
       case 'completado':
         return Icons.check_circle_rounded;
       case 'fallido':
@@ -201,15 +152,28 @@ class _BackupsScreenState extends State<BackupsScreen> {
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(
                 onRefresh: _fetchBackups,
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                  itemCount: _backups.length,
-                  itemBuilder: (_, i) => _BackupCard(
-                    backup: _backups[i],
-                    statusColor: _statusColor(_backups[i].status),
-                    statusIcon: _statusIcon(_backups[i].status),
-                  ),
-                ),
+                child: _backups.isEmpty
+                    ? ListView(
+                        padding: const EdgeInsets.all(32),
+                        children: [
+                          Center(
+                            child: Text(
+                              _error ?? 'Sin respaldos registrados',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: _error != null ? Colors.red : Colors.black54),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                        itemCount: _backups.length,
+                        itemBuilder: (_, i) => _BackupCard(
+                          backup: _backups[i],
+                          statusColor: _statusColor(_backups[i].status),
+                          statusIcon: _statusIcon(_backups[i].status),
+                        ),
+                      ),
               ),
       ),
     );

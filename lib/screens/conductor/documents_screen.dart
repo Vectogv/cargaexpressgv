@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
+import '../../widgets/media_image.dart';
 import '../../services/socket_service_client.dart';
 
 class DocumentsScreen extends StatefulWidget {
@@ -100,9 +102,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final picker = ImagePicker();
 
     while (true) {
-      final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
+      );
       if (picked == null) return;
       final bytes = await picked.readAsBytes();
+      if (!mounted) return;
+      // image_picker la recomprime a JPEG → extensión .jpg.
+      final filename = '${docType}_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
       final confirmed = await showDialog<bool>(
         context: context,
@@ -115,7 +125,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.memory(bytes, height: 200, width: double.infinity, fit: BoxFit.cover),
+                child: Image.memory(bytes, height: 200, width: double.infinity, fit: BoxFit.cover, cacheHeight: 600),
               ),
             ],
           ),
@@ -134,34 +144,34 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       );
 
       if (confirmed == true) {
+        if (!mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
         setState(() => _uploadingDoc = docType);
         try {
           switch (docType) {
             case 'cedula':
-              await ApiClient.instance.uploadDocumentCedula(bytes, picked.name);
+              await ApiClient.instance.uploadDocumentCedula(bytes, filename);
               break;
             case 'licencia':
-              await ApiClient.instance.uploadDocumentLicencia(bytes, picked.name);
+              await ApiClient.instance.uploadDocumentLicencia(bytes, filename);
               break;
             case 'foto_vehiculo':
-              await ApiClient.instance.uploadDocumentVehiculo(bytes, picked.name);
+              await ApiClient.instance.uploadDocumentVehiculo(bytes, filename);
               break;
             case 'foto_conductor':
-              await ApiClient.instance.uploadDocumentDriverPhoto(bytes, picked.name);
+              await ApiClient.instance.uploadDocumentDriverPhoto(bytes, filename);
               break;
           }
           await _loadStatus();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Documento subido correctamente')),
-            );
-          }
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Documento subido correctamente')),
+          );
+        } on ApiException catch (e) {
+          messenger.showSnackBar(SnackBar(content: Text(e.message)));
         } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
-            );
-          }
+          messenger.showSnackBar(
+            SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')),
+          );
         } finally {
           if (mounted) setState(() => _uploadingDoc = null);
         }
@@ -193,18 +203,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  '${ApiClient.baseUrl}$url',
+                // URL firmada (caduca en 1 h): se resuelve con resolveMediaUrl y
+                // _loadStatus() la renueva al volver a cargar el perfil.
+                child: MediaImage(
+                  path: url,
                   height: 300,
                   width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                  placeholder: Container(
                     height: 300,
                     color: const Color(0xFFF2F2F7),
                     child: const Center(child: Text('Imagen no disponible', style: TextStyle(color: Colors.black45))),
-                  ),
-                  loadingBuilder: (_, child, progress) => progress == null ? child : const Center(
-                    child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
                 ),
               ),
@@ -350,12 +358,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     onTap: () => _showDocumentPreview(doc.type),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        '${ApiClient.baseUrl}${_fotoUrl(doc.type)}',
+                      child: MediaImage(
+                        path: _fotoUrl(doc.type),
                         height: 56,
                         width: 80,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                        placeholder: Container(
                           height: 56,
                           width: 80,
                           color: const Color(0xFFF2F2F7),

@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../contracts/socket_events.dart';
 import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
 import '../../models/user.dart';
@@ -31,6 +32,7 @@ import 'entrega_confirmada_screen.dart';
 import 'resumen_viaje_screen.dart';
 import 'calificar_cliente_screen.dart';
 import 'sos_alert_screen.dart';
+import '../shared/action_key.dart';
 import '../shared/dispute_screen.dart';
 import 'disputa_iniciada_wrapper.dart';
 
@@ -54,7 +56,29 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   double? _currentLat;
   double? _currentLng;
   double? _currentSpeed;
-  int _elapsedSeconds = 0;
+  // El cronómetro vive en un ValueNotifier: sólo el texto del tiempo se
+  // reconstruye cada segundo (antes setState() reconstruía toda la pantalla,
+  // FlutterMap incluido, 1 vez por segundo).
+  final ValueNotifier<int> _elapsed = ValueNotifier<int>(0);
+  int get _elapsedSeconds => _elapsed.value;
+  set _elapsedSeconds(int v) => _elapsed.value = v;
+  // Throttle de reconstrucciones por GPS (máx. 1 por segundo).
+  DateTime _lastGpsRebuild = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _gpsRebuildTimer;
+  bool _gpsStarting = false;
+  bool _closeNavigated = false;
+  String? _photoError;
+  // Idempotencia: una clave por acción de cierre (reutilizada en reintentos).
+  final ActionKey _completeKey = ActionKey();
+  final ActionKey _finalizeKey = ActionKey();
+  // Opciones del mapa y capa de tiles creadas una sola vez (no en cada build).
+  MapOptions? _mapOptions;
+  late final TileLayer _tileLayer = TileLayer(
+    urlTemplate: MapConfig.tileUrl,
+    userAgentPackageName: 'com.cargaexpress.app',
+    maxZoom: 22,
+  );
+  List<Polyline> _routePolylines = const [];
   String? _deliveryPhotoUrl;
   Timer? _elapsedTimer;
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
@@ -138,7 +162,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _closeRejectedSub?.cancel();
     _driverStopGpsSub?.cancel();
     _tripStateTimer?.cancel();
+    _gpsRebuildTimer?.cancel();
     _cancelCountdown();
+    _elapsed.dispose();
     super.dispose();
   }
 
@@ -173,8 +199,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final points = await RouteService.getRoute(LatLng(origen.lat, origen.lng), LatLng(destino.lat, destino.lng));
     if (mounted) {
       setState(() {
-      _routePoints = points;
-    });
+        _routePoints = points;
+        _routePolylines = points.isEmpty
+            ? const []
+            : [
+                Polyline(points: points, color: Colors.black.withValues(alpha: 0.2), strokeWidth: 8),
+                Polyline(points: points, color: const Color(0xFF2563EB), strokeWidth: 5),
+              ];
+      });
     }
   }
 
@@ -296,12 +328,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           try {
             if (!mounted) return;
             _posErrors = 0;
+            if (pos.latitude == _currentLat && pos.longitude == _currentLng && pos.speed == _currentSpeed) return;
             CacheService.instance.cacheDriverPosition(pos.latitude, pos.longitude);
-            setState(() {
-              _currentLat = pos.latitude;
-              _currentLng = pos.longitude;
-              _currentSpeed = pos.speed;
-            });
+            // Los campos se actualizan siempre (_sendLocation los lee), pero la
+            // UI se reconstruye como mucho 1 vez por segundo.
+            _currentLat = pos.latitude;
+            _currentLng = pos.longitude;
+            _currentSpeed = pos.speed;
+            _scheduleGpsRebuild();
           } catch (e) {
             LoggerService.instance.error('trip_in_progress: GPS data handler error', e);
           }
@@ -326,11 +360,65 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
+  void _scheduleGpsRebuild() {
+    if (!mounted) return;
+    final since = DateTime.now().difference(_lastGpsRebuild);
+    const minGap = Duration(seconds: 1);
+    if (since >= minGap) {
+      _lastGpsRebuild = DateTime.now();
+      setState(() {});
+      return;
+    }
+    _gpsRebuildTimer ??= Timer(minGap - since, () {
+      _gpsRebuildTimer = null;
+      if (!mounted) return;
+      _lastGpsRebuild = DateTime.now();
+      setState(() {});
+    });
+  }
+
+  Trip _tripWith(Trip t, {String? estado, num? precioFinal}) {
+    final json = t.toJson();
+    if (estado != null) json['estado'] = estado;
+    if (precioFinal != null) json['precioFinal'] = precioFinal;
+    return Trip.fromJson(json);
+  }
+
+  static const _estadosSeguidos = {
+    TripStatus.aceptado,
+    TripStatus.enCamino,
+    TripStatus.llegada,
+    TripStatus.enCurso,
+    TripStatus.entregado,
+    TripStatus.esperaConfirmacion,
+    TripStatus.pendienteConfirmacion,
+  };
+
+  /// `trip:status_changed` del backend: fuente de verdad del estado del viaje.
+  void _onTripStatusChanged(Map<String, dynamic> event) {
+    final t = _trip;
+    final estado = event['estado'] as String?;
+    if (!mounted || t == null || estado == null) return;
+    final id = (event['id'] ?? event['viajeId'] ?? event['tripId'])?.toString();
+    if (id != null && id != t.id.toString()) return;
+    if (estado == t.estado) return;
+    if (estado == TripStatus.finalizado) {
+      // El cliente confirmó el cierre (o se cerró por timeout del backend).
+      _trip = _tripWith(t, estado: estado, precioFinal: event['montoFinal'] as num?);
+      _goToEntregaConfirmada(_trip!);
+    } else if (_estadosSeguidos.contains(estado)) {
+      setState(() => _trip = _tripWith(t, estado: estado));
+      _cacheTripState();
+    }
+  }
+
   void _onSocketEvent(Map<String, dynamic> event) {
     try {
       final tipo = event['__event'] as String?;
       if (tipo == 'driver:stop_gps') {
         _stopGpsTimer();
+      } else if (tipo == SocketEvents.tripStatusChanged) {
+        _onTripStatusChanged(event);
       } else if (tipo == 'trip:cancelled') {
         if (mounted) {
           _snack('El viaje ha sido cancelado');
@@ -403,18 +491,31 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     });
   }
 
+  /// Devuelve la ruta subida, o null si el usuario canceló o falló la subida
+  /// (en ese caso deja el motivo en [_photoError] y lo muestra).
   Future<String?> _takeDeliveryPhoto() async {
+    _photoError = null;
     try {
       final picker = ImagePicker();
-      final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+      final file = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
+      );
       if (file == null) return null;
       final bytes = await file.readAsBytes();
       final url = await TripService.deliveryPhoto(_trip!.id, bytes, 'delivery_${DateTime.now().millisecondsSinceEpoch}.jpg');
       return url;
+    } on ApiException catch (e) {
+      LoggerService.instance.error('Error uploading delivery photo', e);
+      _photoError = e.message;
     } catch (e) {
       LoggerService.instance.error('Error taking delivery photo', e);
-      return null;
+      _photoError = 'No se pudo subir la foto: ${e.toString().replaceFirst("Exception: ", "")}';
     }
+    if (mounted && _photoError != null) _snack(_photoError!);
+    return null;
   }
 
   // El backend exige llegar a 'esperando_confirmacion' ANTES de finalizar:
@@ -427,51 +528,66 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (t == null) return true;
     if (t.estado != TripStatus.enCurso && t.estado != TripStatus.entregado) return true;
     final montoFinal = montoFinalOverride ?? t.precioFinal ?? t.precioEstimado;
+    if (montoFinal == null) {
+      // El backend exige montoFinal (422 sin él).
+      if (mounted) _snack('Debes indicar el monto final del viaje para cerrarlo.');
+      return false;
+    }
     try {
-      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion));
-      final json = t.toJson();
-      json['precioFinal'] = montoFinal;
-      json['estado'] = TripStatus.esperaConfirmacion;
-      _trip = Trip.fromJson(json);
+      final key = _completeKey.keyFor('${t.id}|$montoFinal|$justificacion');
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion, idempotencyKey: key));
+      _completeKey.settle();
+      // El backend deja el viaje en 'pendiente_confirmacion' hasta que el
+      // cliente confirme (no está finalizado todavía).
+      _trip = _tripWith(t, estado: TripStatus.pendienteConfirmacion, precioFinal: montoFinal);
+      _cacheTripState();
       return true;
     } on ApiException catch (e) {
+      _completeKey.settle(e);
       LoggerService.instance.error('trip_in_progress: completeTrip error', e);
       if (e.code == 'JUSTIFICACION_REQUERIDA') {
         if (mounted) _snack('Justificaci\u00f3n requerida (m\u00ednimo 10 caracteres). Distancia: ${e.message}');
       } else if (e.code == 'FUERA_DE_RANGO_ORIGEN') {
         if (mounted) _snack('Fuera de rango del origen. Distancia: ${e.message}');
       } else {
-        if (mounted) _snack('Error al completar la entrega: ${e.toString().replaceFirst("Exception: ", "")}');
+        if (mounted) _snack(e.message);
       }
       return false;
     } catch (e) {
+      _completeKey.settle(e);
       LoggerService.instance.error('trip_in_progress: completeTrip error', e);
       if (mounted) _snack('Error al completar la entrega: ${e.toString().replaceFirst("Exception: ", "")}');
       return false;
     }
   }
 
+  /// Pide el monto final. Si el viaje no tiene precio conocido el monto es
+  /// obligatorio: devuelve null si el conductor cancela.
   Future<num?> _promptMontoFinal() async {
     final t = _trip;
     if (t == null) return null;
     final current = t.precioFinal ?? t.precioEstimado;
-    if (current == null) return null;
-    final ctrl = TextEditingController(text: current.toStringAsFixed(0));
+    final ctrl = TextEditingController(text: current?.toStringAsFixed(0) ?? '');
     final value = await showDialog<num>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Monto final'),
         content: TextField(
           controller: ctrl,
+          autofocus: current == null,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Monto final (\$)',
             hintText: 'Monto a cobrar al cliente',
-            border: OutlineInputBorder(),
+            helperText: current == null ? 'Obligatorio para cerrar el viaje' : null,
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, current), child: const Text('Mantener actual')),
+          if (current != null)
+            TextButton(onPressed: () => Navigator.pop(ctx, current), child: const Text('Mantener actual'))
+          else
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () {
               final v = num.tryParse(ctrl.text.trim().replaceAll(',', ''));
@@ -511,12 +627,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     if (confirm == true) {
       _deliveryPhotoUrl = await _takeDeliveryPhoto();
-      if (_deliveryPhotoUrl == null && mounted) {
+      if (_deliveryPhotoUrl == null && _photoError != null && mounted) {
         final retry = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Error al tomar la foto'),
-            content: const Text('No se pudo subir la foto de evidencia. ¿Quieres intentarlo de nuevo?'),
+            title: const Text('Error al subir la foto'),
+            content: Text('$_photoError\n\n¿Quieres intentarlo de nuevo?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -541,16 +657,24 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     // solicitar la confirmación/finalización al cliente.
     final montoFinal = await _promptMontoFinal();
     if (!mounted) return;
+    if (montoFinal == null) {
+      _snack('Debes indicar el monto final del viaje para cerrarlo.');
+      setState(() => _actionLoading = false);
+      return;
+    }
 
     // Pedir justificación para el cierre (antifraude)
     String? justificacion;
     bool needsJustificacion = true;
-    while (needsJustificacion && mounted) {
+    while (needsJustificacion) {
+      if (!mounted) return;
+      // Fuera del builder: si se declara dentro, cada setDialogState() la
+      // reinicia a null y el botón "Continuar" nunca se habilita.
+      String? localJustificacion;
       final result = await showDialog<String>(
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) {
-            String? localJustificacion;
             return AlertDialog(
               title: const Text('Justificación de cierre'),
               content: Column(
@@ -621,44 +745,46 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       if (_deliveryPhotoUrl != null) 'foto': _deliveryPhotoUrl,
     });
 
-    int timeoutSec = 30;
     if (!mounted) return;
     setState(() => _actionLoading = true);
 
+    // Antes: el Timer hacía setState() de TODA la pantalla cada segundo y el
+    // texto del diálogo (otra ruta) ni siquiera se refrescaba. Ahora sólo el
+    // contador del diálogo escucha este ValueNotifier.
+    final countdown = ValueNotifier<int>(30);
+    _cancelCountdown();
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        _cancelCountdown();
-        _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          timeoutSec--;
-          if (timeoutSec <= 0) {
+        _countdownTimer ??= Timer.periodic(const Duration(seconds: 1), (timer) {
+          countdown.value--;
+          if (countdown.value <= 0) {
             timer.cancel();
             _countdownTimer = null;
-            Navigator.pop(ctx);
+            if (ctx.mounted) Navigator.pop(ctx);
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                _snack('El cliente no respondi\u00f3. Finalizando viaje.');
+                _snack('El cliente a\u00fan no responde. El viaje queda pendiente de su confirmaci\u00f3n.');
                 _finalizeTrip();
               }
             });
-          } else {
-            if (mounted) setState(() {});
           }
         });
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
+        return AlertDialog(
               title: const Text('Esperando confirmaci\u00f3n'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text('Solicitando confirmaci\u00f3n al cliente...'),
                   const SizedBox(height: 16),
-                  Text('Tiempo restante: $timeoutSec s',
-                    style: TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.w700,
-                      color: timeoutSec < 10 ? Colors.red : _primaryDark,
+                  ValueListenableBuilder<int>(
+                    valueListenable: countdown,
+                    builder: (_, timeoutSec, _) => Text('Tiempo restante: $timeoutSec s',
+                      style: TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.w700,
+                        color: timeoutSec < 10 ? Colors.red : _primaryDark,
+                      ),
                     ),
                   ),
                 ],
@@ -679,10 +805,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                 ),
               ],
             );
-          },
-        );
       },
     );
+    _cancelCountdown();
+    countdown.dispose();
     if (mounted) setState(() => _actionLoading = false);
   }
 
@@ -703,17 +829,24 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _startGpsTimer() async {
-    if (_locationTimer != null) return;
-
-    final granted = await _requestLocationPermission();
-    if (!granted) return;
+    // Evitar timers duplicados si se llama dos veces mientras se pide permiso.
+    if (_locationTimer != null || _gpsStarting) return;
+    _gpsStarting = true;
+    final bool granted;
+    try {
+      granted = await _requestLocationPermission();
+    } finally {
+      _gpsStarting = false;
+    }
+    if (!granted || !mounted || _locationTimer != null) return;
 
     DriverLocationService.instance.pause(); // evitar triple GPS
 
     _locationTimer = Timer.periodic(const Duration(seconds: 10), (_) => _sendLocation());
     _sendLocation();
+    _elapsedTimer?.cancel();
     _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _elapsedSeconds++);
+      if (mounted) _elapsed.value++;
     });
 
     _tripStateTimer?.cancel();
@@ -729,7 +862,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             final newEstado = fresh.estado;
             if (oldEstado != null && newEstado != null && oldEstado != newEstado) {
               LoggerService.instance.info('TripInProgress: estado changed $oldEstado -> $newEstado');
-              setState(() { _trip = fresh; });
+              if (newEstado == TripStatus.finalizado) {
+                _trip = fresh;
+                _goToEntregaConfirmada(fresh);
+              } else {
+                setState(() { _trip = fresh; });
+              }
             }
           }
         } catch (_) {}
@@ -741,6 +879,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _locationTimer?.cancel();
     _locationTimer = null;
     _elapsedTimer?.cancel();
+    _elapsedTimer = null;
   }
 
   Future<bool> _requestLocationPermission() async {
@@ -858,65 +997,114 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
+  /// Solicita el cierre al backend y sigue el estado REAL que éste devuelve.
+  /// El backend deja el viaje en 'pendiente_confirmacion' hasta que el cliente
+  /// confirme; sólo con 'finalizado' (respuesta o socket) se muestra el resumen.
   Future<void> _finalizeTrip() async {
     if (_trip == null || _isFinalizing) return;
     _isFinalizing = true;
     setState(() => _actionLoading = true);
     try {
-      final t = _trip!;
-      final montoFinal = t.precioFinal ?? t.precioEstimado;
-      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.finalizeTrip(t.id, montoFinal: montoFinal));
-      final json = t.toJson();
-      json['estado'] = TripStatus.finalizado;
-      _trip = Trip.fromJson(json);
-      _stopGpsTimer();
+      var t = _trip!;
+      var estado = t.estado;
+      if (estado == TripStatus.enCurso || estado == TripStatus.entregado) {
+        num? montoFinal = t.precioFinal ?? t.precioEstimado;
+        montoFinal ??= await _promptMontoFinal();
+        if (!mounted) return;
+        if (montoFinal == null) {
+          _snack('Debes indicar el monto final del viaje para cerrarlo.');
+          return;
+        }
+        final monto = montoFinal;
+        final key = _finalizeKey.keyFor('${t.id}|$monto');
+        try {
+          await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.finalizeTrip(t.id, montoFinal: monto, idempotencyKey: key));
+          _finalizeKey.settle();
+        } catch (e) {
+          _finalizeKey.settle(e);
+          rethrow;
+        }
+        estado = TripStatus.pendienteConfirmacion;
+        t = _tripWith(t, estado: estado, precioFinal: monto);
+      }
+      // Estado real según el backend (puede que el cliente ya haya confirmado).
+      try {
+        final fresh = await ApiClient.instance.getTripDetail(t.id);
+        final e = fresh['estado'] as String?;
+        if (e != null) estado = e;
+      } catch (e) {
+        // Nos quedamos con el último estado conocido; el socket lo corregirá.
+        LoggerService.instance.error('trip_in_progress: getTripDetail tras cierre', e);
+      }
+      t = _tripWith(t, estado: estado);
+      _trip = t;
+      _cacheTripState();
       if (!mounted) return;
-
-      final precio = t.precioFinal ?? t.precioEstimado ?? 0;
-      final pctComision = t.toJson()['porcentajeComision'] as num? ?? 10;
-      final precioStr = '\$${precio.toStringAsFixed(0)}';
-      final comisionVal = precio * (pctComision / 100);
-      final comisionStr = '- \$${comisionVal.toStringAsFixed(0)}';
-      final totalStr = '\$${(precio - comisionVal).toStringAsFixed(0)}';
-      final cliente = t.cliente;
-      final nombreCliente = cliente?.nombre ?? '';
-      final rating = cliente?.calificacion ?? 4.0;
-      final origenText = t.origen?.direccion ?? '';
-      final destinoText = t.destino?.direccion ?? '';
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EntregaConfirmadaScreen(
-            nombreCliente: nombreCliente,
-            ratingCliente: rating,
-            precioAcordado: precioStr,
-            comision: comisionStr,
-            porcentajeComision: '${pctComision.toInt()}%',
-            gananciaTotal: totalStr,
-            onVerResumen: () => _pushResumenViaje(
-              t, precioStr, comisionStr, '${pctComision.toInt()}%', totalStr, origenText, destinoText,
-            ),
-            onVolverInicio: () => _pushCalificarCliente(nombreCliente, rating),
-          ),
-        ),
-        (route) => false,
-      );
+      if (estado == TripStatus.finalizado) {
+        _goToEntregaConfirmada(t);
+      } else {
+        setState(() {});
+        _snack('Esperando que el cliente confirme la entrega.');
+      }
+    } on ApiException catch (e) {
+      if (mounted) _snack(e.message);
     } catch (e) {
-      _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+      if (mounted) _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
       if (mounted) setState(() => _actionLoading = false);
       _isFinalizing = false;
     }
   }
 
+  void _goToEntregaConfirmada(Trip t) {
+    if (_closeNavigated || !mounted) return;
+    _closeNavigated = true;
+    _stopGpsTimer();
+    _cancelCountdown();
+    CacheService.instance.clearActiveTrip();
+
+    final precio = t.precioFinal ?? t.precioEstimado ?? 0;
+    final pctComision = t.toJson()['porcentajeComision'] as num? ?? 10;
+    final precioStr = '\$${precio.toStringAsFixed(0)}';
+    final comisionVal = precio * (pctComision / 100);
+    final comisionStr = '- \$${comisionVal.toStringAsFixed(0)}';
+    final totalStr = '\$${(precio - comisionVal).toStringAsFixed(0)}';
+    final cliente = t.cliente;
+    final nombreCliente = cliente?.nombre ?? '';
+    final rating = cliente?.calificacion ?? 4.0;
+    final origenText = t.origen?.direccion ?? '';
+    final destinoText = t.destino?.direccion ?? '';
+    final duracion = _formatElapsed();
+    // Esta pantalla se elimina con pushAndRemoveUntil: los callbacks deben usar
+    // el NavigatorState (vivo) y no el `context` de este State ya desmontado.
+    final nav = Navigator.of(context);
+
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => EntregaConfirmadaScreen(
+          nombreCliente: nombreCliente,
+          ratingCliente: rating,
+          precioAcordado: precioStr,
+          comision: comisionStr,
+          porcentajeComision: '${pctComision.toInt()}%',
+          gananciaTotal: totalStr,
+          onVerResumen: () => _pushResumenViaje(
+            nav, t, precioStr, comisionStr, '${pctComision.toInt()}%', totalStr, origenText, destinoText, duracion,
+          ),
+          onVolverInicio: () => _pushCalificarCliente(nav, t.id, nombreCliente, rating),
+        ),
+      ),
+      (route) => false,
+    );
+  }
+
   void _pushResumenViaje(
+    NavigatorState nav,
     Trip t,
     String precioStr, String comisionStr, String pctComision, String totalStr,
-    String origenText, String destinoText,
+    String origenText, String destinoText, String duracion,
   ) {
-    Navigator.push(
-      context,
+    nav.push(
       MaterialPageRoute(
         builder: (_) => ResumenViajeScreen(
           data: ResumenViajeData(
@@ -930,7 +1118,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               t.destino?.lat ?? 0,
               t.destino?.lng ?? 0,
             ).toStringAsFixed(1)} km (aprox.)',
-            duracionTotal: _formatElapsed(),
+            duracionTotal: duracion,
             precioAcordado: precioStr,
             comision: comisionStr,
             porcentajeComision: pctComision,
@@ -942,19 +1130,23 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  void _pushCalificarCliente(String nombreCliente, double rating) {
-    Navigator.push(
-      context,
+  void _pushCalificarCliente(NavigatorState nav, dynamic tripId, String nombreCliente, double rating) {
+    nav.push(
       MaterialPageRoute(
-        builder: (_) => CalificarClienteScreen(
+        builder: (ctx) => CalificarClienteScreen(
           nombreCliente: nombreCliente,
           ratingActual: rating,
           onEnviar: (estrellas, comentario) async {
+            final messenger = ScaffoldMessenger.maybeOf(ctx);
             try {
-              await ApiClient.instance.rateTrip(_trip?.id, estrellas, comentario: comentario);
-            } catch (_) {}
-            if (!context.mounted) return;
-            Navigator.popUntil(context, (route) => route.isFirst);
+              await ApiClient.instance.rateTrip(tripId, estrellas, comentario: comentario);
+            } on ApiException catch (e) {
+              messenger?.showSnackBar(SnackBar(content: Text(e.message)));
+            } catch (_) {
+              messenger?.showSnackBar(const SnackBar(content: Text('No se pudo enviar la calificaci\u00f3n.')));
+            }
+            if (!nav.mounted) return;
+            nav.popUntil((route) => route.isFirst);
           },
         ),
       ),
@@ -975,7 +1167,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   bool get _isTripActive {
     final e = _trip?.estado;
-    return e == TripStatus.aceptado || e == TripStatus.enCamino || e == TripStatus.llegada || e == TripStatus.enCurso || e == TripStatus.entregado || e == TripStatus.esperaConfirmacion;
+    return _estadosSeguidos.contains(e);
   }
 
   bool get _isNearDestination {
@@ -1037,6 +1229,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       case TripStatus.enCurso: label = 'En curso'; break;
       case TripStatus.entregado: label = 'Entregado'; break;
       case TripStatus.esperaConfirmacion: label = 'Esperando confirmación'; break;
+      case TripStatus.pendienteConfirmacion: label = 'Esperando confirmación'; break;
       case TripStatus.finalizado: label = 'Finalizado'; break;
       default: label = 'Viaje en curso';
     }
@@ -1124,12 +1317,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       onLlamar: () => _showClientPhone(t),
       onHeLlegado: _requestFinalization,
       onSubirFoto: () async {
+        // _takeDeliveryPhoto ya muestra el error del backend si falla.
         final url = await _takeDeliveryPhoto();
         if (url != null && mounted) {
           setState(() => _deliveryPhotoUrl = url);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Foto de evidencia subida correctamente')),
-          );
+          _snack('Foto de evidencia subida correctamente');
         }
       },
     );
@@ -1225,7 +1417,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               ),
             ],
           ]
-          else if (estado == TripStatus.esperaConfirmacion)
+          else if (estado == TripStatus.esperaConfirmacion || estado == TripStatus.pendienteConfirmacion)
             _actionButton('Confirmar finalización', _finalizeTrip, _primaryBlue),
         ]),
       ),
@@ -1257,32 +1449,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       children: [
         FlutterMap(
           mapController: _mapController,
-          options: MapOptions(
+          options: _mapOptions ??= MapOptions(
             initialCenter: LatLng(centerLat, centerLng),
             initialZoom: 13,
             onMapReady: _fitMapBounds,
           ),
           children: [
-            TileLayer(
-              urlTemplate: MapConfig.tileUrl,
-              userAgentPackageName: 'com.cargaexpress.app',
-              maxZoom: 22,
-            ),
+            _tileLayer,
             if (_routePoints.isNotEmpty)
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: _routePoints,
-                    color: Colors.black.withValues(alpha: 0.2),
-                    strokeWidth: 8,
-                  ),
-                  Polyline(
-                    points: _routePoints,
-                    color: const Color(0xFF2563EB),
-                    strokeWidth: 5,
-                  ),
-                ],
-              ),
+              PolylineLayer(polylines: _routePolylines),
             MarkerLayer(markers: markers),
             CurrentLocationLayer(
               alignPositionOnUpdate: AlignOnUpdate.always,
@@ -1340,7 +1515,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.timer_outlined, size: 14, color: _primaryBlue),
             const SizedBox(width: 4),
-            Text(_formatElapsed(), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: _primaryBlue)),
+            ValueListenableBuilder<int>(
+              valueListenable: _elapsed,
+              builder: (_, _, _) => Text(_formatElapsed(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: _primaryBlue)),
+            ),
           ]),
         ),
       ]),
@@ -1348,9 +1526,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Widget _buildStepper(String estado) {
-    final steps = ['Aceptado', 'En camino', 'Llegada', 'En curso', 'Entregado', 'Esperando conf.', 'Finalizado'];
-    final estados = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion, TripStatus.finalizado];
-    final current = estados.indexOf(estado);
+    const steps = ['Aceptado', 'En camino', 'Llegada', 'En curso', 'Entregado', 'Esperando conf.', 'Finalizado'];
+    const estados = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion, TripStatus.finalizado];
+    final current = estados.indexOf(estado == TripStatus.pendienteConfirmacion ? TripStatus.esperaConfirmacion : estado);
     if (current < 0) return const SizedBox.shrink();
     return Row(
       children: List.generate(steps.length * 2 - 1, (i) {
@@ -1575,14 +1753,22 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               const SizedBox(height: 16),
               const Text('Motivo de cancelaci\u00f3n:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
               const SizedBox(height: 8),
-              ...['Problema con el cliente', 'Veh\u00edculo no disponible', 'Emergencia', 'Otro'].map((m) => RadioListTile<String>(
-                title: Text(m, style: const TextStyle(fontSize: 14)),
-                value: m,
+              RadioGroup<String>(
                 groupValue: motivoSeleccionado,
                 onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              )),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final m in const ['Problema con el cliente', 'Veh\u00edculo no disponible', 'Emergencia', 'Otro'])
+                      RadioListTile<String>(
+                        title: Text(m, style: const TextStyle(fontSize: 14)),
+                        value: m,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                  ],
+                ),
+              ),
               if (motivoSeleccionado != null) ...[
                 const SizedBox(height: 8),
                 TextField(
@@ -1671,14 +1857,22 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                 const SizedBox(height: 16),
                 const Text('Motivo de la solicitud:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                 const SizedBox(height: 8),
-                ...['Problema con el cliente', 'Emergencia', 'Veh\u00edculo averiado', 'Otro'].map((m) => RadioListTile<String>(
-                  title: Text(m, style: const TextStyle(fontSize: 14)),
-                  value: m,
+                RadioGroup<String>(
                   groupValue: motivoSeleccionado,
                   onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                )),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final m in const ['Problema con el cliente', 'Emergencia', 'Veh\u00edculo averiado', 'Otro'])
+                        RadioListTile<String>(
+                          title: Text(m, style: const TextStyle(fontSize: 14)),
+                          value: m,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                    ],
+                  ),
+                ),
                 if (motivoSeleccionado != null) ...[
                   const SizedBox(height: 8),
                   TextField(

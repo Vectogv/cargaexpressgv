@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'coverage_service.dart';
 import 'http_client.dart';
 
 class ProfileService {
@@ -62,6 +63,9 @@ class ProfileService {
   static Future<Map<String, dynamic>> getEmergencyNumbers() async {
     return HttpClient.get('/api/support/emergency', auth: true);
   }
+
+  /// Zonas de cobertura (ver [CoverageService] e [isInsideCoverage]).
+  static Future<List<Map<String, dynamic>>> getCoverage() => CoverageService.getCoverage();
 
   static Future<String> fetchMapboxToken() async {
     final data = await HttpClient.get('/api/config/mapbox', auth: true);

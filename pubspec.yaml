@@ -19,7 +19,7 @@ dependencies:
 
   # HTTP / API
   http: ^1.6.0
-  dio: ^5.7.0
+  http_parser: ^4.1.2
 
   # Almacenamiento
   shared_preferences: ^2.5.3
@@ -67,7 +67,6 @@ dev_dependencies:
 
   json_serializable: ^6.9.4
   build_runner: ^2.4.14
-  mockito: ^5.4.4
 
 flutter:
   uses-material-design: true

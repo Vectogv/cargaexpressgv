@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'dart:math';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
+
+/// Montos: el backend puede serializar decimales como texto.
+num _num(dynamic v) => v is num ? v : num.tryParse('${v ?? ''}') ?? 0;
+
+String _fmtDate(dynamic iso) {
+  final dt = DateTime.tryParse(iso?.toString() ?? '')?.toLocal();
+  if (dt == null) return '';
+  return '${dt.day}/${dt.month}/${dt.year}';
+}
 
 class PagosFinanzasScreen extends StatefulWidget {
   const PagosFinanzasScreen({super.key});
@@ -16,7 +24,11 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
   late TabController _tabCtrl;
   bool _loading = true;
   bool _hasError = false;
+  String? _errorMsg;
+  /// Resumen calculado a partir de GET /api/admin/earnings (lista de
+  /// ganancias {monto, conductor{nombre,apellido,placa}, createdAt}).
   Map<String, dynamic> _data = {};
+  List<Map<String, dynamic>> _earnings = [];
   List<Map<String, dynamic>> _commissions = [];
   List<Map<String, dynamic>> _pendingPayments = [];
   late AnimationController _animCtrl;
@@ -25,18 +37,12 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
 
   final List<String> _periodos = ['Semana', 'Mes', 'Trimestre', 'Año'];
 
-  Map<String, String> get _authHeaders => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ${ApiClient.instance.token}',
-  };
-
   @override
   void initState() {
     super.initState();
+    // Sin listener de pestaña: TabBarView gestiona su propio estado y un
+    // setState por cambio de pestaña reconstruía toda la pantalla.
     _tabCtrl = TabController(length: 3, vsync: this);
-    _tabCtrl.addListener(() {
-      if (!_tabCtrl.indexIsChanging) setState(() {});
-    });
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -56,87 +62,147 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
     setState(() {
       _loading = true;
       _hasError = false;
+      _errorMsg = null;
     });
     await Future.wait([
       _fetchEarnings(),
       _fetchCommissions(),
       _fetchPendingPayments(),
     ]);
+    if (!mounted) return;
     _animCtrl.forward(from: 0);
-    if (mounted) setState(() => _loading = false);
+    setState(() => _loading = false);
+  }
+
+  void _fail(Object e) {
+    _hasError = true;
+    _errorMsg ??= adminErrorText(e);
   }
 
   Future<void> _fetchEarnings() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/earnings'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        _data = jsonDecode(res.body);
-        return;
-      }
-    } catch (_) {}
-    _hasError = true;
-    _data = {};
+      final data = await HttpClient.getList('/api/admin/earnings?limit=100', auth: true);
+      _earnings = adminMapList(data);
+      _data = _buildSummary();
+    } catch (e) {
+      _fail(e);
+      _earnings = [];
+      _data = {};
+    }
   }
 
   Future<void> _fetchCommissions() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/commissions'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body);
-        _commissions = List<Map<String, dynamic>>.from(
-          body is List ? body : body['data'] ?? body['commissions'] ?? [],
-        );
-        return;
+      final data = await HttpClient.getList('/api/admin/commissions', auth: true);
+      if (!mounted) return;
+      // setState: también se usa como onRefresh de la pestaña.
+      setState(() {
+        _commissions = adminMapList(data);
+        _data = _buildSummary();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (_loading) {
+        _fail(e);
+      } else {
+        _showCommissionError(adminErrorText(e));
       }
-    } catch (_) {}
-    _hasError = true;
-    _commissions = [];
+    }
   }
 
   Future<void> _fetchPendingPayments() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/payments/pending'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body);
-        _pendingPayments = List<Map<String, dynamic>>.from(
-          body is List ? body : body['data'] ?? body['payments'] ?? [],
-        );
-        return;
+      final data = await HttpClient.getList('/api/admin/payments/pending', auth: true);
+      if (!mounted) return;
+      setState(() => _pendingPayments = adminMapList(data));
+    } catch (e) {
+      if (!mounted) return;
+      if (_loading) {
+        _fail(e);
+      } else {
+        _showCommissionError(adminErrorText(e));
       }
-    } catch (_) {}
-    _hasError = true;
-    _pendingPayments = [];
+    }
+  }
+
+  static const _periodoDias = {'Semana': 7, 'Mes': 30, 'Trimestre': 90, 'Año': 365};
+
+  /// Resumen del periodo activo: total, variación contra el periodo anterior,
+  /// serie para la gráfica (6 tramos) y los conductores con más ingresos.
+  Map<String, dynamic> _buildSummary() {
+    final dias = _periodoDias[_periodoActivo] ?? 30;
+    final now = DateTime.now();
+    final desde = now.subtract(Duration(days: dias));
+    final previo = desde.subtract(Duration(days: dias));
+    const tramos = 6;
+    final serie = List<double>.filled(tramos, 0);
+    double total = 0, totalPrevio = 0;
+    int transacciones = 0;
+    final porConductor = <String, Map<String, dynamic>>{};
+
+    for (final g in _earnings) {
+      final fecha = DateTime.tryParse(g['createdAt']?.toString() ?? '')?.toLocal();
+      if (fecha == null) continue;
+      final monto = _num(g['monto']).toDouble();
+      if (fecha.isBefore(desde)) {
+        if (!fecha.isBefore(previo)) totalPrevio += monto;
+        continue;
+      }
+      total += monto;
+      transacciones++;
+      final idx = ((fecha.difference(desde).inMinutes / (dias * 24 * 60)) * tramos)
+          .floor()
+          .clamp(0, tramos - 1);
+      serie[idx] += monto;
+      final c = g['conductor'] is Map ? g['conductor'] as Map : const {};
+      final key = g['conductorId']?.toString() ?? '-';
+      final entry = porConductor.putIfAbsent(key, () => {
+            'tipo': '${c['nombre'] ?? ''} ${c['apellido'] ?? ''}'.trim().isEmpty
+                ? 'Conductor #$key'
+                : '${c['nombre'] ?? ''} ${c['apellido'] ?? ''}'.trim(),
+            'placa': c['placa']?.toString() ?? '',
+            'monto': 0.0,
+            'viajes': 0,
+          });
+      entry['monto'] = (entry['monto'] as double) + monto;
+      entry['viajes'] = (entry['viajes'] as int) + 1;
+    }
+
+    final maxSerie = serie.fold<double>(0, max);
+    final pagos = porConductor.values.toList()
+      ..sort((a, b) => (b['monto'] as double).compareTo(a['monto'] as double));
+    final etiquetas = List<String>.generate(tramos, (i) {
+      final d = desde.add(Duration(minutes: (dias * 24 * 60 * i / tramos).round()));
+      return '${d.day}/${d.month}';
+    });
+
+    return {
+      'totalIngresos': total,
+      'variacion': totalPrevio > 0 ? (total - totalPrevio) / totalPrevio * 100 : null,
+      // La gráfica espera valores normalizados 0..1.
+      'grafica': maxSerie > 0 ? serie.map((v) => v / maxSerie).toList() : serie,
+      'etiquetas': etiquetas,
+      'totalTransacciones': _commissions.fold<num>(0, (s, c) => s + _num(c['comisionPendiente'] ?? c['monto'])),
+      'transacciones': transacciones,
+      'pagos': pagos
+          .take(6)
+          .map((p) => {
+                'tipo': p['tipo'],
+                'sub': '${p['placa']} · ${p['viajes']} viaje${p['viajes'] == 1 ? '' : 's'}',
+                'monto': p['monto'],
+                'icon': 'person',
+              })
+          .toList(),
+    };
   }
 
   Future<void> _markPaid(int conductorId) async {
     try {
-      final res = await http.put(
-        Uri.parse(
-          '${ApiClient.baseUrl}/api/admin/commissions/$conductorId/paid',
-        ),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        await _fetchCommissions();
-        if (mounted) setState(() {});
-        return;
-      }
-    } catch (_) {}
-    setState(() {
-      final idx = _commissions.indexWhere(
-        (c) => c['conductorId'] == conductorId,
-      );
-      if (idx != -1) _commissions[idx]['pagada'] = true;
-    });
+      await HttpClient.put('/api/admin/commissions/$conductorId/paid', auth: true);
+      await _fetchCommissions();
+    } catch (e) {
+      _showCommissionError(adminErrorText(e));
+    }
   }
 
   Future<void> _showCommissionHistory(int conductorId) async {
@@ -146,27 +212,14 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final res = await http.get(
-        Uri.parse(
-          '${ApiClient.baseUrl}/api/admin/commissions/$conductorId/history',
-        ),
-        headers: _authHeaders,
-      );
+      final history = await HttpClient.getList('/api/admin/commissions/$conductorId/history', auth: true);
       if (!mounted) return;
       Navigator.of(context).pop();
-      if (res.statusCode == 200) {
-        final body = jsonDecode(res.body);
-        final List history = body is List
-            ? body
-            : (body['data'] ?? body['history'] ?? []);
-        _showHistoryDialog(conductorId, history);
-      } else {
-        _showCommissionError('Error al cargar historial');
-      }
-    } catch (_) {
+      _showHistoryDialog(conductorId, history);
+    } catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop();
-      _showCommissionError('Error al cargar historial');
+      _showCommissionError(adminErrorText(e));
     }
   }
 
@@ -203,8 +256,17 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                   ),
                 )
               else
-                ...history.map(
-                  (h) => Padding(
+                // Backend: {viajeId, montoBruto, comision, montoNeto, pagada,
+                // pagadaAt, viaje{origen,destino}, createdAt}
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: history.length,
+                    itemBuilder: (_, i) {
+                      final h = history[i];
+                      final pagadaH = h['pagada'] == true;
+                      final comision = _num(h['comision']);
+                      return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(
                       children: [
@@ -213,7 +275,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                h['concepto']?.toString() ?? '',
+                                'Viaje #${h['viajeId'] ?? ''} · ${pagadaH ? 'Pagada' : 'Pendiente'}',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -221,7 +283,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                 ),
                               ),
                               Text(
-                                h['fecha']?.toString() ?? '',
+                                '${_fmtDate(h['createdAt'])} · bruto \$${_num(h['montoBruto']).toStringAsFixed(2)}',
                                 style: const TextStyle(
                                   fontSize: 11,
                                   color: Colors.black45,
@@ -231,19 +293,17 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                           ),
                         ),
                         Text(
-                          '\$${(h['monto'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
+                          '\$${comision.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color:
-                                (h['tipo'] == 'egreso' ||
-                                    (h['monto'] as num?)?.isNegative == true)
-                                ? const Color(0xFFE53935)
-                                : const Color(0xFF4CAF50),
+                            color: pagadaH ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
                           ),
                         ),
                       ],
                     ),
+                      );
+                    },
                   ),
                 ),
               const SizedBox(height: 8),
@@ -274,36 +334,49 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
 
   Future<void> _confirmPayment(int userId) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/payments/$userId/confirm'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        await _fetchPendingPayments();
-        if (mounted) setState(() {});
-        return;
-      }
-    } catch (_) {}
-    setState(() {
-      _pendingPayments.removeWhere((p) => p['userId'] == userId);
-    });
+      final res = await HttpClient.put('/api/admin/payments/$userId/confirm', auth: true);
+      adminSnack(this, res['message']?.toString() ?? 'Pago confirmado', color: const Color(0xFF4CAF50));
+      await _fetchPendingPayments();
+    } catch (e) {
+      _showCommissionError(adminErrorText(e));
+    }
   }
 
   Future<void> _rejectPayment(int userId) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/payments/$userId/reject'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        await _fetchPendingPayments();
-        if (mounted) setState(() {});
-        return;
-      }
-    } catch (_) {}
-    setState(() {
-      _pendingPayments.removeWhere((p) => p['userId'] == userId);
-    });
+      final res = await HttpClient.put('/api/admin/payments/$userId/reject', auth: true);
+      adminSnack(this, res['message']?.toString() ?? 'Pago rechazado');
+      await _fetchPendingPayments();
+    } catch (e) {
+      _showCommissionError(adminErrorText(e));
+    }
+  }
+
+  /// El comprobante es una URL relativa firmada (válida 1 h): se resuelve
+  /// con resolveMediaUrl y se muestra con placeholder si falla (p. ej. PDF).
+  void _showComprobante(Map<String, dynamic> p) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Comprobante - ${p['nombre'] ?? ''}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AdminDocImage(p['comprobante']?.toString(), height: 360, width: double.infinity, fit: BoxFit.contain),
+              ),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -339,7 +412,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : _hasError
+                  : _hasError && _earnings.isEmpty && _commissions.isEmpty && _pendingPayments.isEmpty
                       ? _buildErrorState()
                       : TabBarView(
                           controller: _tabCtrl,
@@ -372,10 +445,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black54),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Verifica tu conexión e intenta nuevamente.',
+            Text(
+              _errorMsg ?? 'Verifica tu conexión e intenta nuevamente.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.black38),
+              style: const TextStyle(fontSize: 13, color: Colors.black38),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
@@ -539,7 +612,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                   ),
                                 ),
                                 Text(
-                                  '\$${(c['monto'] as num).toStringAsFixed(2)}',
+                                  '\$${_num(c['monto']).toStringAsFixed(2)}',
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
@@ -733,7 +806,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                     ),
                                   ),
                                   Text(
-                                    '\$${(p['monto'] as num).toStringAsFixed(2)}',
+                                    '\$${_num(p['monto']).toStringAsFixed(2)}',
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w800,
@@ -761,6 +834,13 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
+                                  if (p['comprobante'] != null)
+                                    TextButton.icon(
+                                      onPressed: () => _showComprobante(p),
+                                      icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                                      label: const Text('Comprobante', style: TextStyle(fontSize: 11)),
+                                    ),
+                                  const Spacer(),
                                   SizedBox(
                                     height: 30,
                                     child: OutlinedButton(
@@ -873,9 +953,12 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
   }
 
   Widget _buildHeroCard() {
-    final total = _data['totalIngresos'] ?? 0.0;
-    final puntos = List<double>.from(_data['grafica'] ?? []);
-    final etiquetas = List<String>.from(_data['etiquetas'] ?? []);
+    final total = _num(_data['totalIngresos']).toDouble();
+    final puntos = List<double>.from(_data['grafica'] ?? const <double>[]);
+    final etiquetas = List<String>.from(_data['etiquetas'] ?? const <String>[]);
+    final variacion = _data['variacion'] as double?;
+    final sube = (variacion ?? 0) >= 0;
+    final varColor = sube ? const Color(0xFF4CAF50) : const Color(0xFFE53935);
 
     return Container(
       decoration: BoxDecoration(
@@ -928,37 +1011,29 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                   ],
                 ),
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFF4CAF50).withValues(alpha: 0.4),
+                // Variación real contra el periodo anterior (antes era fija).
+                if (variacion != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: varColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: varColor.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(sube ? Icons.trending_up : Icons.trending_down, size: 13, color: varColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${sube ? '+' : ''}${variacion.toStringAsFixed(1)}%',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: varColor),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    children: const [
-                      Icon(
-                        Icons.trending_up,
-                        size: 13,
-                        color: Color(0xFF4CAF50),
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        '+12.4%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF4CAF50),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
@@ -969,7 +1044,10 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
               children: _periodos.map((p) {
                 final sel = _periodoActivo == p;
                 return GestureDetector(
-                  onTap: () => setState(() => _periodoActivo = p),
+                  onTap: () => setState(() {
+                    _periodoActivo = p;
+                    _data = _buildSummary();
+                  }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(right: 6),
@@ -1025,14 +1103,14 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
   Widget _buildMetricas() {
     final metricas = [
       {
-        'label': 'Total Comisión',
-        'valor': '\$${(_data['totalTransacciones'] ?? 0.0).toStringAsFixed(2)}',
+        'label': 'Comisión pendiente',
+        'valor': '\$${_num(_data['totalTransacciones']).toStringAsFixed(2)}',
         'icon': Icons.account_balance_wallet_outlined,
         'color': const Color(0xFF1E88E5),
       },
       {
-        'label': 'USD Transacciones',
-        'valor': '\$${(_data['dolarTransacciones'] ?? 0.0).toStringAsFixed(2)}',
+        'label': 'Transacciones',
+        'valor': '${_data['transacciones'] ?? 0}',
         'icon': Icons.attach_money_rounded,
         'color': const Color(0xFF43A047),
       },
@@ -1107,8 +1185,8 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
   }
 
   Widget _buildPaymentsList() {
-    final pagos = List<Map<String, dynamic>>.from(_data['pagos'] ?? []);
-    final total = _data['totalIngresos'] ?? 1.0;
+    final pagos = List<Map<String, dynamic>>.from(_data['pagos'] ?? const <Map<String, dynamic>>[]);
+    final total = _num(_data['totalIngresos']);
 
     return Container(
       decoration: BoxDecoration(
@@ -1129,7 +1207,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
             child: Row(
               children: [
                 const Text(
-                  'Desglose de Pagos',
+                  'Ingresos por conductor',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -1138,7 +1216,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                 ),
                 const Spacer(),
                 Text(
-                  '${pagos.length} categorías',
+                  '${pagos.length} conductores',
                   style: const TextStyle(fontSize: 11, color: Colors.black38),
                 ),
               ],
@@ -1148,12 +1226,12 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
           ...pagos.asMap().entries.map((entry) {
             final i = entry.key;
             final p = entry.value;
-            final pct = total > 0 ? (p['monto'] as num) / (total as num) : 0.0;
+            final pct = total > 0 ? _num(p['monto']) / total : 0.0;
             final isLast = i == pagos.length - 1;
             return _PagoRow(
               tipo: p['tipo'] ?? '',
               sub: p['sub'] ?? '',
-              monto: (p['monto'] as num).toDouble(),
+              monto: _num(p['monto']).toDouble(),
               icon: p['icon'] ?? 'swap',
               porcentaje: pct.clamp(0.0, 1.0),
               isLast: isLast,

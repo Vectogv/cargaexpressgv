@@ -254,7 +254,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(conductor['nombre'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-              Text('${_vehiculoTexto(conductor)}', style: const TextStyle(fontSize: 12, color: Colors.black45)),
+              Text(_vehiculoTexto(conductor), style: const TextStyle(fontSize: 12, color: Colors.black45)),
             ])),
           ]),
         ],

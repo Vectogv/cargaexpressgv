@@ -83,7 +83,8 @@ void main() {
         verify(() => mockApiClient.getProfile()).called(1);
       });
 
-      test('recovers from cache when profile fetch fails', () async {
+      test('falls back to cache and never refreshes manually on failure',
+          () async {
         when(() => mockApiClient.token).thenReturn('valid-token');
         when(() => mockApiClient.getProfile())
             .thenThrow(Exception('Network error'));
@@ -97,36 +98,22 @@ void main() {
 
         verify(() => mockApiClient.getProfile()).called(1);
         verify(() => mockCacheService.getCachedProfile()).called(1);
-        verify(() => mockApiClient.refreshToken()).called(1);
+        // HttpClient ya renueva ante 401 con un refresh compartido: el monitor
+        // no debe competir con él (refresh tokens de un solo uso).
+        verifyNever(() => mockApiClient.refreshToken());
       });
 
-      test('attempts token refresh when profile and cache fail', () async {
+      test('handles failure gracefully when cache is empty', () async {
         when(() => mockApiClient.token).thenReturn('valid-token');
         when(() => mockApiClient.getProfile())
             .thenThrow(Exception('Network error'));
         when(() => mockCacheService.getCachedProfile()).thenReturn(null);
-        when(() => mockApiClient.refreshToken())
-            .thenAnswer((_) async => authResponse);
-
-        await service.checkHealth(
-            client: mockApiClient, cache: mockCacheService);
-
-        verify(() => mockApiClient.refreshToken()).called(1);
-      });
-
-      test('handles full recovery failure gracefully', () async {
-        when(() => mockApiClient.token).thenReturn('valid-token');
-        when(() => mockApiClient.getProfile())
-            .thenThrow(Exception('Network error'));
-        when(() => mockCacheService.getCachedProfile()).thenReturn(null);
-        when(() => mockApiClient.refreshToken())
-            .thenThrow(Exception('Refresh failed'));
 
         await service.checkHealth(
             client: mockApiClient, cache: mockCacheService);
 
         verify(() => mockApiClient.getProfile()).called(1);
-        verify(() => mockApiClient.refreshToken()).called(1);
+        verifyNever(() => mockApiClient.refreshToken());
       });
     });
   });

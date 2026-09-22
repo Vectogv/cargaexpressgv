@@ -1,17 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/notification_service.dart';
 import '../user/auth_screen.dart';
-
-Map<String, String> get _authHeaders => {
-  'Content-Type': 'application/json',
-  'Authorization': 'Bearer ${ApiClient.instance.token}',
-};
+import 'admin_common.dart';
 
 const Color _primaryDark = Color(0xFF1A3C6E);
 const Color _textDark = Color(0xFF1A1A2E);
@@ -30,11 +24,14 @@ class AdminLiveScreen extends StatefulWidget {
 }
 
 class _AdminLiveScreenState extends State<AdminLiveScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, VisiblePolling {
   late TabController _tabCtrl;
   bool _loading = true;
+  String? _error;
   List<Map<String, dynamic>> _trips = [];
-  List<Map<String, dynamic>> _drivers = [];
+  /// Conductores en un notifier: las ubicaciones por socket llegan con mucha
+  /// frecuencia y solo deben reconstruir lo que muestra conductores.
+  final ValueNotifier<List<Map<String, dynamic>>> _drivers = ValueNotifier(const []);
   List<Map<String, dynamic>> _clients = [];
   List<Map<String, dynamic>> _disputes = [];
   List<Map<String, dynamic>> _cancellations = [];
@@ -45,7 +42,6 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
   StreamSubscription<Map<String, dynamic>>? _cancelSub;
   StreamSubscription<Map<String, dynamic>>? _emergencySub;
   StreamSubscription<dynamic>? _notifSub;
-  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -58,23 +54,23 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
     _initSocket();
     _fetchAll();
 
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) _fetchAll();
-    });
+    // Solo sondea mientras esta pantalla está visible y la app en primer plano.
+    startPolling(const Duration(seconds: 15), _fetchAll);
   }
 
   void _initSocket() {
     _driverLocSub = SocketServiceClient.instance.onAdminDriverLocation.listen((data) {
       if (!mounted) return;
-      setState(() {
-        final dataId = (data['_id'] ?? data['id'])?.toString();
-        final idx = _drivers.indexWhere((d) => (d['_id'] ?? d['id'])?.toString() == dataId);
-        if (idx >= 0) {
-          _drivers[idx] = Map<String, dynamic>.from(_drivers[idx])..addAll(data);
-        } else if (dataId != null) {
-          _drivers.add(data);
-        }
-      });
+      final dataId = (data['_id'] ?? data['id'] ?? data['conductorId'])?.toString();
+      if (dataId == null) return;
+      final list = List<Map<String, dynamic>>.of(_drivers.value);
+      final idx = list.indexWhere((d) => (d['_id'] ?? d['id'])?.toString() == dataId);
+      if (idx >= 0) {
+        list[idx] = Map<String, dynamic>.from(list[idx])..addAll(data);
+      } else {
+        list.add(data);
+      }
+      _drivers.value = list;
     });
 
     _disputeSub = SocketServiceClient.instance.onAdminDispute.listen((data) {
@@ -101,7 +97,7 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
     _cancelSub?.cancel();
     _emergencySub?.cancel();
     _notifSub?.cancel();
-    _pollTimer?.cancel();
+    _drivers.dispose();
     super.dispose();
   }
 
@@ -117,91 +113,48 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
     if (mounted && _loading) setState(() => _loading = false);
   }
 
-  /// Tolerancia al formato de lista: acepta `[...]` y `{"data": [...]}`
-  /// (el backend pagina con `{data, total, page, limit}`).
-  List<Map<String, dynamic>> _parseList(String body) {
-    return List<Map<String, dynamic>>.from(
-      HttpClient.parseListLenient(jsonDecode(body)).whereType<Map>(),
-    );
+  /// GET de lista con manejo uniforme de errores: guarda el mensaje del
+  /// backend para mostrarlo (sin tragarse el fallo) y conserva datos previos.
+  Future<List<Map<String, dynamic>>?> _getList(String path) async {
+    try {
+      final list = adminMapList(await HttpClient.getList(path, auth: true));
+      if (mounted && _error != null) setState(() => _error = null);
+      return list;
+    } catch (e) {
+      if (mounted) setState(() => _error = adminErrorText(e));
+      return null;
+    }
   }
 
   Future<void> _fetchTrips() async {
-    try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/trips'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() => _trips = _parseList(res.body));
-      }
-    } catch (_) {}
+    final list = await _getList('/api/admin/trips');
+    if (list != null && mounted) setState(() => _trips = list);
   }
 
   Future<void> _fetchDrivers() async {
-    try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/drivers'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() => _drivers = _parseList(res.body));
-      }
-    } catch (_) {}
+    final list = await _getList('/api/admin/drivers');
+    if (list != null && mounted) _drivers.value = list;
   }
 
   Future<void> _fetchClients() async {
-    try {
-      // Contrato real: no existe /api/admin/clients; la lista de usuarios
-      // se obtiene de GET /api/admin/users y se filtra por rol.
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/users'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() {
-          _clients = _parseList(res.body)
-              .where((u) => u['rol'] == 'cliente')
-              .toList();
-        });
-      }
-    } catch (_) {}
+    // El backend filtra por rol (antes se filtraba en el cliente solo la 1a página).
+    final list = await _getList('/api/admin/users?rol=cliente&limit=100');
+    if (list != null && mounted) setState(() => _clients = list);
   }
 
   Future<void> _fetchDisputes() async {
-    try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/disputes'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() => _disputes = _parseList(res.body));
-      }
-    } catch (_) {}
+    final list = await _getList('/api/admin/disputes');
+    if (list != null && mounted) setState(() => _disputes = list);
   }
 
   Future<void> _fetchCancellations() async {
-    try {
-      // Contrato real: GET /api/admin/cancellation-requests
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/cancellation-requests'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() => _cancellations = _parseList(res.body));
-      }
-    } catch (_) {}
+    final list = await _getList('/api/admin/cancellation-requests');
+    if (list != null && mounted) setState(() => _cancellations = list);
   }
 
   Future<void> _fetchEmergencies() async {
-    try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/emergencies'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200 && mounted) {
-        setState(() => _emergencies = _parseList(res.body));
-      }
-    } catch (_) {}
+    final list = await _getList('/api/admin/emergencies');
+    if (list != null && mounted) setState(() => _emergencies = list);
   }
 
   @override
@@ -274,16 +227,28 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabCtrl,
+          : Column(
               children: [
-                _buildOverviewTab(),
-                _buildTripsTab(),
-                _buildDriversTab(),
-                _buildClientsTab(),
-                _buildDisputesTab(),
-                _buildCancellationsTab(),
-                _buildEmergenciesTab(),
+                if (_error != null)
+                  MaterialBanner(
+                    backgroundColor: const Color(0xFFFFEBEE),
+                    content: Text(_error!, style: const TextStyle(color: _accentRed)),
+                    actions: [TextButton(onPressed: _fetchAll, child: const Text('Reintentar'))],
+                  ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabCtrl,
+                    children: [
+                      _buildOverviewTab(),
+                      _buildTripsTab(),
+                      _buildDriversTab(),
+                      _buildClientsTab(),
+                      _buildDisputesTab(),
+                      _buildCancellationsTab(),
+                      _buildEmergenciesTab(),
+                    ],
+                  ),
+                ),
               ],
             ),
     );
@@ -294,9 +259,13 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
       final e = t['estado'] as String?;
       return e == 'aceptado' || e == 'en_curso';
     }).length;
-    final onlineDrivers = _drivers.where((d) => d['online'] == true || d['conectado'] == true).length;
-    final pendingDisputes = _disputes.where((d) => (d['status'] as String? ?? '') == 'pending').length;
-    final activeEmergencies = _emergencies.where((e) => (e['status'] as String? ?? '') == 'active').length;
+    // Disputas: el backend solo lista estado abierta/en_revision.
+    final pendingDisputes = _disputes.where((d) {
+      final e = d['estado'] as String? ?? 'abierta';
+      return e == 'abierta' || e == 'en_revision';
+    }).length;
+    // Emergencias: el backend solo lista las no atendidas (atendida=false).
+    final activeEmergencies = _emergencies.where((e) => e['atendida'] != true).length;
     final todayCancellations = _cancellations.length;
 
     return RefreshIndicator(
@@ -310,7 +279,15 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
             Row(children: [
               Expanded(child: _StatCard('Viajes Activos', '$activeTrips', Icons.route, _primaryDark)),
               const SizedBox(width: 8),
-              Expanded(child: _StatCard('Conductores Online', '$onlineDrivers', Icons.drive_eta, _accentGreen)),
+              Expanded(
+                child: ValueListenableBuilder<List<Map<String, dynamic>>>(
+                  valueListenable: _drivers,
+                  builder: (_, drivers, _) {
+                    final online = drivers.where((d) => d['online'] == true || d['conectado'] == true).length;
+                    return _StatCard('Conductores Online', '$online', Icons.drive_eta, _accentGreen);
+                  },
+                ),
+              ),
             ]),
             const SizedBox(height: 8),
             Row(children: [
@@ -337,10 +314,10 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
   List<Widget> _buildRecentEvents() {
     final events = <Map<String, dynamic>>[];
     for (final e in _emergencies.take(3)) {
-      events.add({'icon': Icons.crisis_alert, 'color': _accentRed, 'text': 'Emergencia: ${e['title'] ?? ''}', 'time': e['createdAt'] ?? ''});
+      events.add({'icon': Icons.crisis_alert, 'color': _accentRed, 'text': 'Emergencia: ${_personName(e['usuario']) ?? e['motivo'] ?? ''}', 'time': e['createdAt'] ?? ''});
     }
     for (final d in _disputes.take(3)) {
-      events.add({'icon': Icons.gavel, 'color': _accentOrange, 'text': 'Disputa: ${d['title'] ?? d['motivo'] ?? ''}', 'time': d['createdAt'] ?? ''});
+      events.add({'icon': Icons.gavel, 'color': _accentOrange, 'text': 'Disputa: ${d['problema'] ?? d['versionCliente'] ?? '#${d['id']}'}', 'time': d['createdAt'] ?? ''});
     }
     for (final c in _cancellations.take(3)) {
       events.add({'icon': Icons.cancel, 'color': _accentRed, 'text': 'Cancelaci\u00f3n: ${c['motivo'] ?? ''}', 'time': c['createdAt'] ?? ''});
@@ -378,16 +355,21 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
   }
 
   Widget _buildDriversTab() {
-    if (_drivers.isEmpty) {
-      return const Center(child: Text('Sin conductores conectados', style: TextStyle(color: _textGrey)));
-    }
-    return RefreshIndicator(
-      onRefresh: _fetchDrivers,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: _drivers.length,
-        itemBuilder: (_, i) => _DriverCard(_drivers[i]),
-      ),
+    return ValueListenableBuilder<List<Map<String, dynamic>>>(
+      valueListenable: _drivers,
+      builder: (_, drivers, _) {
+        if (drivers.isEmpty) {
+          return const Center(child: Text('Sin conductores conectados', style: TextStyle(color: _textGrey)));
+        }
+        return RefreshIndicator(
+          onRefresh: _fetchDrivers,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(8),
+            itemCount: drivers.length,
+            itemBuilder: (_, i) => _DriverCard(drivers[i]),
+          ),
+        );
+      },
     );
   }
 
@@ -474,6 +456,13 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
   }
 }
 
+/// "Nombre Apellido" de un objeto usuario/cliente/conductor del backend.
+String? _personName(dynamic p) {
+  if (p is! Map) return null;
+  final n = '${p['nombre'] ?? p['name'] ?? ''} ${p['apellido'] ?? ''}'.trim();
+  return n.isEmpty ? null : n;
+}
+
 // --- Reusable widgets ---
 
 class _StatCard extends StatelessWidget {
@@ -521,8 +510,9 @@ class _TripCard extends StatelessWidget {
     final estado = trip['estado'] as String? ?? '';
     final conductor = trip['conductor'] as Map<String, dynamic>?;
     final cliente = trip['cliente'] as Map<String, dynamic>?;
-    final origen = trip['origen'] as Map<String, dynamic>?;
-    final destino = trip['destino'] as Map<String, dynamic>?;
+    // Backend: origenDireccion/destinoDireccion (texto).
+    final origen = trip['origenDireccion']?.toString() ?? '';
+    final destino = trip['destinoDireccion']?.toString() ?? '';
 
     Color estadoColor;
     switch (estado) {
@@ -552,13 +542,11 @@ class _TripCard extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             if (conductor != null)
-              _InfoRow(Icons.person, 'Conductor: ${conductor['nombre'] ?? conductor['name'] ?? ''}'),
+              _InfoRow(Icons.person, 'Conductor: ${_personName(conductor) ?? ''}'),
             if (cliente != null)
-              _InfoRow(Icons.person_outline, 'Cliente: ${cliente['nombre'] ?? cliente['name'] ?? ''}'),
-            if (origen != null)
-              _InfoRow(Icons.location_on, origen['direccion']?.toString() ?? origen['address']?.toString() ?? ''),
-            if (destino != null)
-              _InfoRow(Icons.flag, destino['direccion']?.toString() ?? destino['address']?.toString() ?? ''),
+              _InfoRow(Icons.person_outline, 'Cliente: ${_personName(cliente) ?? ''}'),
+            if (origen.isNotEmpty) _InfoRow(Icons.location_on, origen),
+            if (destino.isNotEmpty) _InfoRow(Icons.flag, destino),
           ],
         ),
       ),
@@ -573,10 +561,13 @@ class _DriverCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final online = driver['online'] == true || driver['conectado'] == true;
-    final nombre = driver['nombre'] as String? ?? driver['name'] as String? ?? '';
-    final lat = double.tryParse(driver['latitude']?.toString() ?? driver['lat']?.toString() ?? '');
-    final lng = double.tryParse(driver['longitude']?.toString() ?? driver['lng']?.toString() ?? '');
-    final activeTrips = driver['activeTrips'] ?? driver['viajesActivos'] ?? 0;
+    // Backend: usuario{nombre, apellido}, ultimaUbicacion{lat,lng}, totalViajes.
+    // El socket admin:driver:location agrega lat/lng en la raíz.
+    final nombre = _personName(driver['usuario']) ?? _personName(driver) ?? (driver['placa']?.toString() ?? '');
+    final ubic = driver['ultimaUbicacion'] is Map ? driver['ultimaUbicacion'] as Map : const {};
+    final lat = double.tryParse((driver['lat'] ?? ubic['lat'])?.toString() ?? '');
+    final lng = double.tryParse((driver['lng'] ?? ubic['lng'])?.toString() ?? '');
+    final activeTrips = driver['totalViajes'] ?? 0;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -611,7 +602,7 @@ class _ClientCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nombre = client['nombre'] as String? ?? client['name'] as String? ?? '';
+    final nombre = _personName(client) ?? '';
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -630,15 +621,17 @@ class _DisputeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = dispute['status'] as String? ?? 'pending';
-    final motivo = dispute['title'] as String? ?? dispute['motivo'] as String? ?? '';
-    final desc = dispute['description'] as String? ?? dispute['descripcion'] as String? ?? '';
+    // Backend: estado (abierta|en_revision|resuelta), problema (socket),
+    // versionCliente / versionConductor, viajeId.
+    final status = dispute['estado'] as String? ?? 'abierta';
+    final motivo = dispute['problema']?.toString() ?? 'Viaje #${dispute['viajeId'] ?? ''}';
+    final desc = dispute['versionCliente']?.toString() ?? dispute['versionConductor']?.toString() ?? '';
 
     Color statusColor;
     switch (status) {
-      case 'pending': statusColor = _accentOrange; break;
-      case 'resolved': statusColor = _accentGreen; break;
-      case 'dismissed': statusColor = _textGrey; break;
+      case 'abierta': statusColor = _accentOrange; break;
+      case 'en_revision': statusColor = _primaryDark; break;
+      case 'resuelta': statusColor = _accentGreen; break;
       default: statusColor = _textGrey;
     }
 
@@ -654,7 +647,7 @@ class _DisputeCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                child: Text(status, style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w600)),
+                child: Text(status.replaceAll('_', ' '), style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w600)),
               ),
               const Spacer(),
               Text('#${dispute['id']}', style: TextStyle(fontSize: 11, color: _textGrey)),
@@ -675,7 +668,8 @@ class _CancellationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final motivo = cancel['motivo'] as String? ?? cancel['reason'] as String? ?? '';
+    final motivo = cancel['motivo']?.toString() ?? '';
+    final conductor = _personName(cancel['conductor']);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -687,7 +681,12 @@ class _CancellationCard extends StatelessWidget {
             Row(children: [
               const Icon(Icons.cancel, color: _accentRed, size: 18),
               const SizedBox(width: 6),
-              Text('Cancelaci\u00f3n #${cancel['id'] ?? cancel['tripId'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              Expanded(
+                child: Text(
+                  'Viaje #${cancel['tripId'] ?? cancel['viajeId'] ?? cancel['id'] ?? ''}${conductor != null ? ' \u00b7 $conductor' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
             ]),
             if (motivo.isNotEmpty) ...[const SizedBox(height: 4), Text(motivo, style: TextStyle(fontSize: 12, color: _textGrey))],
           ],
@@ -703,9 +702,16 @@ class _EmergencyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = emergency['status'] as String? ?? 'active';
-    final title = emergency['title'] as String? ?? '';
-    final desc = emergency['description'] as String? ?? emergency['subtitle'] as String? ?? '';
+    // Backend: atendida, usuario{nombre,apellido,telefono}, viaje{origen,destino}; motivo (socket).
+    final status = emergency['atendida'] == true ? 'resolved' : 'active';
+    final usuario = emergency['usuario'];
+    final title = _personName(usuario) ?? '';
+    final viaje = emergency['viaje'] is Map ? emergency['viaje'] as Map : null;
+    final desc = [
+      if (emergency['motivo'] != null) emergency['motivo'].toString(),
+      if (usuario is Map && usuario['telefono'] != null) 'Tel: ${usuario['telefono']}',
+      if (viaje != null) '${viaje['origen'] ?? ''} → ${viaje['destino'] ?? ''}',
+    ].join('\n');
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),

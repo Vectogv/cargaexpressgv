@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
-
-Map<String, String> get _authHeaders => {
-  'Content-Type': 'application/json',
-  'Authorization': 'Bearer ${ApiClient.instance.token}',
-};
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 class Encuesta {
   final String id;
@@ -24,44 +18,6 @@ class Encuesta {
   });
 }
 
-final List<Encuesta> _mockEncuestas = [
-  Encuesta(
-    id: '1',
-    title: 'Satisfacción del servicio de transporte',
-    author: 'Carlos Mendoza',
-    date: DateTime.now().subtract(const Duration(days: 2)),
-    status: 'pendiente',
-  ),
-  Encuesta(
-    id: '2',
-    title: 'Evaluación de conductores',
-    author: 'Ana López',
-    date: DateTime.now().subtract(const Duration(days: 5)),
-    status: 'aprobada',
-  ),
-  Encuesta(
-    id: '3',
-    title: 'Calidad de las rutas',
-    author: 'Pedro Ramírez',
-    date: DateTime.now().subtract(const Duration(days: 7)),
-    status: 'pendiente',
-  ),
-  Encuesta(
-    id: '4',
-    title: 'Experiencia de usuario en la app',
-    author: 'Lucía Fernández',
-    date: DateTime.now().subtract(const Duration(days: 1)),
-    status: 'pendiente',
-  ),
-  Encuesta(
-    id: '5',
-    title: 'Preferencias de horarios',
-    author: 'María García',
-    date: DateTime.now().subtract(const Duration(days: 10)),
-    status: 'aprobada',
-  ),
-];
-
 class GestionEncuestasScreen extends StatefulWidget {
   const GestionEncuestasScreen({super.key});
 
@@ -72,6 +28,7 @@ class GestionEncuestasScreen extends StatefulWidget {
 class _GestionEncuestasScreenState extends State<GestionEncuestasScreen> {
   bool _loading = true;
   List<Encuesta> _encuestas = [];
+  String? _error;
 
   @override
   void initState() {
@@ -82,29 +39,20 @@ class _GestionEncuestasScreenState extends State<GestionEncuestasScreen> {
   Future<void> _fetchEncuestas() async {
     setState(() => _loading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/encuestas'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        setState(() {
-          _encuestas = data.map((e) => _parseEncuesta(e)).toList();
-          _loading = false;
-        });
-      } else {
-        _useFallback();
-      }
-    } catch (_) {
-      _useFallback();
+      final data = await HttpClient.getList('/api/admin/encuestas', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _encuestas = adminMapList(data).map(_parseEncuesta).toList();
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
+        _loading = false;
+      });
     }
-  }
-
-  void _useFallback() {
-    setState(() {
-      _encuestas = List.from(_mockEncuestas);
-      _loading = false;
-    });
   }
 
   Encuesta _parseEncuesta(Map<String, dynamic> json) {
@@ -112,32 +60,23 @@ class _GestionEncuestasScreenState extends State<GestionEncuestasScreen> {
       id: json['id']?.toString() ?? '',
       title: json['title'] as String? ?? '',
       author: json['author'] as String? ?? '',
-      date: json['date'] != null
-          ? DateTime.tryParse(json['date'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      date: DateTime.tryParse(json['date']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
       status: json['status'] as String? ?? 'pendiente',
     );
   }
 
   Future<void> _approveEncuesta(String id) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/encuestas/$id/approve'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        _updateLocalStatus(id, 'aprobada');
-        _showSnackBar('Encuesta aprobada exitosamente', Colors.green);
-      } else {
-        _showSnackBar('Error al aprobar la encuesta', Colors.red);
-      }
-    } catch (_) {
+      await HttpClient.put('/api/admin/encuestas/$id/approve', auth: true);
       _updateLocalStatus(id, 'aprobada');
       _showSnackBar('Encuesta aprobada exitosamente', Colors.green);
+    } catch (e) {
+      _showSnackBar(adminErrorText(e), Colors.red);
     }
   }
 
   void _updateLocalStatus(String id, String status) {
+    if (!mounted) return;
     setState(() {
       _encuestas = _encuestas.map((e) {
         if (e.id == id) {
@@ -179,7 +118,20 @@ class _GestionEncuestasScreenState extends State<GestionEncuestasScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _fetchEncuestas,
-              child: ListView.builder(
+              child: _encuestas.isEmpty
+                  ? ListView(
+                      padding: const EdgeInsets.all(32),
+                      children: [
+                        Center(
+                          child: Text(
+                            _error ?? 'Sin encuestas',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: _error != null ? Colors.red : Colors.black54),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 itemCount: _encuestas.length,
                 itemBuilder: (_, i) => _EncuestaCard(

@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'api/http_client.dart';
 import 'api_client.dart';
 import '../contracts/socket_events.dart';
 import 'socket_service_client.dart';
@@ -95,13 +94,9 @@ class NotificationService {
 
   Future<void> _registerToken(String token) async {
     try {
-      final authToken = ApiClient.instance.token;
-      if (authToken == null) return;
-      await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/users/fcm-token'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $authToken'},
-        body: jsonEncode({'fcmToken': token}),
-      );
+      if (ApiClient.instance.token == null) return;
+      // HttpClient: renueva el token ante 401 y maneja suspensión/timeouts.
+      await HttpClient.put('/api/users/fcm-token', body: {'fcmToken': token}, auth: true);
     } catch (e) {
       LoggerService.instance.error('NotificationService._registerToken error', e);
     }

@@ -12,6 +12,7 @@ import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
 import '../../services/location_permission.dart';
 import '../../services/logger_service.dart';
+import '../shared/action_key.dart';
 import 'rastreo_screen.dart';
 
 class NuevoEnvioScreen extends StatefulWidget {
@@ -40,6 +41,26 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   bool _loadingLocation = false;
   bool _editandoPrecio = false;
   Timer? _draftTimer;
+  final ActionKey _requestKey = ActionKey();
+
+  // Nominatim (política de uso): User-Agent que identifica la app, máx. 1
+  // petición/s y sin respuestas obsoletas (un toque nuevo invalida el anterior).
+  static const Map<String, String> _nominatimHeaders = {
+    'User-Agent': 'CargaExpress/1.0 (com.cargaexpress.app)',
+    'Accept-Language': 'es',
+  };
+  static const Duration _nominatimGap = Duration(milliseconds: 1000);
+  final http.Client _geoClient = http.Client();
+  DateTime _lastGeoRequest = DateTime.fromMillisecondsSinceEpoch(0);
+  int _reverseSeq = 0;
+
+  // Opciones del mapa y capa de tiles creadas una sola vez (antes en cada build).
+  late final MapOptions _mapOptions = MapOptions(
+    initialCenter: _center,
+    initialZoom: 13,
+    onTap: _onMapTapped,
+  );
+  late final TileLayer _tileLayer = TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app');
 
   @override
   void initState() {
@@ -83,6 +104,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     _descripcionCtrl.dispose();
     _precioCtrl.dispose();
     _mapCtrl.dispose();
+    _geoClient.close();
     super.dispose();
   }
 
@@ -95,6 +117,10 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       );
       final latLng = LatLng(pos.latitude, pos.longitude);
       final dir = await _reverseGeocode(latLng);
+      if (dir == null) {
+        if (mounted) setState(() => _loadingLocation = false);
+        return; // un toque más reciente ya resolvió otra dirección
+      }
 
       if (mounted) {
         setState(() {
@@ -118,24 +144,58 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     }
   }
 
-  Future<String> _reverseGeocode(LatLng latLng) async {
+  /// GET a Nominatim respetando 1 petición/s y con timeout.
+  Future<http.Response> _nominatimGet(Uri uri) async {
+    final wait = _nominatimGap - DateTime.now().difference(_lastGeoRequest);
+    if (wait > Duration.zero) await Future<void>.delayed(wait);
+    _lastGeoRequest = DateTime.now();
+    return _geoClient.get(uri, headers: _nominatimHeaders).timeout(const Duration(seconds: 10));
+  }
+
+  /// Devuelve la dirección, o null si otra petición más reciente la dejó
+  /// obsoleta (el resultado ya no debe aplicarse).
+  Future<String?> _reverseGeocode(LatLng latLng) async {
+    final seq = ++_reverseSeq;
+    final fallback = '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}';
     try {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?lat=${latLng.latitude}&lon=${latLng.longitude}&format=json&accept-language=es',
       );
-      final res = await http.get(uri, headers: {'User-Agent': 'CargaExpress/1.0'});
+      final res = await _nominatimGet(uri);
+      if (seq != _reverseSeq) return null;
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
-        return data['display_name'] as String? ?? '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}';
+        return data['display_name'] as String? ?? fallback;
       }
     } catch (e) {
       LoggerService.instance.warning('nuevo_envio._reverseGeocode error', e);
     }
-    return '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}';
+    if (seq != _reverseSeq) return null;
+    return fallback;
+  }
+
+  void _onMapTapped(TapPosition tap, LatLng latLng) {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Seleccionar como...'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () { Navigator.pop(ctx); _onMapTap(tap, latLng, isOrigen: true); },
+            child: const ListTile(leading: Icon(Icons.trip_origin, color: Colors.green), title: Text('Origen'), dense: true, contentPadding: EdgeInsets.zero),
+          ),
+          SimpleDialogOption(
+            onPressed: () { Navigator.pop(ctx); _onMapTap(tap, latLng, isOrigen: false); },
+            child: const ListTile(leading: Icon(Icons.location_on, color: Colors.red), title: Text('Destino'), dense: true, contentPadding: EdgeInsets.zero),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng, {bool isOrigen = true}) async {
     final dir = await _reverseGeocode(latLng);
+    if (dir == null) return;
     if (mounted) {
       setState(() {
         if (isOrigen) {
@@ -155,6 +215,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     final ctrl = TextEditingController();
     try {
       final recent = await _loadRecentSearches();
+      if (!mounted) return;
       final result = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -179,8 +240,11 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(result)}&format=json&limit=5&accept-language=es',
       );
-      final res = await http.get(uri, headers: {'User-Agent': 'CargaExpress/1.0'});
-        if (res.statusCode != 200) return;
+      final res = await _nominatimGet(uri);
+        if (res.statusCode != 200) {
+          if (mounted) _snack('No se pudo buscar la dirección (${res.statusCode}). Intenta de nuevo.');
+          return;
+        }
 
         final data = jsonDecode(res.body) as List<dynamic>;
         if (data.isEmpty) {
@@ -308,6 +372,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               initialZoom: 13,
               onTap: (tap, latLng) async {
                 final dir = await _reverseGeocode(latLng);
+                if (dir == null) return;
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (mounted) {
                   setState(() {
@@ -318,7 +383,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               },
             ),
             children: [
-              TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app'),
+              _tileLayer,
             ],
           ),
         ),
@@ -342,28 +407,34 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     }
 
     setState(() => _loading = true);
+    final body = {
+      'origen': {
+        'direccion': _origenCtrl.text.trim(),
+        'lat': _origenLatLng!.latitude,
+        'lng': _origenLatLng!.longitude,
+      },
+      'destino': {
+        'direccion': _destinoCtrl.text.trim(),
+        'lat': _destinoLatLng!.latitude,
+        'lng': _destinoLatLng!.longitude,
+      },
+      'descripcion': _descripcionCtrl.text.trim().isEmpty ? null : _descripcionCtrl.text.trim(),
+      'precioCliente': precio,
+    };
     try {
-      await ApiClient.instance.requestTrip({
-        'origen': {
-          'direccion': _origenCtrl.text.trim(),
-          'lat': _origenLatLng!.latitude,
-          'lng': _origenLatLng!.longitude,
-        },
-        'destino': {
-          'direccion': _destinoCtrl.text.trim(),
-          'lat': _destinoLatLng!.latitude,
-          'lng': _destinoLatLng!.longitude,
-        },
-        'descripcion': _descripcionCtrl.text.trim().isEmpty ? null : _descripcionCtrl.text.trim(),
-        'precioCliente': precio,
-      });
+      // Misma clave si el usuario reintenta tras un fallo de red: el backend
+      // no crea un segundo viaje.
+      await ApiClient.instance.requestTrip(body, idempotencyKey: _requestKey.keyFor(body));
+      _requestKey.settle();
 
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RastreoScreen()));
         });
       }
     } catch (e) {
+      _requestKey.settle(e);
       if (mounted) _handleRequestError(e);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -407,7 +478,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       );
       return;
     }
-    _snack(e.toString().replaceFirst('Exception: ', ''));
+    _snack(e is ApiException ? e.message : e.toString().replaceFirst('Exception: ', ''));
   }
 
   void _snack(String msg) {
@@ -566,9 +637,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                           // Divider dentro del card
                           Padding(
                             padding: const EdgeInsets.only(left: 38),
-                            child: Divider(
+                            child: const Divider(
                               height: 1,
-                              color: const Color(0xFFF0F0F0),
+                              color: Color(0xFFF0F0F0),
                             ),
                           ),
 
@@ -657,7 +728,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                     const SizedBox(height: 20),
 
                     // Descripción de la carga
-                    _SectionLabel(label: 'Descripción de la carga'),
+                    const _SectionLabel(label: 'Descripción de la carga'),
                     const SizedBox(height: 8),
                     _InputCard(
                       child: TextField(
@@ -680,7 +751,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                     const SizedBox(height: 20),
 
                     // Precio
-                    _SectionLabel(label: 'Precio que deseas pagar'),
+                    const _SectionLabel(label: 'Precio que deseas pagar'),
                     const SizedBox(height: 8),
                     _InputCard(
                       child: Row(
@@ -779,30 +850,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
         children: [
           FlutterMap(
             mapController: _mapCtrl,
-            options: MapOptions(
-              initialCenter: _center,
-              initialZoom: 13,
-              onTap: (tap, latLng) {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => SimpleDialog(
-                    title: const Text('Seleccionar como...'),
-                    children: [
-                      SimpleDialogOption(
-                        onPressed: () { Navigator.pop(ctx); _onMapTap(tap, latLng, isOrigen: true); },
-                        child: const ListTile(leading: Icon(Icons.trip_origin, color: Colors.green), title: Text('Origen'), dense: true, contentPadding: EdgeInsets.zero),
-                      ),
-                      SimpleDialogOption(
-                        onPressed: () { Navigator.pop(ctx); _onMapTap(tap, latLng, isOrigen: false); },
-                        child: const ListTile(leading: Icon(Icons.location_on, color: Colors.red), title: Text('Destino'), dense: true, contentPadding: EdgeInsets.zero),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+            options: _mapOptions,
             children: [
-              TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app'),
+              _tileLayer,
               if (_origenLatLng != null)
                 MarkerLayer(markers: [
                   Marker(

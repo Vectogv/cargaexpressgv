@@ -20,9 +20,15 @@ class AuthService {
     return AuthResponse.fromJson(data);
   }
 
-  static Future<void> logout() async {
+  /// Revoca el refresh token (el backend lo acepta aunque el access token
+  /// haya expirado). Nunca lanza: el logout local no depende de la red.
+  static Future<void> logout({String? refreshToken}) async {
     try {
-      await HttpClient.post('/api/auth/logout', auth: true);
+      await HttpClient.post(
+        '/api/auth/logout',
+        body: {if (refreshToken != null) 'refreshToken': refreshToken},
+        auth: true,
+      );
     } catch (_) {}
   }
 }

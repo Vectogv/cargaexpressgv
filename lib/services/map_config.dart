@@ -5,16 +5,12 @@ import 'logger_service.dart';
 class MapConfig {
   MapConfig._();
 
-  static String _mapboxAccessToken = '';
+  static String mapboxAccessToken = '';
   static Future<void>? _loading;
 
-  static String get mapboxAccessToken => _mapboxAccessToken;
-
-  static set mapboxAccessToken(String value) => _mapboxAccessToken = value;
-
   static String get tileUrl {
-    if (_mapboxAccessToken.isNotEmpty) {
-      return 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=$_mapboxAccessToken';
+    if (mapboxAccessToken.isNotEmpty) {
+      return 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=$mapboxAccessToken';
     }
     return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   }
@@ -23,7 +19,7 @@ class MapConfig {
   /// así que sin token de usuario no se llama (evita el 401 al arrancar) y se
   /// reintenta tras login/registro.
   static Future<void> ensureLoaded() {
-    if (_mapboxAccessToken.isNotEmpty || ApiClient.instance.token == null) {
+    if (mapboxAccessToken.isNotEmpty || ApiClient.instance.token == null) {
       return Future.value();
     }
     return _loading ??= _fetch().whenComplete(() => _loading = null);
@@ -31,7 +27,7 @@ class MapConfig {
 
   static Future<void> _fetch() async {
     try {
-      _mapboxAccessToken = await ProfileService.fetchMapboxToken();
+      mapboxAccessToken = await ProfileService.fetchMapboxToken();
     } catch (_) {
       LoggerService.instance.debug('Mapbox token not available, using OSM fallback');
     }

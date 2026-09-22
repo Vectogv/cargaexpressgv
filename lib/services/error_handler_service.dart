@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'logger_service.dart';
+import 'session_events.dart';
 
 enum ErrorCategory { network, gps, socket, map, auth, general }
 
@@ -16,11 +17,16 @@ class ErrorHandlerService {
   final StreamController<void> _authExpiredCtrl = StreamController<void>.broadcast();
   Stream<void> get onAuthExpired => _authExpiredCtrl.stream;
 
-  /// Notifica que la sesión expiró y el token no pudo renovarse.
-  void emitSessionExpired() {
+  /// Notifica que la sesión expiró y el token no pudo renovarse. También se
+  /// publica en [SessionEvents] (que es lo que escucha `main.dart`).
+  void emitSessionExpired([String? message]) {
     if (!_authExpiredCtrl.isClosed) {
       _authExpiredCtrl.add(null);
     }
+    SessionEvents.instance.emit(SessionEvent(
+      SessionEventType.expired,
+      message ?? 'Tu sesión expiró. Inicia sesión nuevamente.',
+    ));
   }
 
   void init() {

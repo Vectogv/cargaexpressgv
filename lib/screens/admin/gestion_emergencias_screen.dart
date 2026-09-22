@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../services/api_client.dart';
+import '../../services/api/http_client.dart';
+import 'admin_common.dart';
 
 enum EmergencyPriority { critical, high, medium }
 
@@ -29,42 +28,6 @@ class Emergency {
   });
 }
 
-final List<Emergency> _mockEmergencies = [
-  Emergency(
-    id: '1',
-    tag: 'Flagrant.melievalllat',
-    title: 'Incidente Isaxocidente',
-    subtitle: 'Incidente: Dexttorrio',
-    location: 'Locación: Itariana, 211',
-    priority: EmergencyPriority.critical,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 3)),
-    isNew: true,
-    status: 'active',
-  ),
-  Emergency(
-    id: '2',
-    tag: 'faft alerts',
-    title: 'Incidente & Incidente',
-    subtitle: 'Incidente: Soakoodo',
-    location: 'Locación: Sitomere, 101',
-    priority: EmergencyPriority.high,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 12)),
-    isNew: false,
-    status: 'active',
-  ),
-  Emergency(
-    id: '3',
-    tag: 'sys.monitor',
-    title: 'Alerta de Sistema',
-    subtitle: 'Incidente: Conexión perdida',
-    location: 'Locación: Zona Norte, 45',
-    priority: EmergencyPriority.medium,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 28)),
-    isNew: false,
-    status: 'active',
-  ),
-];
-
 class EmergenciesScreen extends StatefulWidget {
   const EmergenciesScreen({super.key});
 
@@ -77,11 +40,7 @@ class _EmergenciesScreenState extends State<EmergenciesScreen>
   late AnimationController _pulseController;
   bool _loading = true;
   List<Emergency> _emergencies = [];
-
-  Map<String, String> get _authHeaders => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer ${ApiClient.instance.token}',
-  };
+  String? _error;
 
   int get _activeCount =>
       _emergencies.where((e) => e.status != 'resolved').length;
@@ -114,81 +73,63 @@ class _EmergenciesScreenState extends State<EmergenciesScreen>
   Future<void> _fetchEmergencies() async {
     setState(() => _loading = true);
     try {
-      final res = await http.get(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/emergencies'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        final List data = jsonDecode(res.body);
-        setState(() {
-          _emergencies = data.map((e) => _parseEmergency(e)).toList();
-          _loading = false;
-        });
-      } else {
-        _useFallback();
-      }
-    } catch (_) {
-      _useFallback();
+      final data = await HttpClient.getList('/api/admin/emergencies', auth: true);
+      if (!mounted) return;
+      setState(() {
+        _emergencies = adminMapList(data).map(_parseEmergency).toList();
+        _error = null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminErrorText(e);
+        _loading = false;
+      });
     }
   }
 
-  void _useFallback() {
-    setState(() {
-      _emergencies = List.from(_mockEmergencies);
-      _loading = false;
-    });
-  }
-
+  /// Backend: {id, userId, viajeId, lat, lng, atendida, motivo?,
+  /// usuario{nombre,apellido,telefono}, viaje{origen,destino,estado}, createdAt}.
+  /// No hay prioridad en el backend: una alerta con viaje en curso es crítica,
+  /// con viaje asignado alta, y sin viaje media.
   Emergency _parseEmergency(Map<String, dynamic> json) {
-    final priorityStr = (json['priority'] as String? ?? 'medium').toLowerCase();
-    final priority = priorityStr == 'critical'
+    final usuario = json['usuario'] is Map ? json['usuario'] as Map : const {};
+    final viaje = json['viaje'] is Map ? json['viaje'] as Map : null;
+    final estadoViaje = viaje?['estado']?.toString();
+    final priority = estadoViaje == 'en_curso'
         ? EmergencyPriority.critical
-        : priorityStr == 'high'
+        : viaje != null
             ? EmergencyPriority.high
             : EmergencyPriority.medium;
+    final created = DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now();
+    final nombre = '${usuario['nombre'] ?? ''} ${usuario['apellido'] ?? ''}'.trim();
+    final lat = json['lat'];
+    final lng = json['lng'];
     return Emergency(
       id: json['id']?.toString() ?? '',
-      tag: json['tag'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      subtitle: json['subtitle'] as String? ?? '',
-      location: json['location'] as String? ?? '',
+      tag: 'SOS #${json['id'] ?? ''}${json['viajeId'] != null ? ' · Viaje #${json['viajeId']}' : ''}',
+      title: nombre.isNotEmpty ? nombre : 'Usuario #${json['userId'] ?? ''}',
+      subtitle: [
+        if (json['motivo'] != null) json['motivo'].toString(),
+        if (usuario['telefono'] != null) 'Tel: ${usuario['telefono']}',
+        if (viaje != null) '${viaje['origen'] ?? ''} → ${viaje['destino'] ?? ''}',
+      ].join(' · '),
+      location: lat != null && lng != null ? 'Ubicación: $lat, $lng' : 'Ubicación no disponible',
       priority: priority,
-      timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
-          : DateTime.now(),
-      isNew: json['isNew'] == true,
-      status: json['status'] as String? ?? 'active',
+      timestamp: created,
+      isNew: DateTime.now().difference(created).inMinutes < 10,
+      status: json['atendida'] == true ? 'resolved' : 'active',
     );
   }
 
   Future<void> _resolveEmergency(String id) async {
     try {
-      final res = await http.put(
-        Uri.parse('${ApiClient.baseUrl}/api/admin/emergencies/$id/resolve'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode == 200) {
-        await _fetchEmergencies();
-      }
-    } catch (_) {
-      setState(() {
-        _emergencies = _emergencies.map((e) {
-          if (e.id == id) {
-            return Emergency(
-              id: e.id,
-              tag: e.tag,
-              title: e.title,
-              subtitle: e.subtitle,
-              location: e.location,
-              priority: e.priority,
-              timestamp: e.timestamp,
-              isNew: e.isNew,
-              status: 'resolved',
-            );
-          }
-          return e;
-        }).toList();
-      });
+      await HttpClient.put('/api/admin/emergencies/$id/resolve', auth: true);
+      adminSnack(this, 'Emergencia marcada como atendida', color: const Color(0xFF4CAF50));
+      await _fetchEmergencies();
+    } catch (e) {
+      adminSnack(this, adminErrorText(e), error: true);
     }
   }
 
@@ -334,6 +275,20 @@ class _EmergenciesScreenState extends State<EmergenciesScreen>
   }
 
   Widget _buildEmergencyList() {
+    if (_emergencies.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(32),
+        children: [
+          Center(
+            child: Text(
+              _error ?? 'Sin emergencias activas',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _error != null ? Colors.red : Colors.black54),
+            ),
+          ),
+        ],
+      );
+    }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       itemCount: _emergencies.length,
@@ -383,7 +338,10 @@ class _EmergencyCardState extends State<_EmergencyCard>
       curve: Curves.easeOutCubic,
     ));
     _fadeAnim = Tween<double>(begin: 0, end: 1).animate(_animCtrl);
-    Future.delayed(Duration(milliseconds: 80 * widget.index), _animCtrl.forward);
+    // Escalonado limitado y protegido: la tarjeta puede desmontarse antes.
+    Future.delayed(Duration(milliseconds: 80 * widget.index.clamp(0, 8)), () {
+      if (mounted) _animCtrl.forward();
+    });
   }
 
   @override
@@ -589,11 +547,13 @@ class _EmergencyCardState extends State<_EmergencyCard>
         Icon(Icons.location_on_outlined,
             size: 13, color: Colors.grey.shade400),
         const SizedBox(width: 4),
-        Text(
-          widget.emergency.location,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade500,
+        Expanded(
+          child: Text(
+            widget.emergency.location,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade500,
+            ),
           ),
         ),
       ],
