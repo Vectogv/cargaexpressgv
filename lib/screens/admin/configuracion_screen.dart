@@ -259,25 +259,58 @@ class _ZoneRow {
   final TextEditingController hasta; // esquina sureste
   bool activa;
   final bool legacy;
+  // Centro y radio originales de una zona circular. Se conservan para poder
+  // guardarla tal cual: la app solo edita rectángulos, y antes reescribía el
+  // círculo como su rectángulo contenedor, perdiendo el radio sin avisar.
+  final double? lat;
+  final double? lng;
+  final double? radio;
+  final String desdeInicial;
+  final String hastaInicial;
 
-  _ZoneRow({String nombre = '', String desde = '', String hasta = '', this.activa = true, this.legacy = false})
-      : nombre = TextEditingController(text: nombre),
+  _ZoneRow({
+    String nombre = '',
+    String desde = '',
+    String hasta = '',
+    this.activa = true,
+    this.legacy = false,
+    this.lat,
+    this.lng,
+    this.radio,
+  })  : nombre = TextEditingController(text: nombre),
         desde = TextEditingController(text: desde),
-        hasta = TextEditingController(text: hasta);
+        hasta = TextEditingController(text: hasta),
+        desdeInicial = desde,
+        hastaInicial = hasta;
 
-  /// Zona del backend → fila editable. Las zonas antiguas (círculo) se
-  /// convierten al rectángulo que las contiene, igual que el panel web.
+  bool get esCirculo => lat != null && lng != null && radio != null;
+
+  /// ¿Se tocaron las esquinas? Solo entonces un círculo pasa a rectángulo.
+  bool get esquinasEditadas =>
+      desde.text.trim() != desdeInicial.trim() || hasta.text.trim() != hastaInicial.trim();
+
+  bool get conservaCirculo => esCirculo && !esquinasEditadas;
+
+  /// Zona del backend → fila editable. Una zona circular se muestra como el
+  /// rectángulo que la contiene, pero se guarda como círculo salvo que se
+  /// editen las esquinas (el radio se define desde el panel web, en el mapa).
   factory _ZoneRow.fromApi(Map<String, dynamic> z) {
     double? norte = _toDouble(z['norte']);
     double? sur = _toDouble(z['sur']);
     double? este = _toDouble(z['este']);
     double? oeste = _toDouble(z['oeste']);
     var legacy = false;
+    double? centroLat;
+    double? centroLng;
+    double? radioKm;
     if (z['tipo'] == 'circulo' || norte == null) {
       final lat = _toDouble(z['lat'] ?? (z['centro'] is Map ? z['centro']['lat'] : null));
       final lng = _toDouble(z['lng'] ?? (z['centro'] is Map ? z['centro']['lng'] : null));
       final radio = _toDouble(z['radio']);
       if (lat != null && lng != null && radio != null) {
+        centroLat = lat;
+        centroLng = lng;
+        radioKm = radio;
         final dLat = radio / _kmPerDeg;
         final dLng = radio / (_kmPerDeg * math.cos(lat * math.pi / 180));
         norte = lat + dLat;
@@ -294,6 +327,9 @@ class _ZoneRow {
       desde: hasBounds ? '${_fmt(norte)}, ${_fmt(oeste)}' : '',
       hasta: hasBounds ? '${_fmt(sur)}, ${_fmt(este)}' : '',
       legacy: legacy,
+      lat: centroLat,
+      lng: centroLng,
+      radio: radioKm,
     );
   }
 
@@ -383,6 +419,18 @@ class _CoverageSectionState extends State<_CoverageSection> {
       if (nombre.isEmpty) {
         _snack('Cada zona necesita un nombre', error: true);
         return;
+      }
+      // Zona de radio que nadie tocó: se reenvía igual para no perder el radio.
+      if (r.conservaCirculo) {
+        payload.add({
+          'nombre': nombre,
+          'activa': r.activa,
+          'tipo': 'circulo',
+          'lat': r.lat,
+          'lng': r.lng,
+          'radio': r.radio,
+        });
+        continue;
       }
       final b = r.bounds;
       if (b == null) {
@@ -516,13 +564,20 @@ class _ZoneEditorState extends State<_ZoneEditor> {
               ),
             ],
           ),
-          if (r.legacy)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
+          if (r.esCirculo)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Esta zona estaba configurada como círculo. Se convirtió al rectángulo que la contiene; '
-                'revisa las esquinas y guarda.',
-                style: TextStyle(fontSize: 12, color: Colors.orange),
+                r.conservaCirculo
+                    ? 'Zona de radio (${_fmt(r.radio!)} km desde el centro). Aquí se muestra el rectángulo '
+                        'que la contiene, pero se guarda tal cual. El radio se ajusta en el panel web, '
+                        'en Configuración → Cobertura.'
+                    : 'Editaste las esquinas: al guardar, esta zona dejará de ser un radio de '
+                        '${_fmt(r.radio!)} km y pasará a ser rectangular.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: r.conservaCirculo ? Colors.black54 : Colors.orange,
+                ),
               ),
             ),
           const SizedBox(height: 8),
