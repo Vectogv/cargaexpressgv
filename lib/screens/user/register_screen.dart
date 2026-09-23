@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../home_by_role.dart';
 import 'login_screen.dart';
@@ -62,13 +64,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _showSnack('Completa los datos del conductor');
       return;
     }
-    final edad = int.tryParse(_edadCtrl.text.trim());
-    if (edad == null) {
-      _showSnack('La edad es obligatoria');
+    final errorEmail = validarEmail(_emailCtrl.text);
+    if (errorEmail != null) {
+      _showSnack(errorEmail);
       return;
     }
-    if (edad < 18) {
+    final errorPassword = validarPasswordRegistro(_passCtrl.text);
+    if (errorPassword != null) {
+      _showSnack(errorPassword);
+      return;
+    }
+    final edad = int.tryParse(_edadCtrl.text.trim());
+    if (edad != null && edad < LimitesUsuario.edadMin) {
       _showSnack('Debes ser mayor de 18 años para registrarte');
+      return;
+    }
+    final errorEdad = validarEdad(_edadCtrl.text);
+    if (errorEdad != null || edad == null) {
+      _showSnack(errorEdad ?? 'La edad es obligatoria');
       return;
     }
 
@@ -187,20 +200,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 20),
 
-            _buildField(controller: _nombreCtrl, label: 'Nombre'),
+            _buildField(controller: _nombreCtrl, label: 'Nombre', maxLength: LimitesUsuario.nombre),
             const SizedBox(height: 12),
-            _buildField(controller: _apellidoCtrl, label: 'Apellido'),
+            _buildField(controller: _apellidoCtrl, label: 'Apellido', maxLength: LimitesUsuario.apellido),
             const SizedBox(height: 12),
             _buildField(
               controller: _emailCtrl,
               label: 'Correo electrónico',
               keyboardType: TextInputType.emailAddress,
+              maxLength: LimitesUsuario.email,
             ),
             const SizedBox(height: 12),
             _buildField(
               controller: _passCtrl,
               label: 'Contraseña',
               obscure: _obscure,
+              maxLength: LimitesUsuario.passwordMax,
               suffix: IconButton(
                 icon: Icon(
                     _obscure ? Icons.visibility_off : Icons.visibility,
@@ -214,12 +229,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
               controller: _telefonoCtrl,
               label: 'Teléfono',
               keyboardType: TextInputType.phone,
+              maxLength: LimitesUsuario.telefono,
             ),
             const SizedBox(height: 12),
             _buildField(
               controller: _edadCtrl,
               label: 'Edad *',
               keyboardType: TextInputType.number,
+              maxLength: 3,
             ),
 
             if (_rol == 'conductor') ...[
@@ -236,12 +253,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _cedulaCtrl,
                 label: 'Cédula',
                 keyboardType: TextInputType.number,
+                maxLength: LimitesUsuario.cedula,
               ),
               const SizedBox(height: 12),
               _buildField(
                 controller: _placaCtrl,
                 label: 'Placa',
                 textCapitalization: TextCapitalization.characters,
+                maxLength: LimitesUsuario.placa,
               ),
               const SizedBox(height: 12),
               Container(
@@ -274,11 +293,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _buildField(
                 controller: _capacidadCtrl,
                 label: 'Capacidad (ej: 500 kg)',
+                maxLength: LimitesUsuario.capacidad,
               ),
               const SizedBox(height: 12),
               _buildField(
                 controller: _ciudadCtrl,
                 label: 'Ciudad (zona de cobertura)',
+                maxLength: LimitesUsuario.ciudad,
               ),
             ],
 
@@ -346,9 +367,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     bool obscure = false,
     Widget? suffix,
     TextCapitalization textCapitalization = TextCapitalization.none,
+    int? maxLength,
   }) {
     return TextField(
       controller: controller,
+      // Límite del backend (app/validators/auth.ts), sin contador visible.
+      inputFormatters: [if (maxLength != null) LengthLimitingTextInputFormatter(maxLength)],
       keyboardType: keyboardType,
       obscureText: obscure,
       textCapitalization: textCapitalization,

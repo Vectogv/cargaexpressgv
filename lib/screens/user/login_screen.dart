@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../home_by_role.dart';
@@ -26,6 +27,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
       _showSnack('Completa todos los campos');
+      return;
+    }
+    final errorEmail = validarEmail(_emailCtrl.text);
+    if (errorEmail != null) {
+      _showSnack(errorEmail);
       return;
     }
     setState(() => _loading = true);
