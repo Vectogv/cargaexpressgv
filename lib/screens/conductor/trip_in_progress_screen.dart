@@ -26,6 +26,8 @@ import '../../services/fraud_detection_service.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/route_service.dart';
+import '../../services/config_cliente_service.dart';
+import 'esperando_confirmacion_cliente.dart';
 import 'trip_chat_screen.dart';
 import 'viaje_en_camino_screen.dart';
 import 'viaje_llegada_destino_screen.dart';
@@ -137,6 +139,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
 
     _loadRoute();
+    // Radio de cierre y plazo de confirmación del cliente (con valores por
+    // defecto si el endpoint no responde).
+    ConfigClienteService.instance.cargar();
 
     _lifecycleSub = AppLifecycleService.instance.onBackgroundChanged.listen((isBackground) {
       try {
@@ -1421,7 +1426,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             ],
           ]
           else if (estado == TripStatus.esperaConfirmacion || estado == TripStatus.pendienteConfirmacion)
-            _actionButton('Confirmar finalización', _finalizeTrip, _primaryBlue),
+            // Sólo el cliente confirma la entrega (confirmClose exige rol
+            // cliente): el conductor espera y puede consultar el estado real.
+            ValueListenableBuilder<ReglasCliente>(
+              valueListenable: ConfigClienteService.instance.reglas,
+              builder: (_, reglas, _) => EsperandoConfirmacionCliente(
+                minutosRevision: reglas.confirmacionTimeoutMin,
+                cargando: _actionLoading,
+                onActualizar: _finalizeTrip,
+              ),
+            ),
         ]),
       ),
     );
