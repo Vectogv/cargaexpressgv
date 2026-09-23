@@ -168,6 +168,16 @@ void main() {
     expect(find.byIcon(Icons.gavel_rounded), findsOneWidget);
   });
 
+  testWidgets('la notificación suspension_por_pago tiene su propio icono', (tester) async {
+    backend = [
+      {...remota('s1', fecha: DateTime.now().toIso8601String()), 'tipo': 'suspension_por_pago'},
+    ];
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.money_off_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_outlined), findsNothing);
+  });
+
   testWidgets('si el backend falla y no hay nada, ofrece reintentar', (tester) async {
     errorBackend = ApiException('Unauthorized', statusCode: 401);
     await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
