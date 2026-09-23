@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
+import '../../widgets/error_carga.dart';
 
 class ViajeDetalleScreen extends StatefulWidget {
   final dynamic tripId;
@@ -22,12 +24,22 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     _load();
   }
 
+  /// Error de carga distinto de 404 (red, 5xx...): se ofrece reintentar.
+  String? _error;
+
   Future<void> _load() async {
+    if (mounted && !_loading) setState(() { _loading = true; _error = null; });
     try {
       final data = await ApiClient.instance.getTripDetail(widget.tripId);
-      if (mounted) setState(() { _trip = data; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() { _trip = data; _loading = false; _error = null; });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.statusCode == 404 ? null : e.message;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = mensajeDeError(e); });
     }
   }
 
@@ -99,6 +111,8 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _trip == null && _error != null
+              ? ErrorCarga(titulo: 'No pudimos cargar el viaje', detalle: _error, onReintentar: _load)
           : _trip == null
               ? const Center(child: Text('Viaje no encontrado', style: TextStyle(color: Colors.black45)))
               : SingleChildScrollView(
