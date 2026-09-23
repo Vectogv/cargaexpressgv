@@ -44,6 +44,21 @@ void main() {
       });
     });
 
+    testWidgets('muestra el precio final (monto real) y si no hay, el estimado', (tester) async {
+      await abrir(tester, const MisEnviosScreen(),
+          ok: (_) => jsonResp({
+                'data': [
+                  {'_id': 't1', 'estado': 'finalizado', 'precioEstimado': 30000, 'precioFinal': 32000},
+                  {'_id': 't2', 'estado': 'buscando_conductor', 'precioEstimado': '25000.00'},
+                ],
+              }),
+          falla: () => false, body: () async {
+        expect(find.text('\$32000'), findsOneWidget);
+        expect(find.text('\$30000'), findsNothing);
+        expect(find.text('\$25000'), findsOneWidget);
+      });
+    });
+
     testWidgets('error -> mensaje, sin spinner, reintentar', (tester) async {
       var falla = true;
       await abrir(tester, const MisEnviosScreen(),

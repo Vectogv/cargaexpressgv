@@ -118,6 +118,9 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
     final origen = v['origen'] as Map<String, dynamic>?;
     final destino = v['destino'] as Map<String, dynamic>?;
     final estado = v['estado'] as String? ?? '';
+    // precioFinal es el monto real; el estimado sólo si aún no hay final.
+    num? precio(dynamic x) => x is num ? x : num.tryParse(x?.toString() ?? '');
+    final monto = precio(v['precioFinal']) ?? precio(v['precioEstimado']);
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ViajeDetalleScreen(tripId: v['_id'] ?? v['id']))),
       child: Container(
@@ -154,9 +157,9 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
                 Expanded(child: Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
               ],
             ),
-            if (v['precioEstimado'] != null) ...[
+            if (monto != null) ...[
               const SizedBox(height: 6),
-              Text('\$${(v['precioEstimado'] as num).toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
+              Text('\$${monto.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
             ],
           ],
         ),
