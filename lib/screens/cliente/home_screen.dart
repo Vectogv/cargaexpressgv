@@ -35,7 +35,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
   Map<String, dynamic>? _activeTrip;
   bool _loading = true;
-  int _notifUnread = 0;
   bool _redirected = false;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
 
@@ -43,8 +42,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _notifUnread = NotificationService.instance.unreadCount;
     _loadActiveTrip();
+    NotificationService.instance.refresh();
 
     _socketSub = NotificationService.instance.onNotification.listen((event) {
       final tipo = event['__event'] as String?;
@@ -71,7 +70,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
         }
       }
 
-      if (mounted) setState(() => _notifUnread = NotificationService.instance.unreadCount);
     });
 
   }
@@ -211,7 +209,15 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
             );
           }),
           const Spacer(),
-          _badgeIcon(Icons.notifications_outlined, _notifUnread, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
+          // Misma fuente que la pantalla de notificaciones.
+          ValueListenableBuilder<int>(
+            valueListenable: NotificationService.instance.unread,
+            builder: (_, count, __) => _badgeIcon(
+              Icons.notifications_outlined,
+              count,
+              () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+            ),
+          ),
         ],
       ),
     );

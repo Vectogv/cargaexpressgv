@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/api_client.dart';
+import '../../services/notification_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -9,8 +9,10 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final NotificationService _service = NotificationService.instance;
   List<Map<String, dynamic>> _notifications = [];
   bool _loading = true;
+  bool _error = false;
 
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
@@ -20,16 +22,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    // Misma fuente que el badge de la campana: se muestra de inmediato lo que
+    // hay en memoria y se completa con el backend.
+    _notifications = _service.notifications;
+    _service.unread.addListener(_sync);
     _fetchNotifications();
   }
 
+  @override
+  void dispose() {
+    _service.unread.removeListener(_sync);
+    super.dispose();
+  }
+
+  void _sync() {
+    if (mounted) setState(() => _notifications = _service.notifications);
+  }
+
   Future<void> _fetchNotifications() async {
-    try {
-      final notifs = await ApiClient.instance.getNotifications();
-      if (mounted) setState(() { _notifications = notifs; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
+    setState(() {
+      _loading = true;
+      _error = false;
+    });
+    final ok = await _service.refresh();
+    if (!mounted) return;
+    setState(() {
+      _notifications = _service.notifications;
+      _loading = false;
+      _error = !ok;
+    });
   }
 
   IconData _iconForTipo(String? tipo) {
@@ -78,45 +99,87 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: Column(
         children: [
           _buildHeader(context),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _notifications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.notifications_none, size: 64, color: Colors.grey.shade300),
-                            const SizedBox(height: 12),
-                            const Text('Sin notificaciones', style: TextStyle(fontSize: 16, color: Colors.black45)),
-                          ],
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _notifications.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => _buildNotifCard(_notifications[i]),
-                      ),
-          ),
+          Expanded(child: _buildList()),
         ],
       ),
     );
   }
 
+  Widget _buildList() {
+    if (_notifications.isEmpty) {
+      if (_loading) return const Center(child: CircularProgressIndicator());
+      return RefreshIndicator(
+        onRefresh: _fetchNotifications,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const SizedBox(height: 120),
+            Icon(
+              _error ? Icons.cloud_off_outlined : Icons.notifications_none,
+              size: 64,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _error ? 'No pudimos cargar tus notificaciones' : 'Sin notificaciones',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
+            ),
+            if (_error) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: OutlinedButton.icon(
+                  onPressed: _fetchNotifications,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _fetchNotifications,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _notifications.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (_, i) => _buildNotifCard(_notifications[i]),
+      ),
+    );
+  }
+
   Widget _buildHeader(BuildContext context) {
+    final hayNoLeidas = _notifications.any((n) => n['leido'] != true);
     return Container(
       color: _white,
-      padding: const EdgeInsets.only(top: 44, left: 16, right: 16, bottom: 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(Icons.arrow_back_ios_new, size: 20),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+          child: Row(
+            children: [
+              if (Navigator.canPop(context))
+                IconButton(
+                  tooltip: 'Volver',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                )
+              else
+                const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Notificaciones', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              ),
+              if (hayNoLeidas)
+                TextButton(
+                  onPressed: () => _service.markAllRead(),
+                  child: const Text('Marcar todas leídas'),
+                ),
+            ],
           ),
-          const SizedBox(width: 12),
-          const Text('Notificaciones', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        ],
+        ),
       ),
     );
   }
@@ -180,17 +243,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _onNotifTap(Map<String, dynamic> notif) {
-    // `leido` puede venir null/ausente; `!= true` cubre false y null sin
-    // lanzar (el operador `!` sobre un bool nullable/null crashea).
-    if (notif['leido'] != true) {
-      setState(() => notif['leido'] = true);
-      ApiClient.instance.markNotificationRead(notif['id']).catchError((_) {});
-    }
+    if (notif['leido'] != true) _service.markRead(notif);
+    final texto = notif['mensaje'] as String? ?? notif['titulo'] as String? ?? '';
+    if (texto.isEmpty) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(notif['mensaje'] as String? ?? notif['titulo'] as String? ?? ''),
-        duration: const Duration(seconds: 2),
-      ),
+      SnackBar(content: Text(texto), duration: const Duration(seconds: 2)),
     );
   }
 

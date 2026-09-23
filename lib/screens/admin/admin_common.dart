@@ -68,9 +68,9 @@ void showAdminNotificationsSheet(BuildContext context, {VoidCallback? onMarkedAl
                     shrinkWrap: true,
                     children: notifs.take(20).map((n) => ListTile(
                       dense: true,
-                      leading: Icon(Icons.circle, size: 8, color: n['read'] == true ? Colors.grey : const Color(0xFF1565C0)),
-                      title: Text('${n['__event'] ?? ''}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      subtitle: Text('${n['message'] ?? n['title'] ?? 'Sin detalle'}', style: const TextStyle(fontSize: 11)),
+                      leading: Icon(Icons.circle, size: 8, color: n['leido'] == true ? Colors.grey : const Color(0xFF1565C0)),
+                      title: Text('${n['titulo'] ?? 'Notificación'}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      subtitle: Text('${n['mensaje'] ?? 'Sin detalle'}', style: const TextStyle(fontSize: 11)),
                     )).toList(),
                   ),
                 ),

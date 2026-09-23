@@ -386,15 +386,15 @@ class SocketServiceClient {
       });
 
       safeOn('notification:new', (data) {
-        if (data is Map) safeAdd(_notificationCtrl, Map<String, dynamic>.from(data));
+        if (data is Map) safeAdd(_notificationCtrl, {...Map<String, dynamic>.from(data), '__event': 'notification:new'});
       });
 
       safeOn('notification:read', (data) {
-        if (data is Map) safeAdd(_notificationCtrl, Map<String, dynamic>.from(data));
+        if (data is Map) safeAdd(_notificationCtrl, {...Map<String, dynamic>.from(data), '__event': 'notification:read'});
       });
 
       safeOn('notification:delete', (data) {
-        if (data is Map) safeAdd(_notificationCtrl, Map<String, dynamic>.from(data));
+        if (data is Map) safeAdd(_notificationCtrl, {...Map<String, dynamic>.from(data), '__event': 'notification:delete'});
       });
 
       safeOn('trip:nearby', (data) {
