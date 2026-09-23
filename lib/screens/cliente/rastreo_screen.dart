@@ -66,6 +66,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
   StreamSubscription<Map<String, dynamic>>? _tripStartedSub;
   StreamSubscription<Map<String, dynamic>>? _driverLocationSub;
+  StreamSubscription<Map<String, dynamic>>? _etaSub;
+  // Última ETA (min) enviada por el backend en `trip:eta_update`.
+  int? _etaServidorMin;
   StreamSubscription<Map<String, dynamic>>? _finalizeRequestSub;
   StreamSubscription<Map<String, dynamic>>? _finalizeCancelledSub;
   StreamSubscription<Map<String, dynamic>>? _tripFinalizedSub;
@@ -326,6 +329,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
         _scheduleDriverRebuild();
         _checkProximity();
       }
+    });
+
+    _etaSub = SocketServiceClient.instance.onTripEtaUpdate.listen((data) {
+      final minutos = minutosEta(data);
+      if (minutos == null || minutos == _etaServidorMin || !mounted) return;
+      setState(() => _etaServidorMin = minutos);
     });
 
     _finalizeRequestSub = SocketServiceClient.instance.onFinalizeRequest.listen((data) {
@@ -762,6 +771,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     _tripAcceptedSub?.cancel();
     _tripStartedSub?.cancel();
     _driverLocationSub?.cancel();
+    _etaSub?.cancel();
     _finalizeRequestSub?.cancel();
     _finalizeCancelledSub?.cancel();
     _tripFinalizedSub?.cancel();
@@ -1108,6 +1118,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
       status: _status,
       distanciaKm: distance,
       tiempoEstimado: _trip?.tiempoEstimado,
+      minutosServidor: _etaServidorMin,
     );
     final chatEnabled = TripStatus.chatHabilitado(_status);
 
@@ -1476,14 +1487,26 @@ class _PulseSearchIndicatorState extends State<_PulseSearchIndicator> with Singl
 /// desconocido cae en la vista de "Buscando conductor".
 enum RastreoVista { busqueda, seguimiento, entrega, disputa, cerrado, reserva }
 
-/// Tiempo estimado de llegada del conductor al origen, o null si no hay
-/// datos reales (no se muestra). Con la posición en vivo usa la misma
-/// velocidad que el backend (30 km/h); si no, `tiempoEstimado` del viaje.
+/// Minutos de un `trip:eta_update` (`{minutos}`), o null si no es válido.
 @visibleForTesting
-String? etaRecogida({required String status, double? distanciaKm, num? tiempoEstimado}) {
+int? minutosEta(Map<String, dynamic> data) {
+  final v = data['minutos'];
+  final n = v is num ? v : num.tryParse(v?.toString() ?? '');
+  if (n == null || !n.isFinite || n < 0) return null;
+  return n.ceil();
+}
+
+/// Tiempo estimado de llegada del conductor al origen, o null si no hay
+/// datos reales (no se muestra). Prioridad: la ETA en vivo del backend
+/// (`trip:eta_update`), la posición en vivo a 30 km/h (misma velocidad que
+/// el backend) y por último `tiempoEstimado` del viaje.
+@visibleForTesting
+String? etaRecogida({required String status, double? distanciaKm, num? tiempoEstimado, int? minutosServidor}) {
   if (status != TripStatus.aceptado && status != TripStatus.enCamino) return null;
   int? minutos;
-  if (distanciaKm != null && distanciaKm.isFinite) {
+  if (minutosServidor != null) {
+    minutos = max(1, minutosServidor);
+  } else if (distanciaKm != null && distanciaKm.isFinite) {
     minutos = max(1, (distanciaKm / 30 * 60).ceil());
   } else if (tiempoEstimado != null && tiempoEstimado > 0) {
     minutos = tiempoEstimado.ceil();

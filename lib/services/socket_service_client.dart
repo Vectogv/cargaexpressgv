@@ -488,7 +488,7 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_disputeResolvedCtrl, Map<String, dynamic>.from(data));
       });
 
-      safeOn('trip:eta_update', (data) {
+      safeOn(SocketEvents.tripEtaUpdate, (data) {
         if (data is Map) safeAdd(_tripEtaCtrl, Map<String, dynamic>.from(data));
       });
 
@@ -550,6 +550,7 @@ class SocketServiceClient {
       'trip:finalize_request': _finalizeRequestCtrl,
       'dispute:updated': _disputeUpdatedCtrl,
       'dispute:resolved': _disputeResolvedCtrl,
+      SocketEvents.tripEtaUpdate: _tripEtaCtrl,
     }[evento];
     if (ctrl == null) throw ArgumentError('Evento no soportado en pruebas: $evento');
     ctrl.add(data);

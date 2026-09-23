@@ -11,4 +11,8 @@ class SocketEvents {
   static const String sosActivated = 'sos:activated';
   static const String paymentConfirmed = 'payment:confirmed';
   static const String paymentRejected = 'payment:rejected';
+
+  /// `{minutos}`: ETA del conductor al origen mientras el viaje está
+  /// aceptado (driver_controller.updateLocation, 30 km/h).
+  static const String tripEtaUpdate = 'trip:eta_update';
 }
