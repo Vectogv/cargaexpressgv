@@ -21,6 +21,16 @@ class User {
     this.calificacion,
   });
 
-  factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
+  /// El backend a veces envía el usuario anidado con `id` en vez de `_id`
+  /// (p. ej. payloads de socket) o con id numérico. Se normaliza antes de
+  /// delegar en el código generado para que no lance `TypeError` y para que
+  /// el arreglo sobreviva a una regeneración de `user.g.dart`.
+  factory User.fromJson(Map<String, dynamic> json) {
+    final rawId = json['_id'] ?? json['id'];
+    if (json['_id'] is! String) {
+      json = <String, dynamic>{...json, '_id': rawId?.toString() ?? ''};
+    }
+    return _$UserFromJson(json);
+  }
   Map<String, dynamic> toJson() => _$UserToJson(this);
 }

@@ -204,9 +204,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
             // el viaje actual para NO perder conductor / origen / destino.
             final incomingId = data['_id'] ?? data['id'];
             if (_trip == null && incomingId == null) return;
-            final base = _trip?.toJson() ?? <String, dynamic>{};
-            base['_id'] = base['_id'] ?? incomingId;
-            base.addAll(Map<String, dynamic>.from(data));
+            final current = _trip?.toJson() ?? <String, dynamic>{};
+            current['_id'] = current['_id'] ?? incomingId.toString();
+            // Fusión segura: un conductor/cliente parcial no pisa el completo.
+            final base = Trip.mergeSocketPayload(
+                current, Map<String, dynamic>.from(data));
             // `trip:delivered` no existe en el backend: el monto final llega en
             // trip:status_changed (pendiente_confirmacion / finalizado).
             final monto = data['montoFinal'];

@@ -46,4 +46,36 @@ class Trip {
     return _$TripFromJson(json);
   }
   Map<String, dynamic> toJson() => _$TripToJson(this);
+
+  /// Fusiona un payload de socket (normalmente parcial: `{id, estado, ...}`)
+  /// sobre el viaje actual serializado, sin perder datos ya cargados.
+  ///
+  /// - Un `conductor`/`cliente` anidado entrante se fusiona campo a campo con
+  ///   el existente (no lo reemplaza): un objeto parcial o sin `_id` no borra
+  ///   el nombre, teléfono, etc. que ya se tenía.
+  /// - Los valores `null` entrantes no pisan datos existentes.
+  static Map<String, dynamic> mergeSocketPayload(
+    Map<String, dynamic> base,
+    Map<String, dynamic> data,
+  ) {
+    final merged = <String, dynamic>{...base};
+    data.forEach((key, value) {
+      if (value == null) return;
+      if ((key == 'conductor' || key == 'cliente') && value is Map) {
+        final incoming = Map<String, dynamic>.from(value);
+        final existing = merged[key];
+        final nested = existing is Map
+            ? <String, dynamic>{...Map<String, dynamic>.from(existing)}
+            : <String, dynamic>{};
+        incoming.forEach((k, v) {
+          if (v != null) nested[k] = v;
+        });
+        nested['_id'] ??= incoming['id'];
+        merged[key] = nested;
+        return;
+      }
+      merged[key] = key == '_id' ? value.toString() : value;
+    });
+    return merged;
+  }
 }
