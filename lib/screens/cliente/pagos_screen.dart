@@ -311,8 +311,12 @@ class _PagosScreenState extends State<PagosScreen> {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
         ),
-        Container(
-          decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
+        // Material (no Container con color): los ListTile pintan su fondo y
+        // el efecto de toque en el Material más cercano.
+        Material(
+          color: _white,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
           child: Column(children: children),
         ),
       ],
