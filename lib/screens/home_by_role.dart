@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../providers/notification_provider.dart';
 import '../services/api_client.dart';
 import '../services/logger_service.dart';
+import '../services/notification_service.dart';
 import '../services/session_monitor_service.dart';
 import 'admin/dashboard_screen.dart';
 import 'cliente/home_screen.dart';
@@ -55,14 +57,13 @@ HomeDestino homeDestinoForSession() => homeDestinoFor(
       esModerador: ApiClient.instance.esModerador,
     );
 
-/// Notificaciones en memoria y monitor de sesión (ambos idempotentes).
+/// Monitor de sesión (idempotente) y registro del token FCM, que `main.dart`
+/// sólo hace si al abrir la app ya había sesión guardada.
 void iniciarServiciosDeSesion() {
-  try {
-    NotificationProvider.instance.init();
-  } catch (e) {
-    LoggerService.instance.error('NotificationProvider init error', e);
-  }
   SessionMonitorService.instance.start();
+  unawaited(NotificationService.instance.registrarTokenSesion().catchError((Object e) {
+    LoggerService.instance.error('registrarTokenSesion error', e);
+  }));
 }
 
 /// Abre [home] comoúnica ruta de la pila. Se usa tras login y registro:

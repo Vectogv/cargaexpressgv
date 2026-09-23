@@ -277,9 +277,20 @@ class NotificationService {
     }
   }
 
+  @visibleForTesting
+  set fcmTokenParaTest(String? token) => _fcmToken = token;
+
+  /// Tras login o registro: [init] suele haber corrido al abrir la app sin
+  /// sesión, así que el token FCM aún no se registró en el backend.
+  Future<void> registrarTokenSesion() async {
+    final token = _fcmToken;
+    if (token == null || token.isEmpty) return;
+    await _registerToken(token);
+  }
+
   Future<void> _registerToken(String token) async {
     try {
-      if (ApiClient.instance.token == null) return;
+      if (!hasSession()) return;
       // HttpClient: renueva el token ante 401 y maneja suspensión/timeouts.
       await HttpClient.put('/api/users/fcm-token', body: {'fcmToken': token}, auth: true);
     } catch (e) {

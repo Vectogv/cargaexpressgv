@@ -6,7 +6,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
-import 'package:provider/provider.dart';
 import 'services/api_client.dart';
 import 'services/map_config.dart';
 import 'services/notification_service.dart';
@@ -19,7 +18,6 @@ import 'services/app_lifecycle_service.dart';
 import 'services/error_handler_service.dart';
 import 'services/session_monitor_service.dart';
 import 'services/session_events.dart';
-import 'providers/notification_provider.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/home_by_role.dart';
 
@@ -254,14 +252,6 @@ Future<void> _initServices() async {
     LoggerService.instance.error('AppLifecycleService init error', e);
   }
 
-  try {
-    if (ApiClient.instance.token != null) {
-      NotificationProvider.instance.init();
-    }
-  } catch (e) {
-    LoggerService.instance.error('NotificationProvider init error', e);
-  }
-
   // No bloquean el arranque — se lanzan en paralelo al final.
   unawaited(
     NotificationService.instance.init().catchError((e, s) {
@@ -306,23 +296,18 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: NotificationProvider.instance),
-      ],
-      child: MaterialApp(
-        navigatorKey: _navigatorKey,
-        scaffoldMessengerKey: _scaffoldMessengerKey,
-        debugShowCheckedModeBanner: false,
-        title: 'CargaExpress',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
-          useMaterial3: true,
-        ),
-        home: ApiClient.instance.token != null
-            ? _homeScreenByRole()
-            : const AuthScreen(),
+    return MaterialApp(
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
+      debugShowCheckedModeBanner: false,
+      title: 'CargaExpress',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
+        useMaterial3: true,
       ),
+      home: ApiClient.instance.token != null
+          ? _homeScreenByRole()
+          : const AuthScreen(),
     );
   }
 }
