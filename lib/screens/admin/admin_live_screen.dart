@@ -179,17 +179,23 @@ class _AdminLiveScreenState extends State<AdminLiveScreen>
           ],
         ),
         actions: [
-          if (_notifUnread > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Badge(
-                label: Text('$_notifUnread'),
-                child: IconButton(
-                  icon: const Icon(Icons.notifications_outlined),
-                  onPressed: () {},
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Badge(
+              isLabelVisible: _notifUnread > 0,
+              label: Text('$_notifUnread'),
+              child: IconButton(
+                tooltip: 'Notificaciones',
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () => showAdminNotificationsSheet(
+                  context,
+                  onMarkedAllRead: () {
+                    if (mounted) setState(() => _notifUnread = 0);
+                  },
                 ),
               ),
             ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _fetchAll,

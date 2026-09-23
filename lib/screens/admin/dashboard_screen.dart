@@ -15,6 +15,7 @@ import 'configuracion_screen.dart';
 import '../../services/notification_service.dart';
 import 'gestion_comunicados_screen.dart';
 import 'mapa_vivo_screen.dart';
+import 'admin_common.dart';
 import '../user/auth_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -265,52 +266,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showNotifications() {
-    final notifs = NotificationService.instance.notifications;
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text('Notificaciones', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                    const Spacer(),
-                    if (notifs.isNotEmpty)
-                      TextButton(
-                        onPressed: () {
-                          NotificationService.instance.markAllRead();
-                          setState(() => _unreadCount = 0);
-                          Navigator.pop(context);
-                        },
-                        child: const Text('Marcar todas leídas'),
-                      ),
-                  ],
-                ),
-                const Divider(),
-                if (notifs.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Center(child: Text('Sin notificaciones', style: TextStyle(color: Colors.black45))),
-                  )
-                else
-                  ...notifs.take(20).map((n) => ListTile(
-                    dense: true,
-                    leading: Icon(Icons.circle, size: 8, color: n['read'] == true ? Colors.grey : const Color(0xFF1565C0)),
-                    title: Text('${n['__event'] ?? ''}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    subtitle: Text('${n['message'] ?? n['title'] ?? 'Sin detalle'}', style: const TextStyle(fontSize: 11)),
-                  )),
-              ],
-            ),
-          ),
-        );
+    showAdminNotificationsSheet(
+      context,
+      onMarkedAllRead: () {
+        if (mounted) setState(() => _unreadCount = 0);
       },
     );
   }
