@@ -55,6 +55,12 @@ class _HomeScreenState extends State<HomeScreen> {
   /// GET /api/payment/debt: deuda de comisión y `estadoCuenta`.
   Map<String, dynamic>? _deuda;
   EstadoPagoConductor get _estadoPago => estadoPagoConductor(_deuda);
+
+  /// Viaje que ocupa al conductor. `pendiente_confirmacion` sólo espera la
+  /// confirmación del cliente (el backend no lo cuenta como ocupado): puede
+  /// conectarse y tomar otro viaje mientras tanto.
+  bool get _viajeOcupa =>
+      _activeTrip != null && _activeTrip!['estado'] != TripStatus.pendienteConfirmacion;
   int _knownNearbyCount = 0;
   final Set<String> _offeredTripIds = {};
   final Set<String> _activeBannerIds = {};
@@ -76,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _socketSub = NotificationService.instance.onNotification.listen((event) async {
       final tipo = event['__event'] as String?;
       if (tipo == 'trip:nearby') {
-        if (_activeTrip == null) {
+        if (!_viajeOcupa) {
           final tripId = (event['_id'] ?? event['id']).toString();
           if (!_offeredTripIds.contains(tripId)) {
             _showNewTripBanner(event);
@@ -103,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     _tripSub = DriverLocationService.instance.onTripsUpdated.listen((trips) {
-      if (_activeTrip != null) return;
+      if (_viajeOcupa) return;
       final disponibles = trips.where((t) {
         final id = (t['_id'] ?? t['id']).toString();
         return !_offeredTripIds.contains(id);
@@ -156,7 +162,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final cachedTrip = CacheService.instance.getCachedActiveTrip();
     if (cachedTrip != null) {
       final estado = cachedTrip['estado'] as String?;
-      if (estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso || estado == TripStatus.entregado || estado == TripStatus.esperaConfirmacion || estado == TripStatus.pendienteConfirmacion) {
+      // `pendiente_confirmacion` en caché no basta: el backend puede tener ya
+      // un viaje activo nuevo (tiene prioridad) o haberlo cerrado.
+      if (estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso || estado == TripStatus.entregado || estado == TripStatus.esperaConfirmacion) {
         if (mounted) setState(() => _activeTrip = cachedTrip);
         _redirectToActiveTrip();
         return;
@@ -166,8 +174,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_activeTrip != null) {
       CacheService.instance.cacheActiveTrip(_activeTrip!);
       _redirectToActiveTrip();
-      return;
     }
+    // Esperando la confirmación del cliente no impide conectarse.
+    if (_viajeOcupa) return;
     if (_online) {
       final estado = _verificacionEstado;
       if (estado == null) {
@@ -232,8 +241,20 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       final current = ModalRoute.of(context);
       if (current != null && !current.isCurrent) return;
-      Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip != null ? Trip.fromJson(_activeTrip!) : null)));
+      _abrirViaje(_activeTrip);
     });
+  }
+
+  /// Abre la vista del viaje. Al volver de un viaje que sólo espera la
+  /// confirmación del cliente, reanuda la búsqueda de viajes si está en
+  /// línea (la vista del viaje pausa el GPS del inicio).
+  Future<void> _abrirViaje(Map<String, dynamic>? viaje) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: viaje != null ? Trip.fromJson(viaje) : null)));
+    if (!mounted) return;
+    await _fetchActiveTrip();
+    if (mounted && _online && !_viajeOcupa && !_estadoPago.bloqueaConexion) {
+      unawaited(DriverLocationService.instance.start());
+    }
   }
 
   Future<void> _fetchActiveTrip() async {
@@ -789,7 +810,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActiveTripCard() {
+  Widget _buildActiveTripCard({EdgeInsets margen = const EdgeInsets.all(16)}) {
     final t = _activeTrip!;
     final origen = t['origen'] as Map<String, dynamic>?;
     final destino = t['destino'] as Map<String, dynamic>?;
@@ -810,7 +831,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: margen,
       child: Column(
         children: [
           Container(
@@ -851,7 +872,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity, height: 50,
                   child: ElevatedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: Trip.fromJson(t)))),
+                    onPressed: () => _abrirViaje(t),
                     icon: const Icon(Icons.map_rounded, size: 22),
                     label: const Text('Ver viaje en el mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
@@ -884,7 +905,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomeContent() {
-    if (_activeTrip != null) {
+    if (_viajeOcupa) {
       return _buildActiveTripCard();
     }
     final sinConductor = _profile?['conductor'] == null;
@@ -895,6 +916,13 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Viaje que espera la confirmación del cliente: visible sin
+          // bloquear el resto del inicio.
+          if (_activeTrip != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: _buildActiveTripCard(margen: EdgeInsets.zero),
+            ),
           if (sinConductor)
             GestureDetector(
               onTap: () => _navigate(10),
