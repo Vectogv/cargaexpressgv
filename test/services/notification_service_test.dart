@@ -114,6 +114,25 @@ void main() {
     expect(marcadas, unorderedEquals(['1', '2']));
   });
 
+  test('"Conductor asignado" sale de offer:accepted (flujo real) sin duplicar con trip:accepted', () {
+    service.ingest({'__event': 'offer:accepted', 'viajeId': '55', 'ofertaId': 'o1'});
+    expect(service.unreadCount, 1);
+    expect(service.notifications.single['titulo'], 'Conductor asignado');
+
+    service.ingest({'__event': 'trip:accepted', 'id': '55'});
+    service.ingest({'__event': 'offer:accepted', 'viajeId': '55', 'ofertaId': 'o1'});
+    expect(service.unreadCount, 1);
+
+    service.ingest({'__event': 'offer:accepted', 'viajeId': '56'});
+    expect(service.unreadCount, 2);
+  });
+
+  test('al conductor no le llega "Conductor asignado" por offer:accepted', () {
+    rol = 'conductor';
+    service.ingest({'__event': 'offer:accepted', 'viajeId': '57'});
+    expect(service.unreadCount, 0);
+  });
+
   test('otro usuario no ve los avisos del anterior', () async {
     service.ingest({'__event': 'trip:accepted', 'id': 't4'});
     expect(service.unreadCount, 1);

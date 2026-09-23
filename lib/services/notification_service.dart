@@ -47,6 +47,7 @@ class NotificationService {
   // Subscripciones a SocketServiceClient (reemplaza el socket propio)
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
+  StreamSubscription<Map<String, dynamic>>? _offerAcceptedSub;
   StreamSubscription<Map<String, dynamic>>? _tripCancelledSub;
   StreamSubscription<Map<String, dynamic>>? _notificationSub;
 
@@ -84,6 +85,10 @@ class NotificationService {
 
     _tripAcceptedSub = SocketServiceClient.instance.onTripAccepted.listen((data) {
       _addNotification({...data, '__event': 'trip:accepted'});
+    });
+
+    _offerAcceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((data) {
+      _addNotification({...data, '__event': 'offer:accepted'});
     });
 
     _tripCancelledSub = SocketServiceClient.instance.onTripCancelled.listen((data) {
@@ -165,9 +170,17 @@ class NotificationService {
         if (msg == null) return; // lo canceló el propio usuario
         _addLocal('viaje_cancelado', 'Viaje cancelado', msg, id);
         break;
+      // El backend emite `offer:accepted` al aceptar una oferta (flujo real);
+      // `trip:accepted` sólo sale de una ruta antigua. Un aviso por viaje.
+      case 'offer:accepted':
       case 'trip:accepted':
         if (currentRol() != 'cliente') return;
-        _addLocal('viaje_aceptado', 'Conductor asignado', 'Un conductor aceptó tu viaje.', id);
+        final tripId = (data['viajeId'] ?? data['tripId'] ?? data['id'])?.toString();
+        if (tripId != null &&
+            _local.any((n) => n['tipo'] == 'viaje_aceptado' && n['tripId'] == tripId)) {
+          return;
+        }
+        _addLocal('viaje_aceptado', 'Conductor asignado', 'Un conductor aceptó tu viaje.', tripId);
         break;
       case 'trip:nearby':
         if (currentRol() != 'conductor') return;
@@ -195,6 +208,7 @@ class NotificationService {
       'tipo': tipo,
       'leido': false,
       'createdAt': ahora.toIso8601String(),
+      if (tripId != null) 'tripId': tripId,
     });
   }
 
@@ -336,6 +350,7 @@ class NotificationService {
   void dispose() {
     _tripStatusSub?.cancel();
     _tripAcceptedSub?.cancel();
+    _offerAcceptedSub?.cancel();
     _tripCancelledSub?.cancel();
     _notificationSub?.cancel();
     _controller.close();
