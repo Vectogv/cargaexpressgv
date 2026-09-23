@@ -1,18 +1,32 @@
 import 'package:flutter/material.dart';
 
+import '../../contracts/disputa_resultado.dart';
+
+String? _texto(dynamic v) {
+  final s = v?.toString().trim();
+  return (s == null || s.isEmpty) ? null : s;
+}
+
+/// Resolución de una disputa del conductor con los datos de
+/// GET /api/disputes/:id (`resultado`, `problema`, `comentarioAdmin`).
 class ResolucionScreen extends StatelessWidget {
-  final String resultado;
-  final String motivo;
+  final Map<String, dynamic> disputa;
   final VoidCallback? onVerDetalle;
   final VoidCallback? onVolverInicio;
 
   const ResolucionScreen({
     super.key,
-    this.resultado = 'A favor del conductor',
-    this.motivo = 'La evidencia confirma que la carga fue entregada en buen estado.',
+    required this.disputa,
     this.onVerDetalle,
     this.onVolverInicio,
   });
+
+  String? get _resultadoCrudo => _texto(disputa['resultado']);
+
+  /// Sólo se abre al resolverse la disputa: sin resultado legible se
+  /// muestra "Disputa resuelta" en lugar de "Sin resultado".
+  String get _resultado =>
+      _resultadoCrudo == null ? 'Disputa resuelta' : etiquetaResultado(_resultadoCrudo);
 
   static const Color _textPrimary = Color(0xFF111111);
   static const Color _textBody = Color(0xFF333333);
@@ -79,33 +93,17 @@ class ResolucionScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      resultado,
+                      _resultado,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: _blue,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    const Divider(color: _divider, height: 1),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Motivo',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: _label,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      motivo,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: _textBody,
-                        height: 1.55,
-                      ),
-                    ),
+                    if (_texto(disputa['problema']) != null)
+                      ..._seccion('Problema reportado', _texto(disputa['problema'])!),
+                    if (_texto(disputa['comentarioAdmin']) != null)
+                      ..._seccion('Comentario del administrador', _texto(disputa['comentarioAdmin'])!),
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
@@ -148,10 +146,32 @@ class ResolucionScreen extends StatelessWidget {
     );
   }
 
+  List<Widget> _seccion(String titulo, String texto) => [
+        const SizedBox(height: 20),
+        const Divider(color: _divider, height: 1),
+        const SizedBox(height: 20),
+        Text(
+          titulo,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: _label,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          texto,
+          style: const TextStyle(
+            fontSize: 14,
+            color: _textBody,
+            height: 1.55,
+          ),
+        ),
+      ];
+
   Widget _buildBanner() {
-    final aFavor = resultado.toLowerCase().contains('favor del conductor');
-    final enContra = resultado.toLowerCase().contains('contra del conductor')
-        || resultado.toLowerCase().contains('en contra');
+    final aFavor = _resultadoCrudo == DisputaResultado.favorConductor;
+    final enContra = _resultadoCrudo == DisputaResultado.favorCliente;
     final icon = aFavor ? Icons.check_rounded : (enContra ? Icons.close_rounded : Icons.info_outline_rounded);
     final gradientColors = aFavor
         ? const [Color(0xFF2E7D32), Color(0xFF43A047)]

@@ -1,20 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../contracts/disputa_resultado.dart';
 import 'detalle_resolucion_screen.dart';
 
-/// Texto del resultado de una disputa (`favor_cliente` / `favor_conductor`).
-String etiquetaResultado(dynamic resultado) {
-  switch (resultado?.toString()) {
-    case 'favor_cliente':
-      return 'A favor del cliente';
-    case 'favor_conductor':
-      return 'A favor del conductor';
-    case null:
-    case '':
-      return 'Sin resultado';
-    default:
-      return resultado.toString();
-  }
-}
+export '../../contracts/disputa_resultado.dart' show etiquetaResultado;
 
 /// Reembolso con separador de miles (`$15.000`); null si no hay reembolso.
 /// El backend lo envía como número o como texto decimal.

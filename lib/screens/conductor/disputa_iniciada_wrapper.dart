@@ -63,20 +63,16 @@ class _DisputaIniciadaWrapperState extends State<DisputaIniciadaWrapper> {
     if (id != widget.disputeId?.toString()) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      String resultado = 'Resuelto';
-      String motivo = '';
+      Map<String, dynamic> disputa = const {};
       try {
-        final dispute = await ApiClient.instance.getDispute(widget.disputeId);
-        resultado = dispute['resultado'] as String? ?? 'Resuelto';
-        motivo = dispute['motivo'] as String? ?? '';
+        disputa = await ApiClient.instance.getDispute(widget.disputeId);
       } catch (_) {}
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => ResolucionScreen(
-            resultado: resultado,
-            motivo: motivo,
+            disputa: disputa,
             onVolverInicio: () => Navigator.popUntil(context, (r) => r.isFirst),
           ),
         ),
