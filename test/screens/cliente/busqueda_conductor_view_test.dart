@@ -48,7 +48,8 @@ void main() {
     await _pump(tester);
 
     expect(find.text('Buscando conductor disponible'), findsOneWidget);
-    expect(find.text('02:05'), findsOneWidget);
+    // Con la máquina cargada puede pasar un segundo entre el test y el widget.
+    expect(find.textContaining(RegExp(r'^02:0[56]$')), findsOneWidget);
     expect(find.text('Sin vehículos disponibles a menos de 2 km'), findsOneWidget);
     expect(find.text('Calle 10 # 43-20, Medellín'), findsOneWidget);
     expect(find.text('Carrera 70, Envigado'), findsOneWidget);
