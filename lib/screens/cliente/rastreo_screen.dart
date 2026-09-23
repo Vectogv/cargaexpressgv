@@ -485,7 +485,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   void _checkProximity() {
     final dist = _distanceToPickup();
-    if (dist < _proximidadKm && !_proximityAlertShown && _status == TripStatus.aceptado) {
+    // El backend penaliza la cancelación del cliente en aceptado y
+    // conductor_en_camino: avisar en ambos.
+    final cancelarPenaliza = _status == TripStatus.aceptado || _status == TripStatus.enCamino;
+    if (dist < _proximidadKm && !_proximityAlertShown && cancelarPenaliza) {
       _proximityAlertShown = true;
       _showProximityAlert();
     }

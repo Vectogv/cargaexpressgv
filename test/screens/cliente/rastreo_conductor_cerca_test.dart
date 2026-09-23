@@ -37,4 +37,12 @@ void main() {
       expect(find.byType(RastreoScreen, skipOffstage: false), findsOneWidget);
     });
   });
+
+  testWidgets('el aviso también sale con el conductor en camino (el backend penaliza igual)',
+      (tester) async {
+    await conApiFalsa((req) => jsonResp(_viaje('conductor_en_camino')), () async {
+      await _conductorA300m(tester, 'conductor_en_camino');
+      expect(find.text('El conductor ya se encuentra cerca'), findsOneWidget);
+    });
+  });
 }
