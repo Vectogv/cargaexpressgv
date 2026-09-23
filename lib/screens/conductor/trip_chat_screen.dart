@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/socket_service_client.dart';
@@ -76,7 +77,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
         _activeTrip = await ApiClient.instance.getActiveTrip();
       }
       final estado = _activeTrip?['estado'] as String?;
-      _canChat = estado == 'aceptado' || estado == 'conductor_en_camino' || estado == 'conductor_llegada' || estado == 'en_curso' || estado == 'entregado' || estado == 'esperando_confirmacion';
+      _canChat = TripStatus.chatHabilitado(estado);
       if (_canChat) {
         _setupSocket();
         final tripId = _activeTrip!['id']?.toString();
@@ -162,7 +163,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
       if (data['id']?.toString() == tripId && mounted) {
         final estado = data['estado'] as String?;
         if (estado != null) {
-          setState(() => _canChat = estado == 'aceptado' || estado == 'conductor_en_camino' || estado == 'conductor_llegada' || estado == 'en_curso' || estado == 'entregado' || estado == 'esperando_confirmacion');
+          setState(() => _canChat = TripStatus.chatHabilitado(estado));
         }
       }
     });
