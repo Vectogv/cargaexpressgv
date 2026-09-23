@@ -132,9 +132,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _pagoConfirmadoSub = SocketServiceClient.instance.onPaymentConfirmed.listen((data) {
       if (!mounted) return;
-      setState(() => _deuda = {...?_deuda, 'estadoCuenta': 'activa', 'montoDeuda': 0});
+      // Puede quedar saldo (viajes terminados durante la revisión): la cuenta
+      // queda activa y el aviso de deuda sigue con lo que falta.
+      setState(() => _deuda = deudaTrasPagoConfirmado(_deuda, data));
       unawaited(_cargarDeuda());
-      _snack(data['message']?.toString() ?? 'Tu pago fue confirmado. Ya puedes conectarte.');
+      _snack(mensajePagoConfirmado(data));
     });
     _pagoRechazadoSub = SocketServiceClient.instance.onPaymentRejected.listen((data) {
       if (!mounted) return;

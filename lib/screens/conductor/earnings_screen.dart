@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
 import '../../services/api/payment_service.dart';
+import 'aviso_cuenta_pago.dart' show formatoDinero, numeroDe;
 
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -472,9 +473,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
   }
 
   Widget _buildDebtCard() {
-    final monto = (_debt?['montoDeuda'] as num?) ?? 0;
-    final dias = (_debt?['diasRestantes'] as num?)?.toInt() ?? 0;
+    final monto = numeroDe(_debt?['montoDeuda']) ?? 0;
+    final dias = numeroDe(_debt?['diasRestantes'])?.toInt() ?? 0;
     final estado = _debt?['estadoCuenta'] as String?;
+    // Monto del comprobante en revisión (null si no hay uno).
+    final comprobante = numeroDe(_debt?['montoComprobante']);
     final nequiNumero = _debt?['nequiNumero'] as String?;
     final nequiNombre = _debt?['nequiNombre'] as String?;
     final sinDeuda = (monto <= 0) && (estado == null || estado == 'activa');
@@ -527,6 +530,29 @@ class _EarningsScreenState extends State<EarningsScreen> {
               style: TextStyle(fontSize: 12, color: const Color(0xFFBF360C), height: 1.4),
             ),
           ),
+          if (estado == 'esperando_confirmacion' && comprobante != null && comprobante > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(10)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  'Comprobante en revisión por ${formatoDinero(comprobante)}',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)),
+                ),
+                if (monto > comprobante) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tu deuda actual es ${formatoDinero(monto)}: los ${formatoDinero(monto - comprobante)} adicionales '
+                    'son comisiones de viajes terminados mientras se revisa el comprobante. '
+                    'Seguirán pendientes cuando se apruebe el pago.',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF0D47A1), height: 1.4),
+                  ),
+                ],
+              ]),
+            ),
+          ],
           if (nequiNumero != null && nequiNumero.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(

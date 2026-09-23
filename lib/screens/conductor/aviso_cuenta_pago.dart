@@ -34,11 +34,41 @@ String? _dinero(dynamic v) {
   return '\$$s';
 }
 
+/// Número de un campo del backend (acepta num o texto decimal).
+num? numeroDe(dynamic v) => _numero(v);
+
+/// `$12.000` (null si no hay monto positivo).
+String? formatoDinero(dynamic v) => _dinero(v);
+
 String? _fecha(dynamic iso) {
   final d = DateTime.tryParse(iso?.toString() ?? '')?.toLocal();
   if (d == null) return null;
   String dos(int v) => v.toString().padLeft(2, '0');
   return '${dos(d.day)}/${dos(d.month)}/${d.year}';
+}
+
+/// Deuda tras `payment:confirmed` ({message, estadoCuenta, montoDeuda,
+/// deudaFechaLimite}): `montoDeuda` es lo que queda por pagar (comisiones de
+/// viajes terminados mientras se revisaba el comprobante), 0 si quedó al día.
+Map<String, dynamic> deudaTrasPagoConfirmado(Map<String, dynamic>? anterior, Map<String, dynamic> evento) {
+  final restante = _numero(evento['montoDeuda']) ?? 0;
+  return {
+    ...?anterior,
+    'estadoCuenta': evento['estadoCuenta']?.toString() ?? 'activa',
+    'montoDeuda': restante > 0 ? restante : 0,
+    'deudaFechaLimite': restante > 0 ? evento['deudaFechaLimite'] : null,
+    'montoComprobante': null,
+  };
+}
+
+/// Mensaje para el conductor cuando el administrador aprueba su pago.
+String mensajePagoConfirmado(Map<String, dynamic> evento) {
+  final monto = _dinero(evento['montoDeuda']);
+  if (monto != null) {
+    final fecha = _fecha(evento['deudaFechaLimite']);
+    return 'Pago aprobado. Te quedan $monto por pagar${fecha != null ? ' antes del $fecha' : ''}';
+  }
+  return evento['message']?.toString() ?? 'Tu pago fue confirmado. Ya puedes conectarte.';
 }
 
 /// Aviso en el inicio del conductor sobre su deuda de comisión. No muestra

@@ -61,6 +61,58 @@ void main() {
     expect(log.where((r) => r.url.path == '/api/drivers/status' && r.body.contains('true')), isEmpty);
   });
 
+  testWidgets('payment:confirmed con saldo restante: avisa cuánto queda y mantiene el aviso de deuda', (tester) async {
+    pantallaAlta(tester);
+    deuda = {'estadoCuenta': 'esperando_confirmacion', 'montoDeuda': 20000, 'montoComprobante': 12000};
+    await conApiFalsa(backend, () async {
+      await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
+      await avanzar(tester, 2);
+      expect(find.text('Pago en revisión'), findsOneWidget);
+
+      deuda = {'estadoCuenta': 'activa', 'montoDeuda': 8000, 'deudaFechaLimite': '2026-10-08T12:00:00.000-05:00'};
+      SocketServiceClient.instance.simularEventoParaTest(SocketEvents.paymentConfirmed, {
+        'message': 'Tu pago ha sido confirmado y tu cuenta está activa. Te queda una deuda de \$8.000...',
+        'estadoCuenta': 'activa',
+        'montoDeuda': 8000,
+        'deudaFechaLimite': '2026-10-08T12:00:00.000-05:00',
+      });
+      await tester.pump();
+      await tester.pump();
+      // Sin esperar a recargar la deuda: el aviso ya refleja el saldo.
+      expect(find.text('Deuda de comisión: \$8.000'), findsOneWidget);
+      await avanzar(tester, 1);
+      expect(find.text('Pago aprobado. Te quedan \$8.000 por pagar antes del 08/10/2026'), findsOneWidget);
+      expect(find.text('Deuda de comisión: \$8.000'), findsOneWidget);
+      expect(find.text('Cuenta suspendida por pago pendiente'), findsNothing);
+      expect(interruptor(tester).onChanged, isNotNull);
+
+      await tester.pumpWidget(const SizedBox());
+      await avanzar(tester, 1);
+    });
+  });
+
+  testWidgets('payment:confirmed sin saldo quita el aviso de deuda', (tester) async {
+    pantallaAlta(tester);
+    deuda = {'estadoCuenta': 'esperando_confirmacion', 'montoDeuda': 12000, 'montoComprobante': 12000};
+    await conApiFalsa(backend, () async {
+      await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
+      await avanzar(tester, 2);
+      deuda = {'estadoCuenta': 'activa', 'montoDeuda': null};
+      SocketServiceClient.instance.simularEventoParaTest(SocketEvents.paymentConfirmed, {
+        'message': 'Tu pago ha sido confirmado. Tu cuenta está activa nuevamente.',
+        'estadoCuenta': 'activa',
+        'montoDeuda': 0,
+        'deudaFechaLimite': null,
+      });
+      await avanzar(tester, 1);
+      expect(find.byKey(const Key('aviso_cuenta_pago')), findsNothing);
+      expect(find.text('Tu pago ha sido confirmado. Tu cuenta está activa nuevamente.'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await avanzar(tester, 1);
+    });
+  });
+
   testWidgets('account:payment_suspended lo desconecta y muestra el aviso sin cerrar sesión', (tester) async {
     pantallaAlta(tester);
     deuda = {'estadoCuenta': 'activa', 'montoDeuda': 20000, 'deudaFechaLimite': '2026-10-08T12:00:00.000-05:00'};
