@@ -285,6 +285,7 @@ class ApiClient {
 
   Future<Map<String, dynamic>> makeOffer(dynamic tripId, int monto, {String? placa, String? mensaje}) => OfferService.makeOffer(tripId, monto, placa: placa, mensaje: mensaje);
   Future<List<Map<String, dynamic>>> getOffers(dynamic tripId) => OfferService.getOffers(tripId);
+  Future<List<Map<String, dynamic>>> getMyPendingOffers() => OfferService.getMyPendingOffers();
   Future<Map<String, dynamic>> acceptOffer(dynamic tripId, dynamic offerId) => OfferService.acceptOffer(tripId, offerId);
   Future<Map<String, dynamic>> rejectOffer(dynamic tripId, dynamic offerId) => OfferService.rejectOffer(tripId, offerId);
 

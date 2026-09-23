@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
+import '../../models/oferta_pendiente.dart';
 import '../../models/trip.dart';
+import '../../services/server_clock.dart';
+import 'oferta_aceptada_screen.dart';
 import 'trip_in_progress_screen.dart';
 
 class OffersScreen extends StatefulWidget {
@@ -13,14 +16,23 @@ class OffersScreen extends StatefulWidget {
   State<OffersScreen> createState() => _OffersScreenState();
 }
 
-class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderStateMixin {
+class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   Map<String, dynamic>? _activeTrip;
   List<Map<String, dynamic>> _history = [];
   bool _loadingActive = true;
   bool _loadingHistory = true;
 
+  /// Ofertas enviadas que esperan respuesta del cliente.
+  List<OfertaPendiente> _pendientes = [];
+  bool _loadingPendientes = true;
+  String? _errorPendientes;
+  Timer? _relojPendientes;
+  bool _abriendoViaje = false;
+
   StreamSubscription<Map<String, dynamic>>? _offerAcceptedSub;
+  StreamSubscription<Map<String, dynamic>>? _offerRejectedSub;
+  StreamSubscription<Map<String, dynamic>>? _offerExpiredSub;
 
   static const Color _primaryBlue = Color(0xFF1565C0);
   static const Color _accentGreen = Color(0xFF4CAF50);
@@ -31,22 +43,95 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
     _fetchData();
-    _offerAcceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((_) {
-      if (mounted) _fetchData();
-    });
+    _offerAcceptedSub = SocketServiceClient.instance.onOfferAccepted.listen(_ofertaAceptada);
+    _offerRejectedSub = SocketServiceClient.instance.onOfferRejected.listen(_quitarOferta);
+    _offerExpiredSub = SocketServiceClient.instance.onOfferExpired.listen(_quitarOferta);
+    // La cuenta regresiva se recalcula con la hora del servidor cada segundo.
+    _relojPendientes = Timer.periodic(const Duration(seconds: 1), (_) => _descartarVencidas());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _offerAcceptedSub?.cancel();
+    _offerRejectedSub?.cancel();
+    _offerExpiredSub?.cancel();
+    _relojPendientes?.cancel();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) _fetchPendientes();
+  }
+
   Future<void> _fetchData() async {
-    await Future.wait([_fetchActive(), _fetchHistory()]);
+    await Future.wait([_fetchPendientes(), _fetchActive(), _fetchHistory()]);
+  }
+
+  Future<void> _fetchPendientes() async {
+    if (mounted && _errorPendientes != null) {
+      setState(() { _errorPendientes = null; _loadingPendientes = true; });
+    }
+    try {
+      final lista = await ApiClient.instance.getMyPendingOffers();
+      final ahora = ServerClock.ahora();
+      final ofertas = lista
+          .map(OfertaPendiente.fromJson)
+          .where((o) => o.restante(ahora) != Duration.zero)
+          .toList();
+      if (mounted) setState(() { _pendientes = ofertas; _loadingPendientes = false; _errorPendientes = null; });
+    } catch (_) {
+      if (mounted) {
+        setState(() { _loadingPendientes = false; _errorPendientes = 'No se pudieron cargar tus ofertas'; });
+      }
+    }
+  }
+
+  void _descartarVencidas() {
+    if (!mounted || _pendientes.isEmpty) return;
+    final ahora = ServerClock.ahora();
+    setState(() => _pendientes = _pendientes.where((o) => o.restante(ahora) != Duration.zero).toList());
+  }
+
+  void _quitarOferta(Map<String, dynamic> evento) {
+    if (!mounted) return;
+    setState(() => _pendientes = _pendientes.where((o) => !o.coincideCon(evento)).toList());
+  }
+
+  /// El cliente aceptó una oferta: se abre el viaje como desde "Oferta enviada".
+  Future<void> _ofertaAceptada(Map<String, dynamic> evento) async {
+    if (!mounted) return;
+    OfertaPendiente? aceptada;
+    for (final o in _pendientes) {
+      if (o.coincideCon(evento)) aceptada = o;
+    }
+    if (aceptada == null || _abriendoViaje) {
+      _fetchData();
+      return;
+    }
+    _abriendoViaje = true;
+    setState(() => _pendientes = _pendientes.where((o) => o != aceptada).toList());
+    final monto = evento['monto'] is num ? evento['monto'] as num : aceptada.monto;
+    Map<String, dynamic> viaje;
+    try {
+      viaje = await ApiClient.instance.getTripDetail(aceptada.viajeId);
+    } catch (_) {
+      viaje = {'id': aceptada.viajeId, ...evento};
+    }
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(
+      builder: (_) => OfertaAceptadaScreen.desdeViaje(viaje, montoOferta: _dinero(monto)),
+    ));
+  }
+
+  static String _dinero(num n) {
+    final s = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+    return '\$$s';
   }
 
   Future<void> _fetchActive() async {
@@ -80,6 +165,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           labelColor: _primaryBlue,
           unselectedLabelColor: _textGrey,
           tabs: const [
+            Tab(text: 'Pendientes'),
             Tab(text: 'Viaje activo'),
             Tab(text: 'Historial'),
           ],
@@ -88,10 +174,95 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       body: TabBarView(
         controller: _tabController,
         children: [
+          _buildPendientesTab(),
           _buildActiveTab(),
           _buildHistoryTab(),
         ],
       ),
+    );
+  }
+
+  /// Lista deslizable (para "tirar hacia abajo" también en vacío o error).
+  Widget _mensajePendientes(IconData icono, String titulo, String detalle, {Widget? accion}) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
+      children: [
+        Icon(icono, size: 64, color: Colors.grey.shade300),
+        const SizedBox(height: 12),
+        Text(titulo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.black45)),
+        const SizedBox(height: 6),
+        Text(detalle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.black38)),
+        if (accion != null) ...[const SizedBox(height: 16), Center(child: accion)],
+      ],
+    );
+  }
+
+  Widget _buildPendientesTab() {
+    if (_loadingPendientes) return const Center(child: CircularProgressIndicator());
+    final Widget contenido;
+    if (_errorPendientes != null) {
+      contenido = _mensajePendientes(
+        Icons.cloud_off, _errorPendientes!, 'Revisa tu conexión e intenta de nuevo.',
+        accion: OutlinedButton.icon(
+          onPressed: _fetchPendientes,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Reintentar'),
+        ),
+      );
+    } else if (_pendientes.isEmpty) {
+      contenido = _mensajePendientes(
+        Icons.local_offer_outlined, 'No tienes ofertas pendientes',
+        'Las ofertas que envíes aparecerán aquí mientras el cliente decide.',
+      );
+    } else {
+      final ahora = ServerClock.ahora();
+      contenido = ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _pendientes.length,
+        itemBuilder: (_, i) => _pendienteCard(_pendientes[i], ahora),
+      );
+    }
+    return RefreshIndicator(onRefresh: _fetchPendientes, child: contenido);
+  }
+
+  Widget _pendienteCard(OfertaPendiente o, DateTime ahora) {
+    final restante = o.restante(ahora);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: const Color(0xFFFF8F00).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.timer_outlined, size: 14, color: Color(0xFFFF8F00)),
+              const SizedBox(width: 4),
+              Text(
+                restante != null ? 'Vence en ${formatoCuentaRegresiva(restante)}' : 'Esperando al cliente',
+                style: const TextStyle(fontSize: 12, color: Color(0xFFFF8F00), fontWeight: FontWeight.w700),
+              ),
+            ]),
+          ),
+          const Spacer(),
+          Text(_dinero(o.monto), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          const Icon(Icons.trip_origin, size: 16, color: _accentGreen),
+          const SizedBox(width: 8),
+          Expanded(child: Text(o.origen, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+        ]),
+        const SizedBox(height: 6),
+        Row(children: [
+          const Icon(Icons.location_on, size: 16, color: Colors.red),
+          const SizedBox(width: 8),
+          Expanded(child: Text(o.destino, style: const TextStyle(fontSize: 13, color: _textGrey))),
+        ]),
+      ]),
     );
   }
 

@@ -37,6 +37,28 @@ class OfertaAceptadaScreen extends StatefulWidget {
     required this.trip,
   });
 
+  /// Pantalla con los datos reales del viaje (GET /api/trips/:id) y el monto
+  /// ya formateado de la oferta aceptada.
+  factory OfertaAceptadaScreen.desdeViaje(Map<String, dynamic> trip, {required String montoOferta, Key? key}) {
+    final cliente = trip['cliente'] is Map ? Map<String, dynamic>.from(trip['cliente'] as Map) : const <String, dynamic>{};
+    final origen = trip['origen'] is Map ? trip['origen'] as Map : null;
+    final destino = trip['destino'] is Map ? trip['destino'] as Map : null;
+    return OfertaAceptadaScreen(
+      key: key,
+      montoOferta: montoOferta,
+      cliente: ClienteData(
+        nombre: cliente['nombre'] as String? ?? 'Cliente',
+        rating: (cliente['rating'] as num?)?.toDouble() ?? 5.0,
+        avatarUrl: cliente['avatar'] as String?,
+      ),
+      origen: origen?['direccion'] as String? ?? 'Origen',
+      destino: destino?['direccion'] as String? ?? 'Destino',
+      distancia: trip['distancia'] != null ? '${trip['distancia']} km' : '—',
+      descripcionCarga: trip['descripcion'] as String? ?? 'No especificada',
+      trip: trip,
+    );
+  }
+
   @override
   State<OfertaAceptadaScreen> createState() => _OfertaAceptadaScreenState();
 }

@@ -17,6 +17,13 @@ class OfferService {
     return list.cast<Map<String, dynamic>>();
   }
 
+  /// Ofertas propias del conductor pendientes y sin vencer
+  /// (GET /api/drivers/offers).
+  static Future<List<Map<String, dynamic>>> getMyPendingOffers() async {
+    final list = await HttpClient.getList('/api/drivers/offers', auth: true);
+    return list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
   static Future<Map<String, dynamic>> acceptOffer(dynamic tripId, dynamic offerId) async {
     return HttpClient.post('/api/trips/$tripId/offers/$offerId/accept', auth: true);
   }

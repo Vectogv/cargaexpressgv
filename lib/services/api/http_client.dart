@@ -10,6 +10,7 @@ import '../error_handler_service.dart';
 import '../logger_service.dart';
 import '../network_monitor_service.dart';
 import '../performance_monitor.dart';
+import '../server_clock.dart';
 import '../session_events.dart';
 
 class HttpClient {
@@ -108,7 +109,9 @@ class HttpClient {
     Duration timeout = _timeout,
   ]) async {
     try {
-      return await request().timeout(timeout);
+      final res = await request().timeout(timeout);
+      ServerClock.registrarFecha(res.headers['date']);
+      return res;
     } on TimeoutException {
       throw ApiException('El servidor tardó demasiado en responder. Intenta de nuevo.', code: 'TIMEOUT');
     } on http.ClientException {

@@ -34,6 +34,8 @@ void main() {
     }, () async {
       await tester.pumpWidget(const MaterialApp(home: OffersScreen()));
       await avanzar(tester);
+      await tester.tap(find.text('Viaje activo'));
+      await avanzar(tester);
       expect(find.text('Esperando confirmación del cliente'), findsOneWidget);
       expect(find.text('pendiente_confirmacion'), findsNothing);
       await tester.tap(find.text('Historial'));
