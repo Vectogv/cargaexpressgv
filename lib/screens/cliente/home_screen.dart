@@ -10,6 +10,7 @@ import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
 import '../user/auth_screen.dart';
 import '../conductor/notifications_screen.dart';
+import 'cliente_inicio_view.dart';
 import 'nuevo_envio_screen.dart';
 import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
@@ -17,6 +18,7 @@ import 'perfil_screen.dart';
 import 'pagos_screen.dart';
 import 'soporte_screen.dart';
 import 'ajustes_screen.dart';
+import 'viaje_detalle_screen.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
   const ClienteHomeScreen({super.key});
@@ -35,6 +37,10 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
   Map<String, dynamic>? _activeTrip;
   bool _loading = true;
+  bool _errorActivo = false;
+  List<Map<String, dynamic>> _recientes = [];
+  bool _cargandoRecientes = true;
+  bool _errorRecientes = false;
   bool _redirected = false;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
 
@@ -43,6 +49,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadActiveTrip();
+    _loadRecientes();
     NotificationService.instance.refresh();
 
     _socketSub = NotificationService.instance.onNotification.listen((event) {
@@ -50,6 +57,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
       if (tipo == SocketEvents.tripStatusChanged || tipo == SocketEvents.tripCancelled) {
         _loadActiveTrip();
+        _loadRecientes();
       }
 
       if (tipo == SocketEvents.tripCancelled && mounted) {
@@ -94,7 +102,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
       if (trip != null) {
         CacheService.instance.cacheActiveTrip(trip);
         if (mounted) {
-          setState(() { _activeTrip = trip; _loading = false; });
+          setState(() { _activeTrip = trip; _loading = false; _errorActivo = false; });
           // Un viaje en disputa sigue "activo" en el backend, pero no hay nada
           // que rastrear: no se fuerza la redireccion (evita que "Volver al
           // inicio" rebote de nuevo al seguimiento). La tarjeta lo muestra.
@@ -109,11 +117,37 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
         }
       } else {
         CacheService.instance.clearActiveTrip();
-        if (mounted) setState(() { _activeTrip = null; _loading = false; });
+        if (mounted) setState(() { _activeTrip = null; _loading = false; _errorActivo = false; });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() { _loading = false; _errorActivo = true; });
     }
+  }
+
+  /// Últimos envíos para el inicio (el viaje activo ya tiene su tarjeta).
+  Future<void> _loadRecientes() async {
+    if (mounted) setState(() { _cargandoRecientes = _recientes.isEmpty; _errorRecientes = false; });
+    try {
+      final data = await ApiClient.instance.getTripHistory(limit: 6);
+      final activoId = (_activeTrip?['_id'] ?? _activeTrip?['id'])?.toString();
+      final lista = data
+          .where((v) => activoId == null || (v['_id'] ?? v['id'])?.toString() != activoId)
+          .take(5)
+          .toList();
+      if (mounted) setState(() { _recientes = lista; _cargandoRecientes = false; });
+    } catch (_) {
+      if (mounted) setState(() { _cargandoRecientes = false; _errorRecientes = _recientes.isEmpty; });
+    }
+  }
+
+  Future<void> _refrescar() async {
+    await Future.wait([_loadActiveTrip(), _loadRecientes()]);
+  }
+
+  void _abrir(Widget screen, {bool recargar = false}) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then((_) {
+      if (recargar && mounted) _refrescar();
+    });
   }
 
   void _redirectToTracking() {
@@ -127,20 +161,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     });
   }
 
-  String _estadoLabel(String? estado) {
-    switch (estado) {
-      case TripStatus.buscando: return 'Buscando conductor';
-      case TripStatus.aceptado: return 'Conductor asignado';
-      case TripStatus.enCamino: return 'Conductor en camino';
-      case TripStatus.llegada: return 'Conductor llegó';
-      case TripStatus.enCurso: return 'En camino a destino';
-      case TripStatus.esperaConfirmacion: return 'Entrega completada';
-      case TripStatus.finalizado: return 'Finalizado';
-      case TripStatus.cancelado: return 'Cancelado';
-      default: return TripStatus.label(estado);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,11 +171,23 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
           children: [
             _buildHeader(),
             Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _activeTrip != null
-                      ? _buildActiveTripView()
-                      : _buildNoTripView(),
+              child: ClienteInicioView(
+                nombre: ApiClient.instance.nombre,
+                cargando: _loading,
+                errorActivo: _errorActivo,
+                viajeActivo: _activeTrip,
+                recientes: _recientes,
+                cargandoRecientes: _cargandoRecientes,
+                errorRecientes: _errorRecientes,
+                onNuevoEnvio: () => _abrir(const NuevoEnvioScreen(), recargar: true),
+                onVerSeguimiento: () => _abrir(const RastreoScreen(), recargar: true),
+                onVerViaje: (v) => _abrir(ViajeDetalleScreen(tripId: v['_id'] ?? v['id'])),
+                onHistorial: () => _abrir(const MisEnviosScreen()),
+                onPerfil: () => _abrir(const PerfilScreen()),
+                onSoporte: () => _abrir(const SoporteScreen()),
+                onReintentar: _refrescar,
+                onRefresh: _refrescar,
+              ),
             ),
           ],
         ),
@@ -177,9 +209,16 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       child: Row(
         children: [
+          Builder(builder: (ctx) {
+            return IconButton(
+              tooltip: 'Menú',
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+              icon: const Icon(Icons.menu_rounded, color: _textDark),
+            );
+          }),
           Builder(builder: (ctx) {
             return GestureDetector(
               onTap: () => Scaffold.of(ctx).openDrawer(),
@@ -246,205 +285,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
           ),
       ],
     );
-  }
-
-  Widget _buildNoTripView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '¡Bienvenido, ${ApiClient.instance.nombre}${ApiClient.instance.apellido != null && ApiClient.instance.apellido!.isNotEmpty ? ' ${ApiClient.instance.apellido}' : ''}!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-                letterSpacing: -0.4,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '¿Qué deseas hacer hoy?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey[500],
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NuevoEnvioScreen()),
-                ).then((_) => _loadActiveTrip()),
-                icon: const Icon(Icons.add_circle_outline, size: 22),
-                label: const Text(
-                  'Solicitar viaje',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primaryBlue,
-                  foregroundColor: _white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActiveTripView() {
-    final estado = _activeTrip!['estado'] as String?;
-    final origen = _activeTrip!['origen'] as Map<String, dynamic>?;
-    final destino = _activeTrip!['destino'] as Map<String, dynamic>?;
-    final conductor = _activeTrip!['conductor'] as Map<String, dynamic>?;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          const Text(
-            'Viaje en curso',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _estadoLabel(estado),
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const SizedBox(height: 28),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [_primaryBlue, const Color(0xFF1565C0)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(color: _primaryBlue.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6)),
-              ],
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 64, height: 64,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
-                  child: const Icon(Icons.local_shipping, color: Colors.white, size: 32),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  _estadoLabel(estado),
-                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
-                ),
-                if (origen != null || destino != null) ...[
-                  const SizedBox(height: 16),
-                  if (origen != null)
-                    _routeInfo(Icons.trip_origin, 'Origen', origen['direccion'] as String? ?? ''),
-                  if (destino != null) ...[
-                    const SizedBox(height: 6),
-                    _routeInfo(Icons.location_on, 'Destino', destino['direccion'] as String? ?? ''),
-                  ],
-                ],
-                if (conductor != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.white24,
-                          child: Text(
-                            _initials(conductor['nombre'] as String? ?? ''),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(conductor['nombre'] as String? ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                              Text('${conductor['tipoVehiculo'] ?? ''} \u00b7 ${conductor['placa'] ?? ''}', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity, height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const RastreoScreen()),
-                    ).then((_) => _loadActiveTrip()),
-                    icon: const Icon(Icons.track_changes, size: 20),
-                    label: const Text('Ver seguimiento', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _white,
-                      foregroundColor: _primaryBlue,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _routeInfo(IconData icon, String label, String dir) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.white70),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text('$label: $dir', style: const TextStyle(color: Colors.white, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-      ],
-    );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
   void _onNavTap(int index) {
