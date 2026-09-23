@@ -5,6 +5,9 @@ import 'location_permission.dart';
 import 'logger_service.dart';
 
 class SosService {
+  /// Longitud máxima de `alertas_emergencia.motivo` (varchar(100)).
+  static const int motivoMax = 100;
+
   /// Posición para el SOS sin bloquearlo: actual (con límites cortos), si no
   /// la última conocida; null si no hay ninguna. No abre los ajustes del
   /// sistema: el SOS no debe sacar al usuario de la app.
@@ -31,9 +34,10 @@ class SosService {
 
     // Sin posición se envía igual: el backend acepta lat/lng nulos (antes se
     // mandaba 0,0, una ubicación falsa en el golfo de Guinea).
+    final m = motivo?.trim() ?? '';
     final payload = {
       'viajeId': tripId,
-      if (motivo != null && motivo.trim().isNotEmpty) 'motivo': motivo.trim(),
+      if (m.isNotEmpty) 'motivo': m.length > motivoMax ? m.substring(0, motivoMax) : m,
       if (pos != null) 'lat': pos.latitude,
       if (pos != null) 'lng': pos.longitude,
     };

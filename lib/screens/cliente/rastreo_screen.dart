@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1303,34 +1304,17 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   Future<void> _sendSos() async {
     if (_sosSending) return;
-    final confirmed = await showDialog<bool>(
+    // Devuelve el texto opcional (puede ser '') o null si se cancela.
+    final descripcion = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enviar alerta SOS'),
-        content: const Text(
-          'Se notificará a tu contacto de emergencia con tu ubicación actual. ¿Deseas continuar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Enviar SOS'),
-          ),
-        ],
-      ),
+      builder: (_) => const _SosDialog(),
     );
-    if (confirmed != true || !mounted) return;
+    if (descripcion == null || !mounted) return;
+    final motivo = descripcion.trim().isEmpty ? 'SOS enviado por el cliente' : descripcion.trim();
 
     setState(() => _sosSending = true);
     try {
-      final alerta = await SosService.sendAlert(tripId: _trip?.id, motivo: 'SOS enviado por el cliente');
+      final alerta = await SosService.sendAlert(tripId: _trip?.id, motivo: motivo);
       if (!mounted) return;
       if (alerta.id != null) {
         Navigator.push(
@@ -1352,6 +1336,67 @@ class _RastreoScreenState extends State<RastreoScreen> {
     } finally {
       if (mounted) setState(() => _sosSending = false);
     }
+  }
+}
+
+/// Confirmación del SOS con un texto opcional ("¿qué está pasando?"). El
+/// backend avisa a administradores, moderadores de la zona y al otro
+/// participante del viaje; NO al contacto de emergencia.
+class _SosDialog extends StatefulWidget {
+  const _SosDialog();
+
+  @override
+  State<_SosDialog> createState() => _SosDialogState();
+}
+
+class _SosDialogState extends State<_SosDialog> {
+  final _texto = TextEditingController();
+
+  @override
+  void dispose() {
+    _texto.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Enviar alerta SOS'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Se notificará al equipo de soporte y al conductor, con tu ubicación si está disponible.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _texto,
+            maxLines: 2,
+            // alertas_emergencia.motivo es varchar(100).
+            inputFormatters: [LengthLimitingTextInputFormatter(SosService.motivoMax)],
+            decoration: const InputDecoration(
+              hintText: '¿Qué está pasando? (opcional)',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFDC2626),
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context, _texto.text),
+          child: const Text('Enviar SOS'),
+        ),
+      ],
+    );
   }
 }
 
