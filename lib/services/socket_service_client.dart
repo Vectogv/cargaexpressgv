@@ -537,6 +537,24 @@ class SocketServiceClient {
     });
   }
 
+  /// Pruebas: entrega [data] a los listeners como si el backend hubiera
+  /// emitido [evento] (sólo eventos que usan las pantallas del cliente).
+  @visibleForTesting
+  void simularEventoParaTest(String evento, Map<String, dynamic> data) {
+    final ctrl = <String, StreamController<Map<String, dynamic>>>{
+      SocketEvents.tripStatusChanged: _tripStatusCtrl,
+      'driver:location': _driverLocationCtrl,
+      'new:offer': _newOfferCtrl,
+      'offer:accepted': _offerAcceptedCtrl,
+      'trip:cancelled': _tripCancelledCtrl,
+      'trip:finalize_request': _finalizeRequestCtrl,
+      'dispute:updated': _disputeUpdatedCtrl,
+      'dispute:resolved': _disputeResolvedCtrl,
+    }[evento];
+    if (ctrl == null) throw ArgumentError('Evento no soportado en pruebas: $evento');
+    ctrl.add(data);
+  }
+
   /// Pruebas: observa los eventos que la app intenta emitir.
   @visibleForTesting
   void Function(String event, Map<String, dynamic> data)? onEmitForTest;

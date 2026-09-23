@@ -104,12 +104,14 @@ class _CancelTripScreenState extends State<CancelTripScreen> {
                     children: [
                       _CustomRadio(selected: isSelected),
                       const SizedBox(width: 14),
-                      Text(
-                        reason,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                          color: isSelected ? const Color(0xFF1A1A2E) : const Color(0xFF4A4A5A),
+                      Expanded(
+                        child: Text(
+                          reason,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected ? const Color(0xFF1A1A2E) : const Color(0xFF4A4A5A),
+                          ),
                         ),
                       ),
                     ],

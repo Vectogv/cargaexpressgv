@@ -498,12 +498,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
   void _showProximityAlert() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      DriverNearbyWarningSheet.show(
-        context,
-        onProceed: () {
-          Navigator.maybePop(context);
-        },
-      );
+      // "Cancelar de todas formas" abre la cancelación real (antes sólo
+      // cerraba pantallas). El backend decide si aún se puede cancelar
+      // (CONDUCTOR_CERCA) y el error se muestra al usuario.
+      DriverNearbyWarningSheet.show(context, onProceed: _cancelar);
     });
   }
 
