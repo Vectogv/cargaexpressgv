@@ -27,6 +27,7 @@ import 'conductor_en_la_zona_screen.dart';
 import 'llegada_al_destino_screen.dart';
 import 'chat_screen.dart';
 import 'emergencia_chat_screen.dart';
+import 'soporte_screen.dart';
 
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
@@ -753,6 +754,17 @@ class _RastreoScreenState extends State<RastreoScreen> {
         return 'Viaje completado';
       case TripStatus.finalizado:
         return 'Viaje finalizado';
+      case TripStatus.disputa:
+      case TripStatus.enDisputa:
+        return 'Viaje en disputa';
+      case TripStatus.cancelado:
+        return 'Viaje cancelado';
+      case TripStatus.rechazado:
+        return 'Viaje rechazado';
+      case TripStatus.sos:
+        return 'Emergencia activa';
+      case TripStatus.reservado:
+        return 'Reserva programada';
       default:
         return 'Rastreo';
     }
@@ -810,22 +822,48 @@ class _RastreoScreenState extends State<RastreoScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    switch (_status) {
-      case TripStatus.buscando:
+    switch (rastreoVistaPara(_status)) {
+      case RastreoVista.busqueda:
         return _buildSearchContent();
-      case TripStatus.aceptado:
-      case TripStatus.enCamino:
-      case TripStatus.llegada:
-      case TripStatus.enCurso:
+      case RastreoVista.seguimiento:
         return _buildTrackingContent();
-      case TripStatus.entregado:
-      case TripStatus.esperaConfirmacion:
-      case TripStatus.pendienteConfirmacion:
-      case TripStatus.finalizado:
+      case RastreoVista.entrega:
         return _buildDeliveryContent();
-      default:
-        return _buildSearchContent();
+      case RastreoVista.disputa:
+        return RastreoEstadoInfo(
+          icon: Icons.gavel_rounded,
+          color: const Color(0xFFF59E0B),
+          titulo: 'Viaje en disputa',
+          mensaje: 'Un moderador está revisando el caso. Te notificaremos '
+              'la resolución; mientras tanto no necesitas hacer nada más.',
+          onSoporte: () => _safePush(const SoporteScreen()),
+          onInicio: _volverAlInicio,
+        );
+      case RastreoVista.cerrado:
+        final rechazado = _status == TripStatus.rechazado;
+        return RastreoEstadoInfo(
+          icon: Icons.cancel_outlined,
+          color: const Color(0xFFDC2626),
+          titulo: rechazado ? 'Viaje rechazado' : 'Viaje cancelado',
+          mensaje: 'Este viaje ya no está activo. Puedes solicitar uno nuevo '
+              'desde el inicio.',
+          onSoporte: () => _safePush(const SoporteScreen()),
+          onInicio: _volverAlInicio,
+        );
+      case RastreoVista.reserva:
+        return RastreoEstadoInfo(
+          icon: Icons.event_available,
+          color: const Color(0xFF2563EB),
+          titulo: 'Reserva programada',
+          mensaje: 'La búsqueda de conductor comenzará a la hora programada.',
+          onInicio: _volverAlInicio,
+        );
     }
+  }
+
+  void _volverAlInicio() {
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Widget _buildDeliveryContent() {
@@ -1352,6 +1390,122 @@ class _PulseSearchIndicatorState extends State<_PulseSearchIndicator> with Singl
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Qué contenido muestra [RastreoScreen] para cada estado del backend
+/// (`app/services/trip_state_machine.ts`). Ningún estado terminal o
+/// desconocido cae en la vista de "Buscando conductor".
+enum RastreoVista { busqueda, seguimiento, entrega, disputa, cerrado, reserva }
+
+@visibleForTesting
+RastreoVista rastreoVistaPara(String status) {
+  switch (status) {
+    case TripStatus.creado:
+    case TripStatus.buscando:
+    case TripStatus.pendiente:
+      return RastreoVista.busqueda;
+    case TripStatus.aceptado:
+    case TripStatus.enCamino:
+    case TripStatus.llegada:
+    case TripStatus.enCurso:
+    case TripStatus.sos:
+      return RastreoVista.seguimiento;
+    case TripStatus.entregado:
+    case TripStatus.esperaConfirmacion:
+    case TripStatus.pendienteConfirmacion:
+    case TripStatus.finalizado:
+      return RastreoVista.entrega;
+    case TripStatus.disputa:
+    case TripStatus.enDisputa:
+      return RastreoVista.disputa;
+    case TripStatus.cancelado:
+    case TripStatus.rechazado:
+      return RastreoVista.cerrado;
+    case TripStatus.reservado:
+      return RastreoVista.reserva;
+    default:
+      // Estado nuevo aún no contemplado: mejor el seguimiento del viaje que
+      // una búsqueda engañosa.
+      return RastreoVista.seguimiento;
+  }
+}
+
+/// Panel informativo de estado (disputa, cancelado, reserva) con acciones
+/// para salir de la pantalla: contactar a soporte y volver al inicio.
+class RastreoEstadoInfo extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String titulo;
+  final String mensaje;
+  final VoidCallback? onSoporte;
+  final VoidCallback onInicio;
+
+  const RastreoEstadoInfo({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.titulo,
+    required this.mensaje,
+    required this.onInicio,
+    this.onSoporte,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 80, color: color),
+            const SizedBox(height: 24),
+            Text(
+              titulo,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              mensaje,
+              style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            if (onSoporte != null) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: onSoporte,
+                  icon: const Icon(Icons.support_agent),
+                  label: const Text('Contactar a soporte'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onInicio,
+                icon: const Icon(Icons.home_outlined),
+                label: const Text('Volver al inicio'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

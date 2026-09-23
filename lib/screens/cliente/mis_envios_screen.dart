@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import 'viaje_detalle_screen.dart';
 
@@ -39,7 +40,7 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
       case 'esperando_confirmacion': return 'Esperando confirmación';
       case 'finalizado': return 'Finalizado';
       case 'cancelado': return 'Cancelado';
-      default: return estado;
+      default: return TripStatus.label(estado);
     }
   }
 

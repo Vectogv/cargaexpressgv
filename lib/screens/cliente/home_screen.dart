@@ -94,7 +94,12 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
         CacheService.instance.cacheActiveTrip(trip);
         if (mounted) {
           setState(() { _activeTrip = trip; _loading = false; });
-          if (!_redirected) {
+          // Un viaje en disputa sigue "activo" en el backend, pero no hay nada
+          // que rastrear: no se fuerza la redireccion (evita que "Volver al
+          // inicio" rebote de nuevo al seguimiento). La tarjeta lo muestra.
+          final enDisputa = trip['estado'] == TripStatus.disputa ||
+              trip['estado'] == TripStatus.enDisputa;
+          if (!_redirected && !enDisputa) {
             _redirected = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) _redirectToTracking();
@@ -131,7 +136,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
       case TripStatus.esperaConfirmacion: return 'Entrega completada';
       case TripStatus.finalizado: return 'Finalizado';
       case TripStatus.cancelado: return 'Cancelado';
-      default: return estado ?? '';
+      default: return TripStatus.label(estado);
     }
   }
 
