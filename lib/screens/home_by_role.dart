@@ -51,3 +51,14 @@ HomeDestino homeDestinoForSession() => homeDestinoFor(
       rol: ApiClient.instance.rol,
       esModerador: ApiClient.instance.esModerador,
     );
+
+/// Abre [home] como única ruta de la pila. Se usa tras login y registro:
+/// antes quedaba debajo la pantalla de autenticación, y cualquier
+/// `popUntil((r) => r.isFirst)` (cancelar viaje, volver al inicio...)
+/// llevaba a ella, como si se hubiera cerrado la sesión.
+Future<void> abrirInicioComoRaiz(BuildContext context, Widget home) {
+  return Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => home),
+    (_) => false,
+  );
+}

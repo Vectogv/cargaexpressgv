@@ -47,10 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
         _showSnack('Bienvenido ${auth.nombre}');
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => homeScreenFor(destino)),
-        );
+        abrirInicioComoRaiz(context, homeScreenFor(destino));
       }
     } catch (e) {
       if (mounted) {

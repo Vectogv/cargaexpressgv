@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cargaexpress/screens/home_by_role.dart';
@@ -41,5 +42,32 @@ void main() {
 
     final normal = AuthResponse.fromJson({'token': 't', 'rol': 'cliente'});
     expect(normal.esModerador, isFalse);
+  });
+
+  testWidgets(
+      'tras login el inicio queda como primera ruta: popUntil(isFirst) '
+      'no vuelve a la pantalla de autenticación', (tester) async {
+    final navKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(
+      navigatorKey: navKey,
+      home: const Text('auth'),
+    ));
+    // AuthScreen -> push(LoginScreen), como en la app.
+    navKey.currentState!.push(MaterialPageRoute(builder: (_) => const Text('login')));
+    await tester.pumpAndSettle();
+
+    abrirInicioComoRaiz(navKey.currentContext!, const Text('home'));
+    await tester.pumpAndSettle();
+    expect(navKey.currentState!.canPop(), isFalse);
+
+    // Rastreo encima del inicio; cancelar hace popUntil(isFirst).
+    navKey.currentState!.push(MaterialPageRoute(builder: (_) => const Text('rastreo')));
+    await tester.pumpAndSettle();
+    navKey.currentState!.popUntil((r) => r.isFirst);
+    await tester.pumpAndSettle();
+
+    expect(find.text('home'), findsOneWidget);
+    expect(find.text('auth'), findsNothing);
+    expect(find.text('login'), findsNothing);
   });
 }

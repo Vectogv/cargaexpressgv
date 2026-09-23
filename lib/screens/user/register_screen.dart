@@ -103,13 +103,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // home del rol en lugar de pedir un segundo login.
         _showSnack('Cuenta creada exitosamente');
         final home = homeDestinoFor(rol: auth.rol, esModerador: auth.esModerador);
-        final Widget destino = home == HomeDestino.ninguno
-            ? const LoginScreen()
-            : homeScreenFor(home);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => destino),
-        );
+        if (home == HomeDestino.ninguno) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        } else {
+          abrirInicioComoRaiz(context, homeScreenFor(home));
+        }
       }
     } catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');
