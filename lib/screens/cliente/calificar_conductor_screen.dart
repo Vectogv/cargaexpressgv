@@ -131,7 +131,7 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                _rating > 0 ? _labels[_rating - 1] : '',
+                _rating > 0 ? _labels[_rating - 1] : 'Toca las estrellas para calificar',
                 style: const TextStyle(
                   fontSize: 14,
                   color: Color(0xFF6B7280),
@@ -165,11 +165,11 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _submitting
+                  // Sin estrellas no hay calificación válida (el backend exige 1-5).
+                  onPressed: _submitting || _rating == 0
                       ? null
                       : () async {
                           setState(() => _submitting = true);
-                          final navigator = Navigator.of(context);
                           final messenger = ScaffoldMessenger.of(context);
                           try {
                             await ApiClient.instance.rateTrip(
@@ -178,7 +178,9 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
                               comentario: _commentController.text,
                             );
                             if (!mounted) return;
-                            navigator.popUntil((route) => route.isFirst);
+                            // La navegación la decide quien abrió la pantalla
+                            // (antes se hacía popUntil aquí y otra vez en
+                            // onSubmitted, con un contexto ya desmontado).
                             widget.onSubmitted();
                           } catch (e) {
                             if (!mounted) return;
