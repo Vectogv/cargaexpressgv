@@ -905,6 +905,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
           titulo: 'Reserva programada',
           mensaje: 'La búsqueda de conductor comenzará a la hora programada.',
           onInicio: _volverAlInicio,
+          // reservado -> cancelado está permitido (trip_state_machine.ts).
+          textoCancelar: 'Cancelar reserva',
+          onCancelar: _cancelling ? null : _cancelar,
         );
     }
   }
@@ -1514,6 +1517,8 @@ class RastreoEstadoInfo extends StatelessWidget {
   final String mensaje;
   final VoidCallback? onSoporte;
   final VoidCallback onInicio;
+  final String? textoCancelar;
+  final VoidCallback? onCancelar;
 
   const RastreoEstadoInfo({
     super.key,
@@ -1523,6 +1528,8 @@ class RastreoEstadoInfo extends StatelessWidget {
     required this.mensaje,
     required this.onInicio,
     this.onSoporte,
+    this.textoCancelar,
+    this.onCancelar,
   });
 
   @override
@@ -1576,6 +1583,21 @@ class RastreoEstadoInfo extends StatelessWidget {
                 ),
               ),
             ),
+            if (textoCancelar != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: onCancelar,
+                  icon: const Icon(Icons.event_busy),
+                  label: Text(textoCancelar!),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFE53935),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

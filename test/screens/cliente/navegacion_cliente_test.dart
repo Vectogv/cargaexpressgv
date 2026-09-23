@@ -95,6 +95,28 @@ void main() {
     });
   });
 
+  testWidgets('reserva programada: "Cancelar reserva" cancela con el motivo elegido', (tester) async {
+    pantallaAlta(tester);
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/trips/active') return jsonResp(_viaje('reservado'));
+      return jsonResp({'ok': true});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      expect(find.text('Reserva programada'), findsWidgets);
+
+      await tester.tap(find.text('Cancelar reserva'));
+      await avanzar(tester);
+      await tester.tap(find.text('Cambié de opinión'));
+      await tester.pump();
+      await tester.tap(find.text('Confirmar cancelación'));
+      await avanzar(tester);
+    }, log: log);
+    final cancel = log.singleWhere((r) => r.url.path == '/api/trips/t1/cancel');
+    expect(cancel.body, contains('Cambié de opinión'));
+  });
+
   testWidgets('Rastreo: si no carga el viaje se avisa y se puede reintentar', (tester) async {
     pantallaAlta(tester);
     await conApiFalsa((_) => errorResp(503, 'Servicio no disponible'), () async {
