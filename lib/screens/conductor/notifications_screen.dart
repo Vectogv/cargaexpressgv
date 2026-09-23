@@ -62,6 +62,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'pago_recibido': return Icons.payments_outlined;
       case 'mensaje': return Icons.chat_bubble_outline;
       case 'documentacion': return Icons.description_outlined;
+      // Único tipo persistido que el backend envía al cliente
+      // (moderator_controller: cierre del viaje pasado a disputa).
+      case 'disputa_cierre': return Icons.gavel_rounded;
       default: return Icons.notifications_outlined;
     }
   }
@@ -75,6 +78,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'pago_recibido': return const Color(0xFF6A1B9A);
       case 'mensaje': return const Color(0xFF00897B);
       case 'documentacion': return const Color(0xFFE65100);
+      case 'disputa_cierre': return const Color(0xFFD97706);
       default: return const Color(0xFF757575);
     }
   }
@@ -88,6 +92,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'pago_recibido': return const Color(0xFFF3E5F5);
       case 'mensaje': return const Color(0xFFE0F2F1);
       case 'documentacion': return const Color(0xFFFBE9E7);
+      case 'disputa_cierre': return const Color(0xFFFEF3C7);
       default: return const Color(0xFFF5F5F5);
     }
   }

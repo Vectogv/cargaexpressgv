@@ -159,6 +159,15 @@ void main() {
     expect(find.text('Marcar todas leídas'), findsNothing);
   });
 
+  testWidgets('la notificación disputa_cierre (moderator_controller) tiene icono de disputa', (tester) async {
+    backend = [
+      {...remota('d1', fecha: DateTime.now().toIso8601String()), 'tipo': 'disputa_cierre'},
+    ];
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.gavel_rounded), findsOneWidget);
+  });
+
   testWidgets('si el backend falla y no hay nada, ofrece reintentar', (tester) async {
     errorBackend = ApiException('Unauthorized', statusCode: 401);
     await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
