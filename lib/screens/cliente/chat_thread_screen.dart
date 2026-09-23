@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
+import '../../widgets/error_carga.dart';
 
 class ChatThreadScreen extends StatefulWidget {
   final String titulo;
@@ -32,6 +33,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
+  String? _errorCarga;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   StreamSubscription<bool>? _connectionSub;
 
@@ -71,12 +73,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         setState(() {
           _messages = msgs;
           _loading = false;
+          _errorCarga = null;
         });
       }
       _scrollDown();
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _errorCarga = mensajeDeError(e); });
     }
+  }
+
+  void _reintentar() {
+    setState(() { _loading = true; _errorCarga = null; });
+    _fetchMensajes();
   }
 
   void _onSocketMessage(Map<String, dynamic> data) {
@@ -128,13 +136,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           }
         });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           for (final m in _messages) {
             if (m['id'] == tempId) m['_status'] = 'failed';
           }
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo enviar el mensaje: ${mensajeDeError(e)}')),
+        );
       }
     }
   }
@@ -180,7 +191,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
+                : _messages.isEmpty && _errorCarga != null
+                    ? ErrorCarga(
+                        titulo: 'No pudimos cargar los mensajes',
+                        detalle: _errorCarga,
+                        onReintentar: _reintentar,
+                      )
+                    : _messages.isEmpty
                     ? _buildEmpty()
                     : ListView.builder(
                         controller: _scrollCtrl,

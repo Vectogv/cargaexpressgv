@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/socket_service_client.dart';
+import '../../widgets/error_carga.dart';
 
 class ChatScreen extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -18,6 +19,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
+  String? _errorCarga;
   bool _otherTyping = false;
   bool _isTyping = false;
   Timer? _typingTimer;
@@ -160,7 +162,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       final tripId = _tripId?.toString();
       if (tripId != null) CacheService.instance.cacheMessages(tripId, msgs);
       if (mounted) {
-        setState(() { _messages = msgs; _loading = false; });
+        setState(() { _messages = msgs; _loading = false; _errorCarga = null; });
         for (final msg in msgs) {
           if (msg['isSent'] != true) {
             _sendReadReceipt(msg['_id'] ?? msg['id']);
@@ -168,9 +170,14 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         }
       }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollDown());
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _errorCarga = mensajeDeError(e); });
     }
+  }
+
+  void _reintentar() {
+    setState(() { _loading = true; _errorCarga = null; });
+    _fetchMessages();
   }
 
   void _sendReadReceipt(dynamic msgId) {
@@ -221,13 +228,16 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         });
       }
       _saveCache();
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           for (final m in _messages) {
             if (m['_id'] == msgId) m['status'] = 'failed';
           }
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo enviar el mensaje: ${mensajeDeError(e)}')),
+        );
       }
     }
   }
@@ -288,7 +298,13 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
+                : _messages.isEmpty && _errorCarga != null
+                    ? ErrorCarga(
+                        titulo: 'No pudimos cargar los mensajes',
+                        detalle: _errorCarga,
+                        onReintentar: _reintentar,
+                      )
+                    : _messages.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
