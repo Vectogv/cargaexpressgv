@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../providers/notification_provider.dart';
 import '../services/api_client.dart';
+import '../services/logger_service.dart';
+import '../services/session_monitor_service.dart';
 import 'admin/dashboard_screen.dart';
 import 'cliente/home_screen.dart';
 import 'conductor/home_screen.dart' as conductor;
@@ -52,11 +55,25 @@ HomeDestino homeDestinoForSession() => homeDestinoFor(
       esModerador: ApiClient.instance.esModerador,
     );
 
-/// Abre [home] como única ruta de la pila. Se usa tras login y registro:
+/// Notificaciones en memoria y monitor de sesión (ambos idempotentes).
+void iniciarServiciosDeSesion() {
+  try {
+    NotificationProvider.instance.init();
+  } catch (e) {
+    LoggerService.instance.error('NotificationProvider init error', e);
+  }
+  SessionMonitorService.instance.start();
+}
+
+/// Abre [home] comoúnica ruta de la pila. Se usa tras login y registro:
 /// antes quedaba debajo la pantalla de autenticación, y cualquier
 /// `popUntil((r) => r.isFirst)` (cancelar viaje, volver al inicio...)
 /// llevaba a ella, como si se hubiera cerrado la sesión.
+///
+/// También inicia los servicios de sesión que `main.dart` sólo arranca si
+/// al abrir la app ya había un token guardado.
 Future<void> abrirInicioComoRaiz(BuildContext context, Widget home) {
+  iniciarServiciosDeSesion();
   return Navigator.of(context).pushAndRemoveUntil(
     MaterialPageRoute(builder: (_) => home),
     (_) => false,

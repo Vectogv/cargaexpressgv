@@ -18,7 +18,19 @@ class NotificationProvider extends ChangeNotifier {
   List<NotificationItemModel> get items => List.unmodifiable(_items);
   int get unreadCount => _items.where((n) => n.read != true).length;
 
+  bool _iniciado = false;
+  int _vecesSuscrito = 0;
+
+  bool get iniciado => _iniciado;
+  @visibleForTesting
+  int get vecesSuscrito => _vecesSuscrito;
+
+  /// Idempotente: se llama al arrancar con sesión guardada y tras login o
+  /// registro; los listeners de socket se registran una sola vez.
   void init() {
+    if (_iniciado) return;
+    _iniciado = true;
+    _vecesSuscrito++;
     _loadCached();
     _sub = SocketServiceClient.instance.onNotification.listen((data) {
       final item = NotificationItemModel.fromJson(data);

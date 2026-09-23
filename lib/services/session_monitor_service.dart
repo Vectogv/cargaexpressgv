@@ -12,6 +12,8 @@ class SessionMonitorService {
   bool _running = false;
   static const Duration _checkInterval = Duration(minutes: 5);
 
+  bool get activo => _running;
+
   void start() {
     if (_running) return;
     _running = true;
