@@ -166,8 +166,15 @@ class SocketServiceClient {
 
   /// `true` si el error de conexión indica cuenta suspendida
   /// (`message == 'Cuenta suspendida'` o `data.code == 'CUENTA_SUSPENDIDA'`).
+  /// `CUENTA_SUSPENDIDA_POR_PAGO` (deuda de comisión) NO lo es: el conductor
+  /// sigue con sesión para poder pagar.
   static bool isSuspendedError(dynamic error) {
     try {
+      final text = error?.toString() ?? '';
+      if (text.contains('CUENTA_SUSPENDIDA_POR_PAGO') ||
+          text.toLowerCase().contains('suspendida por pago')) {
+        return false;
+      }
       if (error is Map) {
         final data = error['data'];
         if (data is Map && data['code']?.toString() == 'CUENTA_SUSPENDIDA') return true;
@@ -175,8 +182,7 @@ class SocketServiceClient {
         final msg = error['message']?.toString() ?? '';
         if (msg.toLowerCase().contains('cuenta suspendida')) return true;
       }
-      final text = error?.toString() ?? '';
-      return text.contains('CUENTA_SUSPENDIDA') ||
+      return RegExp(r'CUENTA_SUSPENDIDA(?!_)').hasMatch(text) ||
           text.toLowerCase().contains('cuenta suspendida');
     } catch (_) {
       return false;

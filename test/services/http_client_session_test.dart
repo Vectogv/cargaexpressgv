@@ -60,6 +60,14 @@ void main() {
               {'message': 'Tu cuenta está suspendida'}
             ],
           });
+        } else if (path == '/api/suspended-pago') {
+          await respond(403, {
+            'error': 'Tu cuenta está suspendida por falta de pago de la comisión.',
+            'code': 'CUENTA_SUSPENDIDA_POR_PAGO',
+            'estadoCuenta': 'suspension_por_pago',
+          });
+        } else if (path == '/api/forbidden') {
+          await respond(403, {'error': 'Debes estar verificado para ponerte online'});
         } else if (path == '/api/html') {
           await respond(502, '<html>Bad gateway</html>', json: false);
         } else if (path == '/api/weird') {
@@ -128,6 +136,26 @@ void main() {
       expect(ApiClient.instance.token, isNull);
       await sub.cancel();
     });
+
+    for (final caso in [
+      ('/api/suspended-pago', 'CUENTA_SUSPENDIDA_POR_PAGO'),
+      ('/api/forbidden', null),
+    ]) {
+      test('403 ${caso.$2 ?? 'sin código'} NO cierra la sesión (sólo CUENTA_SUSPENDIDA exacto)', () async {
+        final events = <SessionEvent>[];
+        final sub = SessionEvents.instance.stream.listen(events.add);
+        await expectLater(
+          HttpClient.put(caso.$1, body: {'online': true}, auth: true),
+          throwsA(isA<ApiException>()
+              .having((e) => e.statusCode, 'status', 403)
+              .having((e) => e.code, 'code', caso.$2)),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(ApiClient.instance.token, 'access_1');
+        expect(events, isEmpty);
+        await sub.cancel();
+      });
+    }
 
     test('cuerpo no JSON produce mensaje legible con el código', () async {
       await expectLater(
