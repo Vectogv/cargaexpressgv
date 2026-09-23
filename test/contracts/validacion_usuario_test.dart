@@ -54,7 +54,7 @@ void main() {
       final campos = find.byType(TextField);
       await tester.enterText(campos.at(0), 'ana@test');
       await tester.enterText(campos.at(1), 'x');
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Iniciar Sesión'));
+      await tester.tap(find.byKey(const Key('btn_login')));
       await avanzar(tester);
       expect(find.text('Ingresa un correo electrónico válido'), findsOneWidget);
     }, log: log.cast());

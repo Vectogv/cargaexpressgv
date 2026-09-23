@@ -37,7 +37,7 @@ void main() {
 
     // Should see the auth landing screen
     expect(find.text('CargaExpress'), findsWidgets);
-    expect(find.text('Iniciar Sesion'), findsOneWidget);
+    expect(find.text('Iniciar sesión'), findsOneWidget);
 
     // ────────────────────────────────────────────────────────────────
     // 2. INICIAR SESIÓN COMO CLIENTE
@@ -128,7 +128,7 @@ void main() {
 
     // Should be back at auth screen
     await tester.pumpAndSettle(const Duration(seconds: 3));
-    expect(find.text('Iniciar Sesion'), findsOneWidget);
+    expect(find.text('Iniciar sesión'), findsOneWidget);
 
     // ────────────────────────────────────────────────────────────────
     // 5. CREAR OFERTA COMO CONDUCTOR (via mock server)

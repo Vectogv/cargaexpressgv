@@ -28,8 +28,8 @@ Future<void> tapButtonWithDelay(WidgetTester tester, String text, {Duration dela
 
 /// Logs in with given [email] and [password] starting from [LoginScreen].
 Future<void> login(WidgetTester tester, String email, String password) async {
-  // Tap "Iniciar Sesion" on the auth landing screen
-  await tapButton(tester, 'Iniciar Sesion');
+  // Tap "Iniciar sesión" on the auth landing screen
+  await tapButton(tester, 'Iniciar sesión');
   await tester.pumpAndSettle();
 
   // Fill email
@@ -37,7 +37,7 @@ Future<void> login(WidgetTester tester, String email, String password) async {
   // Fill password
   await enterTextByLabel(tester, 'Contraseña', password);
   // Tap login button
-  await tapButton(tester, 'Iniciar Sesión');
+  await tapButton(tester, 'Iniciar sesión');
   await tester.pumpAndSettle(const Duration(seconds: 3));
 }
 
