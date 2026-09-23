@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cargaexpress/contracts/cancelacion.dart';
+import 'package:cargaexpress/contracts/trip_status.dart';
 
 void main() {
   group('mensajeViajeCancelado', () {
@@ -31,6 +32,19 @@ void main() {
           'El viaje fue cancelado por soporte');
       expect(mensajeViajeCancelado({'id': '1'}, miRol: 'cliente'), 'El viaje fue cancelado');
       expect(mensajeViajeCancelado({'id': '1'}, miRol: null), 'El viaje fue cancelado');
+    });
+  });
+
+  group('cancelacionRequiereSolicitud', () {
+    test('en_curso y conductor_llegada requieren solicitud (motivos "en curso")', () {
+      expect(cancelacionRequiereSolicitud(TripStatus.enCurso), isTrue);
+      expect(cancelacionRequiereSolicitud(TripStatus.llegada), isTrue);
+    });
+
+    test('antes de la llegada se cancela directo', () {
+      expect(cancelacionRequiereSolicitud(TripStatus.buscando), isFalse);
+      expect(cancelacionRequiereSolicitud(TripStatus.aceptado), isFalse);
+      expect(cancelacionRequiereSolicitud(TripStatus.enCamino), isFalse);
     });
   });
 }

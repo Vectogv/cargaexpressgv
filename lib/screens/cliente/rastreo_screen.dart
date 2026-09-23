@@ -509,9 +509,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     setState(() => _cancelling = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      if (_status == TripStatus.enCurso || _status == TripStatus.llegada) {
-        // El backend bloquea la cancelación directa (403) en en_curso y
-        // conductor_llegada: ambas requieren solicitud de cancelación.
+      if (cancelacionRequiereSolicitud(_status)) {
         await TripService.requestCancellation(_trip?.id ?? '', motivo: motivoFinal);
         messenger.showSnackBar(
           const SnackBar(content: Text('Solicitud de cancelaci\u00f3n enviada. Un administrador la revisar\u00e1.')),
@@ -550,7 +548,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   void _cancelar() {
     Navigator.push<Map<String, dynamic>>(
       context,
-      MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: _status == TripStatus.enCurso)),
+      MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: cancelacionRequiereSolicitud(_status))),
     ).then((result) {
       final motivo = motivoDesdeResultado(result);
       if (motivo != null) _doCancel(motivo: motivo);
