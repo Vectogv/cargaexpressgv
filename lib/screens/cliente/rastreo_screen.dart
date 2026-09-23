@@ -809,7 +809,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
             Positioned(
               right: 8,
               top: 8,
-              child: Container(
+              // El contador tapa el centro del icono: que no absorba el toque.
+              child: IgnorePointer(
+                child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(
                   color: Colors.red,
@@ -823,6 +825,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+              ),
               ),
             ),
           ],
