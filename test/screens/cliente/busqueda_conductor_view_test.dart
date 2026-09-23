@@ -80,25 +80,36 @@ void main() {
     expect(abiertas, 1);
   });
 
-  testWidgets('cancelar pide confirmación', (tester) async {
-    final confirmado = <bool>[];
+  testWidgets('cancelar pide un motivo y devuelve motivo + comentario', (tester) async {
+    final resultados = <String?>[];
     await _pump(tester, onCancelar: () {});
     final ctx = tester.element(find.byType(BusquedaConductorView));
 
-    final f1 = confirmarCancelarBusqueda(ctx).then(confirmado.add);
+    // Seguir buscando: no cancela.
+    final f1 = elegirMotivoCancelacionBusqueda(ctx).then(resultados.add);
     await tester.pumpAndSettle();
     expect(find.text('¿Cancelar la búsqueda?'), findsOneWidget);
+    await tester.ensureVisible(find.text('Seguir buscando'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Seguir buscando'));
     await tester.pumpAndSettle();
-    await f1;
+    await f1.timeout(const Duration(seconds: 1));
 
-    final f2 = confirmarCancelarBusqueda(ctx).then(confirmado.add);
+    // Sin motivo elegido el botón está deshabilitado.
+    final f2 = elegirMotivoCancelacionBusqueda(ctx).then(resultados.add);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Sí, cancelar'));
-    await tester.pumpAndSettle();
-    await f2;
+    expect(tester.widget<FilledButton>(find.byKey(const Key('btn_confirmar_cancelacion'))).onPressed, isNull);
 
-    expect(confirmado, [false, true]);
+    await tester.tap(find.text('Error en la dirección'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('campo_comentario_cancelacion')), 'Puse mal el barrio');
+    await tester.ensureVisible(find.byKey(const Key('btn_confirmar_cancelacion')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('btn_confirmar_cancelacion')));
+    await tester.pumpAndSettle();
+    await f2.timeout(const Duration(seconds: 1));
+
+    expect(resultados, [null, 'Error en la dirección: Puse mal el barrio']);
   });
 
   testWidgets('mientras cancela el botón queda deshabilitado', (tester) async {

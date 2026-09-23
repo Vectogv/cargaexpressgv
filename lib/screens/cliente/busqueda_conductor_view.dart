@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../models/trip.dart';
+import 'cancel_trip_screen.dart' show componerMotivoCancelacion;
 import 'nuevo_envio_screen.dart' show formatearMiles;
 
 const Color _kPrimary = Color(0xFF2563EB);
@@ -59,7 +60,12 @@ class BusquedaConductorView extends StatelessWidget {
                   top: 12,
                   left: 16,
                   right: 16,
-                  child: Center(child: _ChipCercanos(cantidad: vehiculosCercanos, radioKm: radioKm)),
+                  child: Center(
+                    child: _ChipCercanos(
+                      cantidad: vehiculosCercanos,
+                      radioKm: radioKm,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -68,7 +74,13 @@ class BusquedaConductorView extends StatelessWidget {
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              boxShadow: [BoxShadow(color: Color(0x1A000000), blurRadius: 16, offset: Offset(0, -4))],
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x1A000000),
+                  blurRadius: 16,
+                  offset: Offset(0, -4),
+                ),
+              ],
             ),
             child: SafeArea(
               top: false,
@@ -81,7 +93,10 @@ class BusquedaConductorView extends StatelessWidget {
                     Container(
                       width: 40,
                       height: 4,
-                      decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                     Flexible(
                       child: SingleChildScrollView(
@@ -89,10 +104,16 @@ class BusquedaConductorView extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _Encabezado(ofertas: ofertas, inicio: inicioBusqueda),
+                            _Encabezado(
+                              ofertas: ofertas,
+                              inicio: inicioBusqueda,
+                            ),
                             if (ofertas > 0) ...[
                               const SizedBox(height: 16),
-                              _OfertasCard(cantidad: ofertas, onTap: onVerOfertas),
+                              _OfertasCard(
+                                cantidad: ofertas,
+                                onTap: onVerOfertas,
+                              ),
                             ],
                             const SizedBox(height: 16),
                             _ResumenViaje(trip: trip),
@@ -109,14 +130,27 @@ class BusquedaConductorView extends StatelessWidget {
                           key: const Key('btn_cancelar_busqueda'),
                           onPressed: cancelando ? null : onCancelar,
                           icon: cancelando
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
                               : const Icon(Icons.close_rounded),
-                          label: Text(cancelando ? 'Cancelando…' : 'Cancelar búsqueda'),
+                          label: Text(
+                            cancelando ? 'Cancelando…' : 'Cancelar búsqueda',
+                          ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: _kRojo,
                             side: const BorderSide(color: Color(0xFFF3B4B2)),
-                            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            textStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ),
@@ -132,26 +166,171 @@ class BusquedaConductorView extends StatelessWidget {
   }
 }
 
-/// Diálogo de confirmación antes de cancelar la búsqueda.
-Future<bool> confirmarCancelarBusqueda(BuildContext context) async {
-  final ok = await showDialog<bool>(
+/// Motivos para cancelar mientras se busca conductor.
+const List<String> motivosCancelacionBusqueda = [
+  'Cambié de opinión',
+  'Error en la dirección',
+  'Conseguí otro transporte',
+  'Tarda mucho en aparecer un conductor',
+  'Otro motivo',
+];
+
+/// Hoja para confirmar la cancelación de la búsqueda eligiendo un motivo
+/// (y un comentario opcional). Devuelve el motivo a enviar al backend, o
+/// null si el usuario sigue buscando.
+Future<String?> elegirMotivoCancelacionBusqueda(BuildContext context) {
+  return showModalBottomSheet<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('¿Cancelar la búsqueda?'),
-      content: const Text(
-        'Los conductores dejarán de ver tu solicitud y las ofertas recibidas se perderán.',
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Seguir buscando')),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: _kRojo),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Sí, cancelar'),
-        ),
-      ],
-    ),
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: Colors.white,
+    builder: (_) => const _MotivoCancelacionSheet(),
   );
-  return ok == true;
+}
+
+class _MotivoCancelacionSheet extends StatefulWidget {
+  const _MotivoCancelacionSheet();
+
+  @override
+  State<_MotivoCancelacionSheet> createState() =>
+      _MotivoCancelacionSheetState();
+}
+
+class _MotivoCancelacionSheetState extends State<_MotivoCancelacionSheet> {
+  String? _motivo;
+  final _comentario = TextEditingController();
+
+  @override
+  void dispose() {
+    _comentario.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final teclado = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: teclado),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      '¿Cancelar la búsqueda?',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: _kTexto,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Los conductores dejarán de ver tu solicitud y las ofertas recibidas se perderán. Cuéntanos por qué:',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _kGris,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    RadioGroup<String>(
+                      groupValue: _motivo,
+                      onChanged: (v) => setState(() => _motivo = v),
+                      child: Column(
+                        children: [
+                          for (final m in motivosCancelacionBusqueda)
+                            RadioListTile<String>(
+                              value: m,
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: _kRojo,
+                              title: Text(
+                                m,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: _kTexto,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    TextField(
+                      key: const Key('campo_comentario_cancelacion'),
+                      controller: _comentario,
+                      maxLines: 2,
+                      maxLength: 200,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: 'Comentario (opcional)',
+                        counterText: '',
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Botones siempre visibles aunque el contenido haga scroll.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Seguir buscando'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      key: const Key('btn_confirmar_cancelacion'),
+                      onPressed: _motivo == null
+                          ? null
+                          : () => Navigator.pop(
+                              context,
+                              componerMotivoCancelacion(
+                                _motivo!,
+                                _comentario.text,
+                              ),
+                            ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _kRojo,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Sí, cancelar'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ChipCercanos extends StatelessWidget {
@@ -161,7 +340,9 @@ class _ChipCercanos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radio = radioKm == radioKm.roundToDouble() ? radioKm.toStringAsFixed(0) : radioKm.toString();
+    final radio = radioKm == radioKm.roundToDouble()
+        ? radioKm.toStringAsFixed(0)
+        : radioKm.toString();
     final texto = cantidad == 0
         ? 'Sin vehículos disponibles a menos de $radio km'
         : '$cantidad ${cantidad == 1 ? 'vehículo disponible' : 'vehículos disponibles'} a menos de $radio km';
@@ -170,18 +351,32 @@ class _ChipCercanos extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8, offset: Offset(0, 2))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.local_shipping_outlined, size: 16, color: cantidad == 0 ? _kGris : _kPrimary),
+          Icon(
+            Icons.local_shipping_outlined,
+            size: 16,
+            color: cantidad == 0 ? _kGris : _kPrimary,
+          ),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               texto,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: _kTexto),
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: _kTexto,
+              ),
             ),
           ),
         ],
@@ -206,8 +401,15 @@ class _Encabezado extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                hayOfertas ? 'Tienes ofertas de conductores' : 'Buscando conductor disponible',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _kTexto, height: 1.25),
+                hayOfertas
+                    ? 'Tienes ofertas de conductores'
+                    : 'Buscando conductor disponible',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _kTexto,
+                  height: 1.25,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -262,7 +464,10 @@ class _TiempoBuscandoState extends State<_TiempoBuscando> {
     final texto = h > 0 ? '$h:$m:$s' : '$m:$s';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF4FF),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -271,7 +476,12 @@ class _TiempoBuscandoState extends State<_TiempoBuscando> {
           Text(
             texto,
             semanticsLabel: 'Buscando hace $texto',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kPrimary, fontFeatures: [FontFeature.tabularFigures()]),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _kPrimary,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
           ),
         ],
       ),
@@ -304,9 +514,19 @@ class _OfertasCard extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                decoration: const BoxDecoration(color: _kVerde, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                  color: _kVerde,
+                  shape: BoxShape.circle,
+                ),
                 alignment: Alignment.center,
-                child: Text('$cantidad', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                child: Text(
+                  '$cantidad',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -314,11 +534,20 @@ class _OfertasCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      cantidad == 1 ? '1 oferta recibida' : '$cantidad ofertas recibidas',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF14532D)),
+                      cantidad == 1
+                          ? '1 oferta recibida'
+                          : '$cantidad ofertas recibidas',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF14532D),
+                      ),
                     ),
                     const SizedBox(height: 2),
-                    const Text('Toca para ver y elegir', style: TextStyle(fontSize: 13, color: Color(0xFF166534))),
+                    const Text(
+                      'Toca para ver y elegir',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF166534)),
+                    ),
                   ],
                 ),
               ),
@@ -353,25 +582,55 @@ class _ResumenViaje extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('TU SOLICITUD', style: TextStyle(fontSize: 11, letterSpacing: 0.5, fontWeight: FontWeight.w700, color: _kGris)),
+          const Text(
+            'TU SOLICITUD',
+            style: TextStyle(
+              fontSize: 11,
+              letterSpacing: 0.5,
+              fontWeight: FontWeight.w700,
+              color: _kGris,
+            ),
+          ),
           const SizedBox(height: 10),
-          _Linea(icon: Icons.trip_origin, color: _kVerde, label: 'Origen', valor: t?.origen?.direccion),
+          _Linea(
+            icon: Icons.trip_origin,
+            color: _kVerde,
+            label: 'Origen',
+            valor: t?.origen?.direccion,
+          ),
           const SizedBox(height: 10),
-          _Linea(icon: Icons.location_on, color: Color(0xFFDC2626), label: 'Destino', valor: t?.destino?.direccion),
+          _Linea(
+            icon: Icons.location_on,
+            color: Color(0xFFDC2626),
+            label: 'Destino',
+            valor: t?.destino?.direccion,
+          ),
           if (carga.isNotEmpty) ...[
             const SizedBox(height: 10),
-            _Linea(icon: Icons.inventory_2_outlined, color: _kGris, label: 'Carga', valor: carga),
+            _Linea(
+              icon: Icons.inventory_2_outlined,
+              color: _kGris,
+              label: 'Carga',
+              valor: carga,
+            ),
           ],
           if (precio != null) ...[
             const Divider(height: 22, color: Color(0xFFE5E7EB)),
             Row(
               children: [
                 const Expanded(
-                  child: Text('Precio ofrecido', style: TextStyle(fontSize: 14, color: _kGris)),
+                  child: Text(
+                    'Precio ofrecido',
+                    style: TextStyle(fontSize: 14, color: _kGris),
+                  ),
                 ),
                 Text(
                   '\$${formatearMiles(precio.round().toString())} COP',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _kTexto),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: _kTexto,
+                  ),
                 ),
               ],
             ),
@@ -387,7 +646,12 @@ class _Linea extends StatelessWidget {
   final Color color;
   final String label;
   final String? valor;
-  const _Linea({required this.icon, required this.color, required this.label, required this.valor});
+  const _Linea({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.valor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -395,7 +659,10 @@ class _Linea extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 18, color: color)),
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 18, color: color),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -407,7 +674,12 @@ class _Linea extends StatelessWidget {
                 v.isEmpty ? '—' : v,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: _kTexto, height: 1.3),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: _kTexto,
+                  height: 1.3,
+                ),
               ),
             ],
           ),
@@ -426,7 +698,8 @@ class PulsoBusqueda extends StatefulWidget {
   State<PulsoBusqueda> createState() => _PulsoBusquedaState();
 }
 
-class _PulsoBusquedaState extends State<PulsoBusqueda> with SingleTickerProviderStateMixin {
+class _PulsoBusquedaState extends State<PulsoBusqueda>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2400),

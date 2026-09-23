@@ -503,20 +503,21 @@ class _RastreoScreenState extends State<RastreoScreen> {
     });
   }
 
-  Future<void> _doCancel() async {
+  Future<void> _doCancel({String? motivo}) async {
     if (_cancelling) return;
+    final motivoFinal = (motivo == null || motivo.trim().isEmpty) ? 'Cancelado por el usuario' : motivo.trim();
     setState(() => _cancelling = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
       if (_status == TripStatus.enCurso || _status == TripStatus.llegada) {
         // El backend bloquea la cancelación directa (403) en en_curso y
         // conductor_llegada: ambas requieren solicitud de cancelación.
-        await TripService.requestCancellation(_trip?.id ?? '', motivo: 'Cancelado por el usuario');
+        await TripService.requestCancellation(_trip?.id ?? '', motivo: motivoFinal);
         messenger.showSnackBar(
           const SnackBar(content: Text('Solicitud de cancelaci\u00f3n enviada. Un administrador la revisar\u00e1.')),
         );
       } else {
-        await TripService.cancelTrip(_trip?.id ?? '', motivo: 'Cancelado por el usuario');
+        await TripService.cancelTrip(_trip?.id ?? '', motivo: motivoFinal);
         messenger.showSnackBar(
           const SnackBar(content: Text('Viaje cancelado correctamente')),
         );
@@ -551,9 +552,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
       context,
       MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: _status == TripStatus.enCurso)),
     ).then((result) {
-      if (result != null) {
-        _doCancel();
-      }
+      final motivo = motivoDesdeResultado(result);
+      if (motivo != null) _doCancel(motivo: motivo);
     });
   }
 
@@ -1000,7 +1000,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   Future<void> _cancelarBusqueda() async {
     if (_cancelling) return;
-    if (await confirmarCancelarBusqueda(context)) _doCancel();
+    final motivo = await elegirMotivoCancelacionBusqueda(context);
+    if (motivo != null) _doCancel(motivo: motivo);
   }
 
   Widget _buildSearchContent() {

@@ -1,5 +1,19 @@
 import 'package:flutter/material.dart';
 
+/// Texto que se envía al backend como `motivo` (se guarda en
+/// motivoCancelacion): el motivo elegido y, si lo hay, el comentario.
+String componerMotivoCancelacion(String motivo, [String? comentario]) {
+  final c = comentario?.trim() ?? '';
+  return c.isEmpty ? motivo : '$motivo: $c';
+}
+
+/// Resultado de [CancelTripScreen] (`{reason, comment}`) como motivo.
+String? motivoDesdeResultado(Map<String, dynamic>? result) {
+  final reason = result?['reason']?.toString().trim() ?? '';
+  if (reason.isEmpty) return null;
+  return componerMotivoCancelacion(reason, result?['comment']?.toString());
+}
+
 class CancelTripScreen extends StatefulWidget {
   final bool enCurso;
 
