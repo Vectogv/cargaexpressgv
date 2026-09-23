@@ -61,6 +61,7 @@ class SocketServiceClient {
   final _adminDisputeCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _adminCancellationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _adminEmergencyCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _moderatorEventCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _disputeUpdatedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _disputeResolvedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripEtaCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -108,6 +109,9 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onAdminDispute => _adminDisputeCtrl.stream;
   Stream<Map<String, dynamic>> get onAdminCancellation => _adminCancellationCtrl.stream;
   Stream<Map<String, dynamic>> get onAdminEmergency => _adminEmergencyCtrl.stream;
+  /// Eventos de la sala `moderator:{zona}` (cierres pendientes, viajes y
+  /// emergencias de la zona). Cada payload incluye `__event` con el nombre.
+  Stream<Map<String, dynamic>> get onModeratorEvent => _moderatorEventCtrl.stream;
   Stream<Map<String, dynamic>> get onDisputeUpdated => _disputeUpdatedCtrl.stream;
   Stream<Map<String, dynamic>> get onDisputeResolved => _disputeResolvedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripEtaUpdate => _tripEtaCtrl.stream;
@@ -465,6 +469,18 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_adminCancellationCtrl, Map<String, dynamic>.from(data));
       });
 
+      for (final event in const [
+        'moderator:pending_close',
+        'moderator:trip:update',
+        'moderator:emergency:update',
+      ]) {
+        safeOn(event, (data) {
+          final payload = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+          payload['__event'] = event;
+          safeAdd(_moderatorEventCtrl, payload);
+        });
+      }
+
       safeOn('admin:emergency', (data) {
         if (data is Map) safeAdd(_adminEmergencyCtrl, Map<String, dynamic>.from(data));
       });
@@ -619,6 +635,7 @@ class SocketServiceClient {
     _adminDisputeCtrl.close();
     _adminCancellationCtrl.close();
     _adminEmergencyCtrl.close();
+    _moderatorEventCtrl.close();
     _disputeUpdatedCtrl.close();
     _disputeResolvedCtrl.close();
     _tripEtaCtrl.close();

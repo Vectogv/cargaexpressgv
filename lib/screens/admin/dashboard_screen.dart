@@ -15,6 +15,7 @@ import 'configuracion_screen.dart';
 import '../../services/notification_service.dart';
 import 'gestion_comunicados_screen.dart';
 import 'mapa_vivo_screen.dart';
+import 'admin_live_screen.dart';
 import 'admin_common.dart';
 import '../user/auth_screen.dart';
 
@@ -332,6 +333,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _DrawerItem(Icons.map_rounded, 'Mapa en Vivo', () {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (_) => const MapaVivoScreen()));
+            }),
+            // Antes solo se llegaba aquí al restaurar la sesión; ahora el
+            // panel en vivo (viajes, disputas, cancelaciones, SOS) es un
+            // destino interno del dashboard, que es el único inicio del admin.
+            _DrawerItem(Icons.monitor_heart_rounded, 'Panel en Vivo', () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminLiveScreen()));
             }),
             const Divider(),
             const Padding(

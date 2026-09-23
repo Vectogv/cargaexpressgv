@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
-import '../admin/dashboard_screen.dart';
-import '../conductor/home_screen.dart' as conductor;
-import '../cliente/home_screen.dart';
+import '../home_by_role.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -104,17 +102,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // El registro ya autentica (guarda tokens y perfil): ir directo al
         // home del rol en lugar de pedir un segundo login.
         _showSnack('Cuenta creada exitosamente');
-        Widget destino;
-        switch (auth.rol) {
-          case 'admin':
-            destino = const DashboardScreen();
-          case 'conductor':
-            destino = const conductor.HomeScreen();
-          case 'cliente':
-            destino = const ClienteHomeScreen();
-          default:
-            destino = const LoginScreen();
-        }
+        final home = homeDestinoFor(rol: auth.rol, esModerador: auth.esModerador);
+        final Widget destino = home == HomeDestino.ninguno
+            ? const LoginScreen()
+            : homeScreenFor(home);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => destino),

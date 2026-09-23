@@ -21,9 +21,7 @@ import 'services/session_monitor_service.dart';
 import 'services/session_events.dart';
 import 'providers/notification_provider.dart';
 import 'screens/user/auth_screen.dart';
-import 'screens/admin/admin_live_screen.dart';
-import 'screens/conductor/home_screen.dart' as conductor;
-import 'screens/cliente/home_screen.dart';
+import 'screens/home_by_role.dart';
 
 final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
@@ -39,15 +37,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   LoggerService.instance.info('Background FCM: ${data['type'] ?? data['event']}');
 }
 
-Widget _homeScreenByRole() {
-  final rol = ApiClient.instance.rol;
-  switch (rol) {
-    case 'admin':     return const AdminLiveScreen();
-    case 'conductor': return const conductor.HomeScreen();
-    case 'cliente':   return const ClienteHomeScreen();
-    default:          return const AuthScreen();
-  }
-}
+/// Misma función de ruteo por rol que usan el login y el registro
+/// (`screens/home_by_role.dart`), para que restaurar la sesión lleve a la
+/// misma pantalla que iniciar sesión.
+Widget _homeScreenByRole() => homeScreenFor(homeDestinoForSession());
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT

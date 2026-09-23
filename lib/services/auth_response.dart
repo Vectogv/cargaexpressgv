@@ -6,6 +6,10 @@ class AuthResponse {
   final String? apellido;
   final String? email;
   final String? rol;
+  /// Moderador de zona: en el backend es una bandera (`esModerador`) sobre un
+  /// usuario con rol cliente/conductor, no un valor de `rol`.
+  final bool esModerador;
+  final String? zonaModerador;
 
   AuthResponse({
     required this.token,
@@ -15,6 +19,8 @@ class AuthResponse {
     this.apellido,
     this.email,
     this.rol,
+    this.esModerador = false,
+    this.zonaModerador,
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
@@ -26,6 +32,8 @@ class AuthResponse {
       apellido: json['apellido'] as String?,
       email: json['email'] as String?,
       rol: json['rol'] as String?,
+      esModerador: json['esModerador'] == true,
+      zonaModerador: json['zonaModerador'] as String?,
     );
   }
 }

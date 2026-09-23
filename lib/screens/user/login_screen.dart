@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
-import '../admin/dashboard_screen.dart';
-import '../conductor/home_screen.dart' as conductor;
-import '../cliente/home_screen.dart';
+import '../home_by_role.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,21 +35,21 @@ class _LoginScreenState extends State<LoginScreen> {
         _passCtrl.text,
       );
       if (mounted) {
-        _showSnack('Bienvenido ${auth.nombre}');
-        Widget destino;
-        switch (auth.rol) {
-          case 'admin':
-            destino = const DashboardScreen();
-          case 'conductor':
-            destino = const conductor.HomeScreen();
-          case 'cliente':
-            destino = const ClienteHomeScreen();
-          default:
-            destino = const DashboardScreen();
+        final destino = homeDestinoFor(
+          rol: auth.rol,
+          esModerador: auth.esModerador,
+        );
+        if (destino == HomeDestino.ninguno) {
+          // Rol sin pantalla en la app: no dejar una sesión "colgada".
+          await ApiClient.instance.logout();
+          if (!mounted) return;
+          _showSnack('Tu cuenta no tiene un rol habilitado en la app. Contacta a soporte.');
+          return;
         }
+        _showSnack('Bienvenido ${auth.nombre}');
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => destino),
+          MaterialPageRoute(builder: (_) => homeScreenFor(destino)),
         );
       }
     } catch (e) {

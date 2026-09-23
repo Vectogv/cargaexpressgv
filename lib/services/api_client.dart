@@ -27,6 +27,8 @@ class ApiClient {
   static const String _apellidoKey = 'auth_apellido';
   static const String _emailKey = 'auth_email';
   static const String _rolKey = 'auth_rol';
+  static const String _esModeradorKey = 'auth_es_moderador';
+  static const String _zonaModeradorKey = 'auth_zona_moderador';
 
   String? _token;
   String? _refreshToken;
@@ -35,6 +37,8 @@ class ApiClient {
   String? _apellido;
   String? _email;
   String? _rol;
+  bool _esModerador = false;
+  String? _zonaModerador;
 
   String? get token => _token;
   String? get userId => _userId;
@@ -42,6 +46,8 @@ class ApiClient {
   String? get apellido => _apellido;
   String? get email => _email;
   String? get rol => _rol;
+  bool get esModerador => _esModerador;
+  String? get zonaModerador => _zonaModerador;
 
   String get nombreCompleto => '${_nombre ?? 'Admin'} ${_apellido ?? ''}'.trim();
 
@@ -54,6 +60,8 @@ class ApiClient {
     _apellido = prefs.getString(_apellidoKey);
     _email = prefs.getString(_emailKey);
     _rol = prefs.getString(_rolKey);
+    _esModerador = prefs.getBool(_esModeradorKey) ?? false;
+    _zonaModerador = prefs.getString(_zonaModeradorKey);
   }
 
   // --- Auth ---
@@ -155,12 +163,20 @@ class ApiClient {
     _apellido = auth.apellido;
     _email = auth.email;
     _rol = auth.rol;
+    _esModerador = auth.esModerador;
+    _zonaModerador = auth.zonaModerador;
     final prefs = await SharedPreferences.getInstance();
     if (auth.id != null) await prefs.setString(_userIdKey, auth.id!);
     if (auth.nombre != null) await prefs.setString(_nombreKey, auth.nombre!);
     if (auth.apellido != null) await prefs.setString(_apellidoKey, auth.apellido!);
     if (auth.email != null) await prefs.setString(_emailKey, auth.email!);
     if (auth.rol != null) await prefs.setString(_rolKey, auth.rol!);
+    await prefs.setBool(_esModeradorKey, auth.esModerador);
+    if (auth.zonaModerador != null) {
+      await prefs.setString(_zonaModeradorKey, auth.zonaModerador!);
+    } else {
+      await prefs.remove(_zonaModeradorKey);
+    }
   }
 
   Future<void> clearTokens() async {
@@ -171,6 +187,8 @@ class ApiClient {
     _apellido = null;
     _email = null;
     _rol = null;
+    _esModerador = false;
+    _zonaModerador = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshTokenKey);
@@ -179,6 +197,8 @@ class ApiClient {
     await prefs.remove(_apellidoKey);
     await prefs.remove(_emailKey);
     await prefs.remove(_rolKey);
+    await prefs.remove(_esModeradorKey);
+    await prefs.remove(_zonaModeradorKey);
     // Cerrar el socket de la sesión anterior para no recibir eventos con
     // un token inválido ni mezclar usuarios.
     SocketServiceClient.instance.disconnect();
