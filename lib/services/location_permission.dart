@@ -114,6 +114,9 @@ class LocationPermissionHelper {
     }
   }
 
+  /// Última posición conocida (null si no hay); no verifica permisos.
+  static Future<Position?> lastKnown() => source.lastKnown();
+
   static Future<bool> openLocationSettings() => source.openLocationSettings();
   static Future<bool> openAppSettings() => source.openAppSettings();
 }
