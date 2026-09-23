@@ -1101,8 +1101,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
       distanciaKm: distance,
       tiempoEstimado: _trip?.tiempoEstimado,
     );
-    // Backend: el chat del viaje solo es válido en aceptado/en_curso (422 fuera).
-    final chatEnabled = _status == TripStatus.aceptado || _status == TripStatus.enCurso;
+    final chatEnabled = TripStatus.chatHabilitado(_status);
 
     return Container(
       padding: const EdgeInsets.all(16),

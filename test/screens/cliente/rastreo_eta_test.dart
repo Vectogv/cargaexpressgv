@@ -30,6 +30,25 @@ void main() {
     });
   });
 
+  testWidgets('con el conductor en camino el chat está disponible', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/trips/active') {
+        return jsonResp({
+          '_id': 't1',
+          'estado': 'conductor_en_camino',
+          'origen': {'lat': 4.6, 'lng': -74.1, 'direccion': 'Origen'},
+          'conductor': {'nombre': 'Carlos'},
+        });
+      }
+      return jsonResp({});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      expect(find.text('Chat'), findsOneWidget);
+    });
+  });
+
   test('sin datos de ETA no se muestra nada (antes "5 min" fijo)', () {
     expect(etaRecogida(status: TripStatus.aceptado), isNull);
     expect(etaRecogida(status: TripStatus.aceptado, distanciaKm: double.infinity), isNull);

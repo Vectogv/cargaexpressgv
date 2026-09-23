@@ -19,6 +19,15 @@ class TripStatus {
   static const String enDisputa = 'en_disputa';
   static const String sos = 'sos';
 
+  /// Estados en los que el backend permite el chat del viaje
+  /// (`chat_controller.ts`; fuera de ellos responde 422).
+  static bool chatHabilitado(String? estado) =>
+      estado == aceptado ||
+      estado == enCurso ||
+      estado == enCamino ||
+      estado == llegada ||
+      estado == sos;
+
   /// Etiqueta legible en español para cualquier estado del backend
   /// (`app/services/trip_status_labels.ts`). Nunca devuelve el string crudo de
   /// un estado conocido; para uno desconocido devuelve el valor tal cual.

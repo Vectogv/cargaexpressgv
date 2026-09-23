@@ -5,6 +5,21 @@ import 'package:cargaexpress/contracts/trip_status.dart';
 import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
 
 void main() {
+  test('chat del viaje disponible en los mismos estados que chat_controller.ts', () {
+    for (final e in [
+      TripStatus.aceptado,
+      TripStatus.enCurso,
+      TripStatus.enCamino,
+      TripStatus.llegada,
+      TripStatus.sos,
+    ]) {
+      expect(TripStatus.chatHabilitado(e), isTrue, reason: e);
+    }
+    for (final e in [TripStatus.buscando, TripStatus.pendienteConfirmacion, TripStatus.finalizado, null]) {
+      expect(TripStatus.chatHabilitado(e), isFalse, reason: e);
+    }
+  });
+
   group('rastreoVistaPara', () {
     test('disputa y en_disputa no muestran la búsqueda de conductor', () {
       expect(rastreoVistaPara(TripStatus.disputa), RastreoVista.disputa);
