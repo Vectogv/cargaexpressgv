@@ -132,6 +132,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
       if (_status == TripStatus.buscando && mounted) {
         _startPolling();
+        _cargarOfertasExistentes();
       }
 
       _startFallbackPolling();
@@ -147,6 +148,32 @@ class _RastreoScreenState extends State<RastreoScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _agregarOfertas(List<Map<String, dynamic>> nuevas) {
+    final merged = fusionarOfertas(_ofertas, nuevas);
+    setState(() {
+      _ofertas
+        ..clear()
+        ..addAll(merged);
+      _hasOffers = _ofertas.isNotEmpty;
+    });
+  }
+
+  /// Las ofertas llegan por socket sólo mientras la pantalla está abierta: al
+  /// abrirla con la búsqueda ya en marcha, traer las que ya existen.
+  Future<void> _cargarOfertasExistentes() async {
+    final tripId = _trip?.id;
+    if (tripId == null || tripId.isEmpty) return;
+    try {
+      final ofertas = await OfferService.getOffers(tripId);
+      if (!mounted || ofertas.isEmpty) return;
+      _agregarOfertas(ofertas);
+    } catch (e) {
+      // No bloquea: las nuevas ofertas siguen llegando por socket y la
+      // pantalla de ofertas vuelve a consultarlas.
+      debugPrint('Rastreo: no se pudieron cargar las ofertas: $e');
     }
   }
 
@@ -249,10 +276,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     _newOfferSub = SocketServiceClient.instance.onNewOffer.listen((data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() {
-          _hasOffers = true;
-          _ofertas.add(Map<String, dynamic>.from(data));
-        });
+        _agregarOfertas([Map<String, dynamic>.from(data)]);
       });
     });
 
@@ -1358,6 +1382,22 @@ class _PulseSearchIndicatorState extends State<_PulseSearchIndicator> with Singl
 /// (`app/services/trip_state_machine.ts`). Ningún estado terminal o
 /// desconocido cae en la vista de "Buscando conductor".
 enum RastreoVista { busqueda, seguimiento, entrega, disputa, cerrado, reserva }
+
+/// Suma a [actuales] las ofertas de [nuevas] que aún no están (por `_id`/`id`).
+/// Las ofertas llegan por socket (`new:offer`) y por GET al abrir la pantalla.
+@visibleForTesting
+List<Map<String, dynamic>> fusionarOfertas(
+    List<Map<String, dynamic>> actuales, List<Map<String, dynamic>> nuevas) {
+  String? idDe(Map<String, dynamic> o) => (o['_id'] ?? o['id'])?.toString();
+  final ids = actuales.map(idDe).whereType<String>().toSet();
+  final r = List<Map<String, dynamic>>.from(actuales);
+  for (final o in nuevas) {
+    final id = idDe(o);
+    if (id != null && !ids.add(id)) continue;
+    r.add(Map<String, dynamic>.from(o));
+  }
+  return r;
+}
 
 @visibleForTesting
 RastreoVista rastreoVistaPara(String status) {
