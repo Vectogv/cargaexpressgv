@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'confirmar_entrega_screen.dart' show avisoConfirmacionPendiente, estiloAvisoConfirmacion;
+import 'confirmar_entrega_screen.dart' show AvisoConfirmacionPendiente;
 import '../../widgets/media_image.dart';
 
 class LlegadaAlDestinoScreen extends StatelessWidget {
@@ -52,7 +52,7 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(avisoConfirmacionPendiente, style: estiloAvisoConfirmacion),
+                  const AvisoConfirmacionPendiente(),
                   const SizedBox(height: 20),
                   const Text(
                     'Foto de evidencia',

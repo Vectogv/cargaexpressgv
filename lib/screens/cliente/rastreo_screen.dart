@@ -14,6 +14,7 @@ import '../../services/api/trip_service.dart';
 import '../../services/api/offer_service.dart';
 import '../../services/api/http_client.dart';
 import '../../services/api_client.dart';
+import '../../services/config_cliente_service.dart';
 import '../../services/map_config.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
@@ -41,7 +42,6 @@ class RastreoScreen extends StatefulWidget {
 }
 
 class _RastreoScreenState extends State<RastreoScreen> {
-  static const double _proximidadKm = 1.0;
   static const double _zonaKm = 0.05;
   Trip? _trip;
   final List<Map<String, dynamic>> _ofertas = [];
@@ -109,6 +109,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
   Future<void> _load() async {
     if (_loading) return;
     setState(() => _loading = true);
+    // Reglas del backend (radio de cierre, plazo de confirmación); no bloquea.
+    ConfigClienteService.instance.cargar();
 
     try {
       if (_trip == null) {
@@ -490,7 +492,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
     // El backend penaliza la cancelación del cliente en aceptado y
     // conductor_en_camino: avisar en ambos.
     final cancelarPenaliza = _status == TripStatus.aceptado || _status == TripStatus.enCamino;
-    if (dist < _proximidadKm && !_proximityAlertShown && cancelarPenaliza) {
+    // Radio del backend (GET /api/config/cliente); 1 km si no está.
+    final proximidadKm = ConfigClienteService.instance.actual.radioAvisoConductorCercaKm;
+    if (dist < proximidadKm && !_proximityAlertShown && cancelarPenaliza) {
       _proximityAlertShown = true;
       _showProximityAlert();
     }

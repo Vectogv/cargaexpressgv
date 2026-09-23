@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cargaexpress/screens/cliente/cancel_trip_screen.dart';
 import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
+import 'package:cargaexpress/services/config_cliente_service.dart';
 import 'package:cargaexpress/services/socket_service_client.dart';
 
 import '../../helpers/fake_api.dart';
@@ -25,6 +26,8 @@ Future<void> _conductorA300m(WidgetTester tester, String estado) async {
 }
 
 void main() {
+  setUp(() => ConfigClienteService.instance.reiniciarParaTest());
+
   testWidgets('"Cancelar viaje de todas formas" abre la cancelación real', (tester) async {
     await conApiFalsa((req) => jsonResp(_viaje('aceptado')), () async {
       await _conductorA300m(tester, 'aceptado');
@@ -42,6 +45,29 @@ void main() {
       (tester) async {
     await conApiFalsa((req) => jsonResp(_viaje('conductor_en_camino')), () async {
       await _conductorA300m(tester, 'conductor_en_camino');
+      expect(find.text('El conductor ya se encuentra cerca'), findsOneWidget);
+    });
+  });
+
+  testWidgets('radio configurado en el backend (0.2 km): a 330 m no se avisa', (tester) async {
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/config/cliente') {
+        return jsonResp({'radioCierreKm': 0.2, 'confirmacionTimeoutMin': 10});
+      }
+      return jsonResp(_viaje('aceptado'));
+    }, () async {
+      await _conductorA300m(tester, 'aceptado');
+      expect(ConfigClienteService.instance.actual.radioCierreKm, 0.2);
+      expect(find.text('El conductor ya se encuentra cerca'), findsNothing);
+    });
+  });
+
+  testWidgets('si /api/config/cliente no existe se avisa a 1 km', (tester) async {
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/config/cliente') return errorResp(404, 'Cannot GET:/api/config/cliente');
+      return jsonResp(_viaje('aceptado'));
+    }, () async {
+      await _conductorA300m(tester, 'aceptado');
       expect(find.text('El conductor ya se encuentra cerca'), findsOneWidget);
     });
   });

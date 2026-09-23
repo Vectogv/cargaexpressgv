@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
 
+import '../../services/config_cliente_service.dart';
+
 /// Si el cliente no responde, el backend (confirmacion_timeout_service)
 /// avisa a un moderador tras `confirmacionTimeoutMin` minutos; NO confirma
-/// solo. El plazo no se expone a la app, por eso el texto es genérico.
-const String avisoConfirmacionPendiente =
-    'Si no confirmas ni rechazas en unos minutos, un moderador revisará el cierre del viaje.';
+/// solo. El plazo llega de GET /api/config/cliente (10 min si no está).
+String avisoConfirmacionPendiente(int minutos) =>
+    'Si no confirmas ni rechazas en unos $minutos minutos, un moderador revisará el cierre del viaje.';
 const TextStyle estiloAvisoConfirmacion =
     TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.5);
+
+/// Aviso del plazo de confirmación con el valor configurado en el backend.
+class AvisoConfirmacionPendiente extends StatelessWidget {
+  final TextAlign? textAlign;
+  const AvisoConfirmacionPendiente({super.key, this.textAlign});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ReglasCliente>(
+      valueListenable: ConfigClienteService.instance.reglas,
+      builder: (_, reglas, _) => Text(
+        avisoConfirmacionPendiente(reglas.confirmacionTimeoutMin),
+        style: estiloAvisoConfirmacion,
+        textAlign: textAlign,
+      ),
+    );
+  }
+}
 
 class ConfirmarEntregaScreen extends StatefulWidget {
   final Future<void> Function() onConfirmar;
@@ -144,11 +164,7 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
-              const Text(
-                avisoConfirmacionPendiente,
-                style: estiloAvisoConfirmacion,
-                textAlign: TextAlign.center,
-              ),
+              const AvisoConfirmacionPendiente(textAlign: TextAlign.center),
               if (widget.fueraDeRango) ...[
                 const SizedBox(height: 16),
                 Container(
