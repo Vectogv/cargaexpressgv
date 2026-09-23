@@ -28,12 +28,12 @@ class OfertaAceptadaScreen extends StatefulWidget {
 
   const OfertaAceptadaScreen({
     super.key,
-    this.montoOferta = '\$55.000',
-    this.cliente = const ClienteData(nombre: 'María González', rating: 4.8),
-    this.origen = 'Av. Principal, Caracas',
-    this.destino = 'Valencia, Zona Industrial',
-    this.distancia = '28.6 km',
-    this.descripcionCarga = 'Electrodomésticos, 3 cajas grandes',
+    this.montoOferta = '—',
+    this.cliente = const ClienteData(nombre: 'Cliente', rating: 5.0),
+    this.origen = 'Origen',
+    this.destino = 'Destino',
+    this.distancia = '—',
+    this.descripcionCarga = 'No especificada',
     required this.trip,
   });
 

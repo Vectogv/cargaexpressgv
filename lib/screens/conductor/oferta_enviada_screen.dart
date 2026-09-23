@@ -19,7 +19,7 @@ class OfertaEnviadaScreen extends StatefulWidget {
 
   const OfertaEnviadaScreen({
     super.key,
-    this.montoOferta = '\$55.000',
+    this.montoOferta = '—',
     this.tripId,
     this.venceEn,
   });
@@ -93,10 +93,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
         final detail = await ApiClient.instance.getTripDetail(tripId);
         final estado = detail['estado'] as String?;
         if ((estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso) && !_isNavigating && mounted) {
-          _isNavigating = true;
-          Navigator.pushReplacement(context, MaterialPageRoute(
-            builder: (_) => OfertaAceptadaScreen(trip: detail),
-          ));
+          await _redirectToAccepted({...detail, 'viajeId': tripId});
         } else if ((estado == TripStatus.cancelado || estado == 'expirado') && !_isNavigating && mounted) {
           _isNavigating = true;
           Navigator.maybePop(context);

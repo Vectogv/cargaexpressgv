@@ -18,12 +18,12 @@ class ViajeAceptadoScreen extends StatelessWidget {
 
   const ViajeAceptadoScreen({
     super.key,
-    this.nombreCliente = 'Maria González',
-    this.ratingCliente = 4.8,
+    this.nombreCliente = 'Cliente',
+    this.ratingCliente = 5.0,
     this.avatarUrl,
-    this.origen = 'Av. Principal, Caracas',
-    this.destino = 'Valencia, Zona Industrial',
-    this.precioAcordado = '\$55.000',
+    this.origen = 'Origen',
+    this.destino = 'Destino',
+    this.precioAcordado = '—',
     this.isStarting = false,
     this.isCancelling = false,
     this.onLlamar,

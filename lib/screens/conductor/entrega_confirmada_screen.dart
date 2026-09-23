@@ -14,13 +14,13 @@ class EntregaConfirmadaScreen extends StatelessWidget {
 
   const EntregaConfirmadaScreen({
     super.key,
-    this.nombreCliente = 'Maria González',
-    this.ratingCliente = 4.8,
+    this.nombreCliente = 'Cliente',
+    this.ratingCliente = 5.0,
     this.avatarUrl,
-    this.precioAcordado = '\$55.000',
-    this.comision = '- \$5.500',
+    this.precioAcordado = '—',
+    this.comision = '—',
     this.porcentajeComision = '10%',
-    this.gananciaTotal = '\$49.500',
+    this.gananciaTotal = '—',
     this.onVerResumen,
     this.onVolverInicio,
   });

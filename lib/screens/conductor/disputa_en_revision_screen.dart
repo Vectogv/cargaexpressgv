@@ -7,8 +7,8 @@ class DisputaEnRevisionScreen extends StatelessWidget {
 
   const DisputaEnRevisionScreen({
     super.key,
-    this.origen = 'Av. Principal, Caracas',
-    this.destino = 'Valencia, Zona Industrial',
+    this.origen = 'Origen',
+    this.destino = 'Destino',
     this.onVerDetalles,
   });
 
