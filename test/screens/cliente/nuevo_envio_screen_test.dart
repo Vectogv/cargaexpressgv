@@ -97,6 +97,40 @@ void main() {
     LocationPermissionHelper.source = const LocationSource();
   });
 
+  group('cobertura del origen (GET /api/config/coverage)', () {
+    // Zona rectangular alrededor de Medellín.
+    http.Response cobertura(http.Request req) => http.Response(
+          jsonEncode({
+            'zonas': [
+              {'clave': 'med', 'nombre': 'Medellín', 'norte': 6.4, 'sur': 6.1, 'este': -75.4, 'oeste': -75.7},
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+
+    Future<void> conOrigen(WidgetTester tester, double lat, double lng) async {
+      LocationPermissionHelper.source = _FakeSource(onCurrent: () async => _pos(lat, lng));
+      await http.runWithClient(() async {
+        await _pumpScreen(tester);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump();
+      }, () => MockClient((req) async => cobertura(req)));
+    }
+
+    testWidgets('origen fuera de cobertura se avisa al elegirlo', (tester) async {
+      await conOrigen(tester, 4.6, -74.1); // Bogotá
+      expect(find.byKey(const Key('aviso_fuera_cobertura')), findsOneWidget);
+      await _dispose(tester);
+    });
+
+    testWidgets('origen dentro de cobertura no muestra aviso', (tester) async {
+      await conOrigen(tester, 6.25, -75.56);
+      expect(find.byKey(const Key('aviso_fuera_cobertura')), findsNothing);
+      await _dispose(tester);
+    });
+  });
+
   testWidgets('sin señal GPS la carga de ubicación termina y ofrece alternativas',
       (tester) async {
     LocationPermissionHelper.source = _FakeSource();

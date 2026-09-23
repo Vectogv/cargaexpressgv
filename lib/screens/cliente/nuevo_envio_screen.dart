@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_client.dart';
+import '../../services/api/coverage_service.dart';
 import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
 import '../../services/location_permission.dart';
@@ -98,7 +99,29 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     _init();
   }
 
+  /// Zonas de cobertura; null si no se pudieron cargar (no se avisa nada y
+  /// el backend sigue validando al solicitar).
+  List<Map<String, dynamic>>? _zonas;
+
+  /// El backend sólo valida la cobertura del ORIGEN (trip_controller.request).
+  bool get _origenFueraDeCobertura {
+    final o = _origenLatLng;
+    final zonas = _zonas;
+    if (o == null || zonas == null) return false;
+    return !isInsideCoverage(zonas, o.latitude, o.longitude);
+  }
+
+  Future<void> _cargarCobertura() async {
+    try {
+      final zonas = await CoverageService.getCoverage();
+      if (mounted) setState(() => _zonas = zonas);
+    } catch (e) {
+      LoggerService.instance.warning('nuevo_envio: no se pudo cargar la cobertura', e);
+    }
+  }
+
   Future<void> _init() async {
+    unawaited(_cargarCobertura());
     await _loadDraft();
     if (!mounted) return;
     _origenCtrl.addListener(_saveDraft);
@@ -777,6 +800,25 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
             onTap: () => _elegirPunto(isOrigen: true),
           ),
           if (_locError != null && _locParaOrigen) _buildLocError(isOrigen: true),
+          if (_origenOk && _origenFueraDeCobertura)
+            Padding(
+              key: const Key('aviso_fuera_cobertura'),
+              padding: const EdgeInsets.fromLTRB(52, 0, 16, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade800),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Este punto de recogida está fuera de nuestra zona de cobertura. '
+                      'Elige otro origen.',
+                      style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1, indent: 52, color: Color(0xFFF0F0F0)),
           _PuntoRow(
             key: const Key('fila_destino'),
