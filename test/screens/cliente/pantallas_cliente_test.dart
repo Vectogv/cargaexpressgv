@@ -159,5 +159,6 @@ void main() {
     await avanzar(tester);
     expect(tester.takeException(), isNull);
     expect(find.text('Ver detalle'), findsOneWidget);
+    expect(find.textContaining('un moderador revisará'), findsOneWidget);
   });
 }

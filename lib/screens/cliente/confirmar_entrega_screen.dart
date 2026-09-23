@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 
+/// Si el cliente no responde, el backend (confirmacion_timeout_service)
+/// avisa a un moderador tras `confirmacionTimeoutMin` minutos; NO confirma
+/// solo. El plazo no se expone a la app, por eso el texto es genérico.
+const String avisoConfirmacionPendiente =
+    'Si no confirmas ni rechazas en unos minutos, un moderador revisará el cierre del viaje.';
+const TextStyle estiloAvisoConfirmacion =
+    TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.5);
+
 class ConfirmarEntregaScreen extends StatefulWidget {
   final Future<void> Function() onConfirmar;
   final Future<void> Function(String motivo)? onRechazar;
@@ -133,6 +141,12 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
                   color: Color(0xFF6B7280),
                   height: 1.6,
                 ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                avisoConfirmacionPendiente,
+                style: estiloAvisoConfirmacion,
                 textAlign: TextAlign.center,
               ),
               if (widget.fueraDeRango) ...[

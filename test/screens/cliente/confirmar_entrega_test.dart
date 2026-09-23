@@ -11,6 +11,12 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: screen));
   }
 
+  testWidgets('avisa que sin confirmar un moderador revisará (no se confirma solo)', (tester) async {
+    await pump(tester, ConfirmarEntregaScreen(onConfirmar: () async {}));
+    expect(find.textContaining('un moderador revisará'), findsOneWidget);
+    expect(find.textContaining('automáticamente'), findsNothing);
+  });
+
   testWidgets('el rechazo envía el motivo que escribió el cliente', (tester) async {
     String? motivo;
     await pump(
