@@ -284,13 +284,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _offerAcceptedShown) return;
         _offerAcceptedShown = true;
-        final conductor = data['conductor'] as Map<String, dynamic>? ?? {};
-        _safeReplace(OfertaAceptadaScreen(
-          conductorNombre: conductor['nombre'] as String? ?? 'Conductor',
-          camion: conductor['tipoVehiculo'] as String? ?? '',
-          placa: conductor['placa'] as String? ?? '',
-          rating: (conductor['rating'] as num?)?.toDouble() ?? 0,
-          onVerSeguimiento: () => Navigator.pop(context),
+        final conductor = data['conductor'] is Map
+            ? Map<String, dynamic>.from(data['conductor'] as Map)
+            : <String, dynamic>{};
+        _safeReplace(ofertaAceptadaCliente(
+          conductor,
+          seguimiento: (_) => const RastreoScreen(),
         ));
       });
     });
@@ -1382,6 +1381,23 @@ class _PulseSearchIndicatorState extends State<_PulseSearchIndicator> with Singl
 /// (`app/services/trip_state_machine.ts`). Ningún estado terminal o
 /// desconocido cae en la vista de "Buscando conductor".
 enum RastreoVista { busqueda, seguimiento, entrega, disputa, cerrado, reserva }
+
+/// Pantalla de oferta aceptada que reemplaza al rastreo. "Ver seguimiento"
+/// usa el contexto de SU ruta (el del rastreo ya no existe tras el
+/// reemplazo) y la sustituye por [seguimiento].
+Widget ofertaAceptadaCliente(Map<String, dynamic> conductor, {required WidgetBuilder seguimiento}) {
+  return Builder(
+    builder: (ctx) => OfertaAceptadaScreen(
+      conductorNombre: conductor['nombre']?.toString() ?? 'Conductor',
+      camion: conductor['tipoVehiculo']?.toString() ?? '',
+      placa: conductor['placa']?.toString() ?? '',
+      rating: (conductor['rating'] as num?)?.toDouble() ?? 0,
+      onVerSeguimiento: () => Navigator.of(ctx).pushReplacement(
+        MaterialPageRoute(builder: seguimiento),
+      ),
+    ),
+  );
+}
 
 /// Suma a [actuales] las ofertas de [nuevas] que aún no están (por `_id`/`id`).
 /// Las ofertas llegan por socket (`new:offer`) y por GET al abrir la pantalla.
