@@ -3,17 +3,25 @@ import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/api_client.dart';
+import '../../models/oferta_pendiente.dart' show formatoCuentaRegresiva;
 import '../../services/logger_service.dart';
+import '../../services/server_clock.dart';
 import 'oferta_aceptada_screen.dart';
+import 'offers_screen.dart';
 
 class OfertaEnviadaScreen extends StatefulWidget {
   final String montoOferta;
   final dynamic tripId;
 
+  /// Vencimiento de la oferta en hora del servidor (de `expiresAt` al
+  /// crearla). Null si no se conoce: se usa un plazo de respaldo.
+  final DateTime? venceEn;
+
   const OfertaEnviadaScreen({
     super.key,
     this.montoOferta = '\$55.000',
     this.tripId,
+    this.venceEn,
   });
 
   @override
@@ -28,6 +36,15 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
   bool _hasError = false;
   Timer? _pollTimer;
   Timer? _timeoutTimer;
+  Timer? _relojTimer;
+
+  /// Margen tras el vencimiento para que llegue offer:accepted/offer:expired
+  /// antes de consultar el viaje.
+  static const Duration _margenVencimiento = Duration(seconds: 3);
+
+  /// Sin `expiresAt`: la oferta vence a los ~28 s y el backend la expira en
+  /// su siguiente pasada (cada 30 s).
+  static const Duration _plazoRespaldo = Duration(seconds: 90);
 
   static const Color _accentBlue = Color(0xFF2563EB);
   static const Color _lightBlue = Color(0xFFEFF6FF);
@@ -90,9 +107,18 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
       } catch (_) {}
     });
 
-    // Respaldo si no llega offer:expired (socket caído): la oferta vence a los
-    // 28 s y el backend la expira en su siguiente pasada (cada 30 s).
-    _timeoutTimer = Timer(const Duration(seconds: 90), () async {
+    // Al vencer (expiresAt del servidor) sin que llegue offer:expired ni
+    // offer:accepted (socket caído), se consulta el viaje y se sale.
+    final venceEn = widget.venceEn;
+    final plazo = venceEn != null
+        ? _restante(venceEn) + _margenVencimiento
+        : _plazoRespaldo;
+    if (venceEn != null) {
+      _relojTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+    _timeoutTimer = Timer(plazo, () async {
       if (_isNavigating || !mounted) return;
       try {
         final detail = await ApiClient.instance.getTripDetail(tripIdStr);
@@ -104,6 +130,11 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
       } catch (_) {}
       _salir('Tu oferta expiró sin respuesta del cliente. Puedes enviar una nueva.');
     });
+  }
+
+  static Duration _restante(DateTime venceEn) {
+    final r = venceEn.difference(ServerClock.ahora());
+    return r.isNegative ? Duration.zero : r;
   }
 
   /// Sale de la pantalla (una sola vez) mostrando [mensaje]. Se llama desde
@@ -132,34 +163,16 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
       fullTrip = tripData;
     }
 
-    final clienteMap = fullTrip['cliente'] as Map<String, dynamic>? ?? {};
-    final origenMap = fullTrip['origen'] as Map<String, dynamic>?;
-    final destinoMap = fullTrip['destino'] as Map<String, dynamic>?;
     final monto = tripData['monto'] is num ? '\$${_fmt((tripData['monto'] as num).toInt())}' : widget.montoOferta;
 
     if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OfertaAceptadaScreen(
-            montoOferta: monto,
-            cliente: ClienteData(
-              nombre: clienteMap['nombre'] as String? ?? 'Cliente',
-              rating: (clienteMap['rating'] as num?)?.toDouble() ?? 5.0,
-              avatarUrl: clienteMap['avatar'] as String?,
-            ),
-            origen: origenMap?['direccion'] as String? ?? 'Origen',
-            destino: destinoMap?['direccion'] as String? ?? 'Destino',
-            distancia: fullTrip['distancia'] != null ? '${fullTrip['distancia']} km' : '—',
-            descripcionCarga: fullTrip['descripcion'] as String? ?? 'No especificada',
-            trip: fullTrip,
-          ),
-        ),
-        (route) => route.isFirst,
-      );
-    });
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OfertaAceptadaScreen.desdeViaje(fullTrip, montoOferta: monto),
+      ),
+      (route) => route.isFirst,
+    );
   }
 
   String _fmt(int n) {
@@ -179,12 +192,15 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
     _expiredSub?.cancel();
     _pollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _relojTimer?.cancel();
     super.dispose();
   }
 
+  /// "Mis ofertas" también sigue la oferta (cuenta regresiva y respuesta).
   void _irAOfertas() {
     if (_isNavigating) return;
-    Navigator.of(context).maybePop();
+    _isNavigating = true;
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const OffersScreen()));
   }
 
   @override
@@ -282,6 +298,24 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                           ],
                         ),
                       ),
+                      if (widget.venceEn != null) ...[
+                        const SizedBox(height: 18),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _lightBlue,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.timer_outlined, size: 18, color: _accentBlue),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Vence en ${formatoCuentaRegresiva(_restante(widget.venceEn!))}',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _accentBlue),
+                            ),
+                          ]),
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       const Text(
                         'Te notificaremos cuando el cliente\ntome una decisión.',

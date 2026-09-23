@@ -137,7 +137,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       final precioEstimado = widget.trip['precioEstimado'];
       final ofertaInicial = _toNum(precioEstimado)?.toDouble() ?? 55000;
       final precioStr = precioEstimado != null ? '\$${_formatMonto(precioEstimado)}' : '\$50.000';
-      final montoStr = await Navigator.push<String>(
+      final creada = await Navigator.push<OfertaCreada>(
         context,
         MaterialPageRoute(
           builder: (_) => HacerOfertaScreen(
@@ -148,7 +148,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           ),
         ),
       );
-      if (montoStr != null && mounted) {
+      if (creada != null && mounted) {
         _tripStatusSub?.cancel();
         _tripAcceptedSub?.cancel();
         DriverLocationService.instance.markAsOffered(_tripId);
@@ -156,8 +156,9 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           context,
           MaterialPageRoute(
             builder: (_) => OfertaEnviadaScreen(
-              montoOferta: montoStr,
+              montoOferta: creada.monto,
               tripId: _tripId,
+              venceEn: creada.venceEn,
             ),
           ),
         );

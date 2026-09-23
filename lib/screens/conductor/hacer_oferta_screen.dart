@@ -2,9 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_client.dart';
 import '../../services/driver_location_service.dart';
+import '../../services/server_clock.dart';
 import '../../services/api/http_client.dart';
 import 'aviso_cuenta_pago.dart' show codigoSuspensionPago;
 import 'earnings_screen.dart';
+
+/// Resultado de enviar la oferta: el monto formateado y cuándo vence.
+class OfertaCreada {
+  final String monto;
+
+  /// Vencimiento en hora del servidor ([ServerClock]); null si el backend no
+  /// envió `expiresAt`.
+  final DateTime? venceEn;
+
+  const OfertaCreada({required this.monto, this.venceEn});
+
+  /// Con la respuesta de POST /api/trips/:id/offers. La duración se toma de
+  /// `expiresAt - createdAt` (ambas del servidor) para no depender del reloj
+  /// del teléfono.
+  static DateTime? vencimiento(Map<String, dynamic> respuesta) {
+    final expira = DateTime.tryParse(respuesta['expiresAt']?.toString() ?? '');
+    if (expira == null) return null;
+    final creada = DateTime.tryParse(respuesta['createdAt']?.toString() ?? '');
+    if (creada == null) return expira;
+    final ventana = expira.difference(creada);
+    if (ventana.isNegative) return expira;
+    return ServerClock.ahora().add(ventana);
+  }
+}
 
 class HacerOfertaScreen extends StatefulWidget {
   final dynamic tripId;
@@ -91,8 +116,13 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
     }
     setState(() => _sending = true);
     try {
-      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.makeOffer(widget.tripId, monto, placa: widget.placa, mensaje: _mensajeController.text));
-      if (mounted) Navigator.of(context).pop(_formatValue(_ofertaActual));
+      final respuesta = await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.makeOffer(widget.tripId, monto, placa: widget.placa, mensaje: _mensajeController.text));
+      if (mounted) {
+        Navigator.of(context).pop(OfertaCreada(
+          monto: _formatValue(_ofertaActual),
+          venceEn: OfertaCreada.vencimiento(respuesta),
+        ));
+      }
     } on ApiException catch (e) {
       if (e.statusCode == 429) {
         _snack('L\u00edmite de ofertas alcanzado. Espera un momento e intenta de nuevo.');
