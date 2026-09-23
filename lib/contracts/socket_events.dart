@@ -12,6 +12,10 @@ class SocketEvents {
   static const String paymentConfirmed = 'payment:confirmed';
   static const String paymentRejected = 'payment:rejected';
 
+  /// Conductor: su deuda de comisión venció y la cuenta quedó suspendida
+  /// por pago (DriverDebtSuspensionService).
+  static const String accountPaymentSuspended = 'account:payment_suspended';
+
   /// `{minutos}`: ETA del conductor al origen mientras el viaje está
   /// aceptado (driver_controller.updateLocation, 30 km/h).
   static const String tripEtaUpdate = 'trip:eta_update';

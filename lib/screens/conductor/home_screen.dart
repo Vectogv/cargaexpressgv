@@ -27,6 +27,7 @@ import 'conductor_trip_detail_screen.dart';
 import 'trip_history_screen.dart';
 import 'support_screen.dart';
 import 'settings_screen.dart';
+import 'aviso_cuenta_pago.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,6 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
+  StreamSubscription<Map<String, dynamic>>? _pagoSuspendidoSub;
+  StreamSubscription<Map<String, dynamic>>? _pagoConfirmadoSub;
+  StreamSubscription<Map<String, dynamic>>? _pagoRechazadoSub;
+
+  /// GET /api/payment/debt: deuda de comisión y `estadoCuenta`.
+  Map<String, dynamic>? _deuda;
+  EstadoPagoConductor get _estadoPago => estadoPagoConductor(_deuda);
   int _knownNearbyCount = 0;
   final Set<String> _offeredTripIds = {};
   final Set<String> _activeBannerIds = {};
@@ -109,12 +117,36 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       _knownNearbyCount = disponibles.length;
     });
+
+    // Suspensión por deuda de comisión: el backend ya lo desconectó.
+    _pagoSuspendidoSub = SocketServiceClient.instance.onAccountPaymentSuspended.listen((data) {
+      _aplicarBloqueoPago(data);
+      _avisarBloqueoPago(data['message']?.toString() ??
+          'Tu cuenta fue suspendida por pago pendiente. Sube el comprobante para reactivarla.');
+    });
+    _pagoConfirmadoSub = SocketServiceClient.instance.onPaymentConfirmed.listen((data) {
+      if (!mounted) return;
+      setState(() => _deuda = {...?_deuda, 'estadoCuenta': 'activa', 'montoDeuda': 0});
+      unawaited(_cargarDeuda());
+      _snack(data['message']?.toString() ?? 'Tu pago fue confirmado. Ya puedes conectarte.');
+    });
+    _pagoRechazadoSub = SocketServiceClient.instance.onPaymentRejected.listen((data) {
+      if (!mounted) return;
+      // El backend devuelve la cuenta a suspension_por_pago.
+      setState(() => _deuda = {...?_deuda, 'estadoCuenta': 'suspension_por_pago'});
+      unawaited(_cargarDeuda());
+      _avisarBloqueoPago(data['message']?.toString() ??
+          'Tu comprobante no fue válido. Sube un nuevo comprobante de pago.');
+    });
   }
 
   @override
   void dispose() {
     _socketSub?.cancel();
     _tripSub?.cancel();
+    _pagoSuspendidoSub?.cancel();
+    _pagoConfirmadoSub?.cancel();
+    _pagoRechazadoSub?.cancel();
     _uiTimer?.cancel();
     super.dispose();
   }
@@ -153,6 +185,13 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       if (estado != 'aprobado') return;
       if (!mounted) return;
+      if (_estadoPago.bloqueaConexion) {
+        // Suspendido por pago o comprobante en revisión: el backend no lo deja
+        // conectarse (el aviso del inicio explica qué hacer).
+        DriverLocationService.instance.pause();
+        setState(() => _online = false);
+        return;
+      }
       final messenger = ScaffoldMessenger.of(context);
       try {
         await ApiClient.instance.setDriverStatus(true);
@@ -161,6 +200,11 @@ class _HomeScreenState extends State<HomeScreen> {
         // suspendido: no fingir que está en línea.
         DriverLocationService.instance.pause();
         if (mounted) setState(() => _online = false);
+        if (e is ApiException && e.code == codigoSuspensionPago) {
+          _aplicarBloqueoPago(e.data);
+          _avisarBloqueoPago(e.message);
+          return;
+        }
         messenger.showSnackBar(SnackBar(
           content: Text(_errorMessage(e)),
           backgroundColor: Colors.orange,
@@ -220,6 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('Error cargando perfil: $e');
     }
+    await _cargarDeuda();
     unawaited(_loadStats());
     // Refresca el resumen cada minuto. La posición del mapa la refresca el
     // propio _DriverMiniMap (antes un setState() global cada 20 s reconstruía
@@ -228,6 +273,56 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       unawaited(_loadStats());
     });
+  }
+
+  /// GET /api/payment/debt (permitido aunque la cuenta esté suspendida por
+  /// pago). Si falla se conserva lo último conocido.
+  Future<void> _cargarDeuda() async {
+    try {
+      final deuda = await ApiClient.instance.getDebt();
+      if (mounted) setState(() => _deuda = deuda);
+    } catch (e) {
+      debugPrint('Error cargando deuda: $e');
+    }
+  }
+
+  /// Cuenta suspendida por pago (403 CUENTA_SUSPENDIDA_POR_PAGO o socket
+  /// `account:payment_suspended`): queda desconectado sin cerrar sesión.
+  void _aplicarBloqueoPago(Map<String, dynamic>? data) {
+    DriverLocationService.instance.pause();
+    if (!mounted) return;
+    setState(() {
+      _online = false;
+      _deuda = {
+        ...?_deuda,
+        'estadoCuenta': data?['estadoCuenta'] ?? 'suspension_por_pago',
+        if (data?['montoDeuda'] != null) 'montoDeuda': data!['montoDeuda'],
+        if (data?['deudaFechaLimite'] != null) 'deudaFechaLimite': data!['deudaFechaLimite'],
+      };
+    });
+    unawaited(_cargarDeuda());
+  }
+
+  void _avisarBloqueoPago(String mensaje) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(mensaje),
+      backgroundColor: Colors.orange.shade800,
+      duration: const Duration(seconds: 6),
+      action: SnackBarAction(label: 'Pagos', textColor: Colors.white, onPressed: _abrirPagos),
+    ));
+  }
+
+  void _snack(String mensaje) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
+  }
+
+  /// Ganancias: muestra la deuda y permite subir el comprobante de pago.
+  Future<void> _abrirPagos() async {
+    if (!mounted) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen()));
+    if (mounted) unawaited(_cargarDeuda());
   }
 
   Future<void> _loadStats() async {
@@ -259,6 +354,12 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           return;
         }
+        if (_estadoPago.bloqueaConexion) {
+          _avisarBloqueoPago(_estadoPago == EstadoPagoConductor.enRevision
+              ? 'Tu comprobante de pago está en revisión. Podrás conectarte cuando sea aprobado.'
+              : 'Tu cuenta está suspendida por pago pendiente. Sube el comprobante para conectarte.');
+          return;
+        }
         // Intentar GPS primero
         final gpsOk = await DriverLocationService.instance.start();
         if (!gpsOk) {
@@ -285,7 +386,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) setState(() => _online = false);
       }
     } catch (e) {
-      if (mounted) {
+      if (e is ApiException && e.code == codigoSuspensionPago) {
+        _aplicarBloqueoPago(e.data);
+        _avisarBloqueoPago(e.message);
+      } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(_errorMessage(e)), backgroundColor: Colors.orange),
         );
@@ -622,6 +726,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildOnlineToggle() {
+    // Con la cuenta suspendida por pago no se puede conectar (sí desconectar).
+    final bloqueado = !_online && _estadoPago.bloqueaConexion;
+    final subtitulo = _online
+        ? 'Recibiendo solicitudes cercanas'
+        : bloqueado
+            ? (_estadoPago == EstadoPagoConductor.enRevision
+                ? 'Pago en revisión: aún no puedes conectarte'
+                : 'Suspendido por pago: paga para conectarte')
+            : 'No recibirás solicitudes';
     return Container(
       margin: const EdgeInsets.only(left: 8),
       padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
@@ -651,7 +764,8 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Text(_online ? 'Conectado' : 'Desconectado',
                     style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                Text(_online ? 'Recibiendo solicitudes cercanas' : 'No recibirás solicitudes',
+                Text(subtitulo,
+                    key: const Key('subtitulo_conexion'),
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12)),
               ],
             ),
@@ -664,7 +778,7 @@ class _HomeScreenState extends State<HomeScreen> {
           else
             Switch(
               value: _online,
-              onChanged: (_) => _toggleStatus(),
+              onChanged: bloqueado ? null : (_) => _toggleStatus(),
               activeThumbColor: Colors.white,
               activeTrackColor: _accentGreen,
               inactiveThumbColor: Colors.white,
@@ -841,6 +955,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos),
           _buildStatsRow(),
           const SizedBox(height: 16),
           _buildMapCard(),

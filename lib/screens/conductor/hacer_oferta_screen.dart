@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../services/api_client.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/api/http_client.dart';
+import 'aviso_cuenta_pago.dart' show codigoSuspensionPago;
+import 'earnings_screen.dart';
 
 class HacerOfertaScreen extends StatefulWidget {
   final dynamic tripId;
@@ -98,7 +100,18 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
         // FUERA_DE_ZONA (422), CONDUCTOR_OCUPADO (409), cuenta suspendida o
         // no verificada (403), viaje sin ofertas (400)...: el backend ya
         // explica el motivo en espa\u00f1ol.
-        _snack(e.message);
+        if (e.code == codigoSuspensionPago && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.message),
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Pagos',
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen())),
+            ),
+          ));
+        } else {
+          _snack(e.message);
+        }
       }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');

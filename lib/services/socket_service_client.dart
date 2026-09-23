@@ -70,6 +70,7 @@ class SocketServiceClient {
   final _tripGpsFrozenCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _paymentConfirmedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _paymentRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _accountPaymentSuspendedCtrl = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onTripStatus => _tripStatusCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverOnWay => _driverOnWayCtrl.stream;
@@ -123,6 +124,11 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onTripGpsFrozen => _tripGpsFrozenCtrl.stream;
   Stream<Map<String, dynamic>> get onPaymentConfirmed => _paymentConfirmedCtrl.stream;
   Stream<Map<String, dynamic>> get onPaymentRejected => _paymentRejectedCtrl.stream;
+
+  /// `account:payment_suspended {estadoCuenta, code, montoDeuda,
+  /// deudaFechaLimite, online: false, message}` (conductor): su deuda de
+  /// comisión venció; el backend ya lo desconectó.
+  Stream<Map<String, dynamic>> get onAccountPaymentSuspended => _accountPaymentSuspendedCtrl.stream;
 
   Stream<bool> get onConnection => _connectionCtrl.stream;
 
@@ -522,6 +528,10 @@ class SocketServiceClient {
       safeOn(SocketEvents.paymentRejected, (data) {
         if (data is Map) safeAdd(_paymentRejectedCtrl, Map<String, dynamic>.from(data));
       });
+
+      safeOn(SocketEvents.accountPaymentSuspended, (data) {
+        if (data is Map) safeAdd(_accountPaymentSuspendedCtrl, Map<String, dynamic>.from(data));
+      });
     } catch (e) {
       LoggerService.instance.error('SocketServiceClient._connect error', e);
       _scheduleReconnect();
@@ -563,6 +573,9 @@ class SocketServiceClient {
       'offer:accepted': _offerAcceptedCtrl,
       'offer:rejected': _offerRejectedCtrl,
       'offer:expired': _offerExpiredCtrl,
+      SocketEvents.paymentConfirmed: _paymentConfirmedCtrl,
+      SocketEvents.paymentRejected: _paymentRejectedCtrl,
+      SocketEvents.accountPaymentSuspended: _accountPaymentSuspendedCtrl,
       'trip:cancelled': _tripCancelledCtrl,
       'trip:finalize_request': _finalizeRequestCtrl,
       'dispute:updated': _disputeUpdatedCtrl,
@@ -679,6 +692,7 @@ class SocketServiceClient {
     _tripGpsFrozenCtrl.close();
     _paymentConfirmedCtrl.close();
     _paymentRejectedCtrl.close();
+    _accountPaymentSuspendedCtrl.close();
     _connectionCtrl.close();
   }
 }
