@@ -93,13 +93,18 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
     setState(() => _submitting = true);
     try {
       final result = await ApiClient.instance.createDispute(
-        tripId: widget.trip?['id'],
+        // `Trip.toJson()` usa `_id`; los mapas del backend traen `id`.
+        tripId: widget.trip?['id'] ?? widget.trip?['_id'],
         problema: _selectedProblem,
         descripcion: _descController.text.trim(),
         fotos: [for (final p in _photos) if (p != null) p.path],
       );
-      final numero = result['numero_disputa'] as String? ?? 'DSP-00001';
       final disputeId = result['id']?.toString() ?? result['_id']?.toString() ?? '';
+      final numeroApi = (result['numero_disputa'] ?? result['numero'])?.toString().trim();
+      // Sin número del backend se muestra el id real, nunca uno inventado.
+      final numero = (numeroApi != null && numeroApi.isNotEmpty)
+          ? numeroApi
+          : (disputeId.isNotEmpty ? '#$disputeId' : '—');
       if (!mounted) return;
       widget.onSubmitted();
       navigator.pushReplacement(

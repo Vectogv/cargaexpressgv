@@ -7,7 +7,7 @@ class DisputaCreadaScreen extends StatelessWidget {
 
   const DisputaCreadaScreen({
     super.key,
-    this.disputeNumber = 'DIS-2024-0610-0012',
+    required this.disputeNumber,
     required this.disputeId,
   });
 
