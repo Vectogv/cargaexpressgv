@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cargaexpress/screens/home_by_role.dart';
 import 'package:cargaexpress/services/auth_response.dart';
+import 'package:cargaexpress/services/session_monitor_service.dart';
 
 void main() {
   group('homeDestinoFor (login, registro y restauración de sesión)', () {
@@ -69,5 +70,7 @@ void main() {
     expect(find.text('home'), findsOneWidget);
     expect(find.text('auth'), findsNothing);
     expect(find.text('login'), findsNothing);
+    // abrirInicioComoRaiz inicia el monitor de sesión (Timer periódico).
+    SessionMonitorService.instance.stop();
   });
 }
