@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class ConfirmarEntregaScreen extends StatefulWidget {
-  final VoidCallback onConfirmar;
-  final Function(String motivo)? onRechazar;
+  final Future<void> Function() onConfirmar;
+  final Future<void> Function(String motivo)? onRechazar;
   final String? montoFinal;
   final bool fueraDeRango;
   final double distanciaKm;
@@ -23,16 +23,44 @@ class ConfirmarEntregaScreen extends StatefulWidget {
 }
 
 class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
+  static const String motivoRechazoPorDefecto = 'Cliente rechazó la entrega';
+
   bool _loading = false;
+  final TextEditingController _motivoCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _motivoCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Ejecuta la acción con el botón bloqueado. Si la acción falla o termina
+  /// sin sacar al usuario de esta pantalla, los botones se reactivan para
+  /// poder reintentar.
+  Future<void> _ejecutar(Future<void> Function() accion) async {
+    setState(() => _loading = true);
+    try {
+      await accion();
+    } catch (e) {
+      debugPrint('ConfirmarEntrega: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo completar la acción. Intenta de nuevo.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   Future<void> _handleConfirmar() async {
     if (_loading) return;
-    setState(() => _loading = true);
-    widget.onConfirmar();
+    await _ejecutar(widget.onConfirmar);
   }
 
   Future<void> _handleRechazar() async {
     if (_loading) return;
+    _motivoCtrl.clear();
     final motivo = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -43,6 +71,7 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
             const Text('Por favor indica el motivo del rechazo:'),
             const SizedBox(height: 16),
             TextField(
+              controller: _motivoCtrl,
               maxLines: 3,
               decoration: const InputDecoration(
                 hintText: 'Motivo...',
@@ -58,7 +87,10 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, 'Cliente rechazó la entrega'),
+            onPressed: () {
+              final escrito = _motivoCtrl.text.trim();
+              Navigator.pop(ctx, escrito.isEmpty ? motivoRechazoPorDefecto : escrito);
+            },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600),
             child: const Text('Confirmar rechazo'),
           ),
@@ -66,9 +98,9 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
       ),
     );
     
-    if (motivo != null && motivo.isNotEmpty) {
-      setState(() => _loading = true);
-      widget.onRechazar?.call(motivo);
+    final onRechazar = widget.onRechazar;
+    if (motivo != null && motivo.isNotEmpty && onRechazar != null && mounted) {
+      await _ejecutar(() => onRechazar(motivo));
     }
   }
 
