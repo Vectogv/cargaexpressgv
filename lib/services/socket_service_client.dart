@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../contracts/socket_events.dart';
 import 'api/http_client.dart';
@@ -536,7 +537,12 @@ class SocketServiceClient {
     });
   }
 
+  /// Pruebas: observa los eventos que la app intenta emitir.
+  @visibleForTesting
+  void Function(String event, Map<String, dynamic> data)? onEmitForTest;
+
   void emit(String event, Map<String, dynamic> data) {
+    onEmitForTest?.call(event, data);
     if (_socket != null && _connected) {
       _socket!.emit(event, data);
     } else {

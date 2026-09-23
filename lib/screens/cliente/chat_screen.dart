@@ -209,11 +209,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     });
     _scrollDown();
 
-    SocketServiceClient.instance.emit('message:send', {
-      'tripId': _tripId,
-      'text': text,
-    });
-
+    // Sólo REST: el POST guarda el mensaje y el backend lo reenvía por
+    // socket al otro participante (`message:send` por socket no hace nada).
     try {
       await ApiClient.instance.sendTripMessage(_tripId, text);
       if (mounted) {
