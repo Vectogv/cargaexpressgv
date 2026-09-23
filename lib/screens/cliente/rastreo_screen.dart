@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/trip.dart';
+import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/api/offer_service.dart';
@@ -236,11 +237,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
       });
       Future.delayed(const Duration(milliseconds: 600), () {
         if (!mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.popUntil(context, (route) => route.isFirst);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El viaje ha sido cancelado')),
-        );
+        final msg = mensajeViajeCancelado(data, miRol: ApiClient.instance.rol);
+        if (msg != null) messenger.showSnackBar(SnackBar(content: Text(msg)));
         if (!mounted) return;
         setState(() => _loading = false);
       });

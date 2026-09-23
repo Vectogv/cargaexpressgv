@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../contracts/cancelacion.dart';
 import '../../contracts/socket_events.dart';
 import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
@@ -421,7 +422,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         _onTripStatusChanged(event);
       } else if (tipo == 'trip:cancelled') {
         if (mounted) {
-          _snack('El viaje ha sido cancelado');
+          // Si canceló el propio conductor, _cancelTrip ya lo confirmó.
+          final msg = mensajeViajeCancelado(event, miRol: ApiClient.instance.rol);
+          if (msg != null) _snack(msg);
           _stopGpsTimer();
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) Navigator.pop(context);

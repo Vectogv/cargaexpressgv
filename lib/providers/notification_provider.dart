@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../contracts/cancelacion.dart';
+import '../services/api_client.dart';
 import '../services/socket_service_client.dart';
 import '../services/cache_service.dart';
 import '../services/api/profile_service.dart';
@@ -26,12 +28,12 @@ class NotificationProvider extends ChangeNotifier {
     });
     _cancelSub = SocketServiceClient.instance.onTripCancelled.listen((data) {
       final tripId = data['tripId'] ?? data['id'];
+      final body = mensajeViajeCancelado(data, miRol: ApiClient.instance.rol);
+      if (body == null) return; // lo cancel\u00f3 el propio usuario
       final item = NotificationItemModel(
         id: 'cancel_${tripId}_${DateTime.now().millisecondsSinceEpoch}',
         title: 'Viaje cancelado',
-        body: data['motivo'] != null
-            ? 'El conductor cancel\u00f3 el viaje: ${data['motivo']}'
-            : 'El conductor ha cancelado el viaje',
+        body: body,
         type: 'viaje_cancelado',
         read: false,
         data: data,

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
 import '../../widgets/carga_express_bottom_nav.dart';
@@ -54,9 +55,11 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
       if (tipo == SocketEvents.tripCancelled && mounted) {
         CacheService.instance.clearDriverPosition();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El viaje ha sido cancelado por el conductor')),
-        );
+        final msg = mensajeViajeCancelado(event, miRol: ApiClient.instance.rol);
+        // Con RastreoScreen encima, el aviso lo muestra esa pantalla.
+        if (msg != null && ModalRoute.of(context)?.isCurrent == true) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        }
       }
 
       // Redirigir a RastreoScreen cuando llegan ofertas
