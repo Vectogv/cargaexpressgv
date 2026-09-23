@@ -167,9 +167,9 @@ Archivo: config/cors.ts
 
 8. URLS
 --------
-  Backend (Railway): https://zippy-trust-production.up.railway.app
-  Health check:      https://zippy-trust-production.up.railway.app/health
-  Swagger docs:      https://zippy-trust-production.up.railway.app/docs
+  Backend (Railway): https://bakend-cargaexpress-production.up.railway.app
+  Health check:      https://bakend-cargaexpress-production.up.railway.app/health
+  Swagger docs:      https://bakend-cargaexpress-production.up.railway.app/docs
   Frontend (dev):    http://localhost:53278 (Flutter web)
 
 
