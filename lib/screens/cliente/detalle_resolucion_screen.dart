@@ -4,23 +4,22 @@ class DetalleResolucionScreen extends StatelessWidget {
   final String disputeNumber;
   final String problema;
   final String resultado;
-  final String reembolso;
-  final String comentarioAdmin;
+  /// null: sin reembolso (no se muestra la fila).
+  final String? reembolso;
+  /// null: el administrador no dej\u00f3 comentario (no se muestra la secci\u00f3n).
+  final String? comentarioAdmin;
   final String fechaResolucion;
   final VoidCallback onVolver;
 
+  /// Datos reales de la disputa (ver `ResolucionScreen`); sin valores de demo.
   const DetalleResolucionScreen({
     super.key,
-    this.disputeNumber = 'DIS-2024-0610-0012',
-    this.problema = 'La carga lleg\u00f3 da\u00f1ada',
-    this.resultado = 'A favor del cliente',
-    this.reembolso = '\$20.000',
-    this.comentarioAdmin =
-        'Despu\u00e9s de revisar las evidencias proporcionadas, '
-        'se confirma que el producto presentaba da\u00f1os '
-        'al momento de la entrega. Se procede con el reembolso '
-        'parcial del valor acordado.',
-    this.fechaResolucion = '15 de junio, 2024',
+    required this.disputeNumber,
+    required this.problema,
+    required this.resultado,
+    required this.reembolso,
+    required this.comentarioAdmin,
+    required this.fechaResolucion,
     required this.onVolver,
   });
 
@@ -75,21 +74,24 @@ class DetalleResolucionScreen extends StatelessWidget {
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF22C55E)),
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Reembolso', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black)),
-                    Text(
-                      reembolso,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF22C55E)),
-                    ),
-                  ],
-                ),
+                if (reembolso != null) ...[
+                  const SizedBox(height: 16),
+                  const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Reembolso', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black)),
+                      Text(
+                        reembolso!,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF22C55E)),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
+            if (comentarioAdmin != null) ...[
             const SizedBox(height: 20),
             _SectionCard(
               children: [
@@ -105,9 +107,11 @@ class DetalleResolucionScreen extends StatelessWidget {
                       child: const Icon(Icons.admin_panel_settings, color: Color(0xFF2563EB), size: 18),
                     ),
                     const SizedBox(width: 10),
-                    const Text(
-                      'Comentario del administrador',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black),
+                    const Expanded(
+                      child: Text(
+                        'Comentario del administrador',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black),
+                      ),
                     ),
                   ],
                 ),
@@ -121,12 +125,13 @@ class DetalleResolucionScreen extends StatelessWidget {
                     border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
                   ),
                   child: Text(
-                    comentarioAdmin,
+                    comentarioAdmin!,
                     style: const TextStyle(fontSize: 14, color: Color(0xFF374151), height: 1.6),
                   ),
                 ),
               ],
             ),
+            ],
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,

@@ -1,18 +1,55 @@
 import 'package:flutter/material.dart';
 import 'detalle_resolucion_screen.dart';
 
-class ResolucionScreen extends StatelessWidget {
-  final String resultado;
-  final String reembolso;
+/// Texto del resultado de una disputa (`favor_cliente` / `favor_conductor`).
+String etiquetaResultado(dynamic resultado) {
+  switch (resultado?.toString()) {
+    case 'favor_cliente':
+      return 'A favor del cliente';
+    case 'favor_conductor':
+      return 'A favor del conductor';
+    case null:
+    case '':
+      return 'Sin resultado';
+    default:
+      return resultado.toString();
+  }
+}
 
-  const ResolucionScreen({
-    super.key,
-    this.resultado = 'A favor del cliente',
-    this.reembolso = '\$20.000',
-  });
+/// Reembolso con separador de miles (`$15.000`); null si no hay reembolso.
+/// El backend lo envía como número o como texto decimal.
+String? formatoReembolso(dynamic valor) {
+  final n = valor is num ? valor : num.tryParse(valor?.toString() ?? '');
+  if (n == null || n <= 0) return null;
+  final digitos = n.round().toString();
+  final conPuntos = digitos.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+  return '\$$conPuntos';
+}
+
+/// Fecha `dd/MM/yyyy` (hora local) de un ISO; null si no es válida.
+String? formatoFecha(dynamic iso) {
+  final d = DateTime.tryParse(iso?.toString() ?? '')?.toLocal();
+  if (d == null) return null;
+  String dos(int v) => v.toString().padLeft(2, '0');
+  return '${dos(d.day)}/${dos(d.month)}/${d.year}';
+}
+
+String? _texto(dynamic v) {
+  final s = v?.toString().trim();
+  return (s == null || s.isEmpty) ? null : s;
+}
+
+/// Resolución de una disputa del cliente con los datos de GET /api/disputes/:id.
+class ResolucionScreen extends StatelessWidget {
+  final Map<String, dynamic> disputa;
+
+  const ResolucionScreen({super.key, required this.disputa});
 
   @override
   Widget build(BuildContext context) {
+    final resultado = etiquetaResultado(disputa['resultado']);
+    final reembolso = formatoReembolso(disputa['reembolso']);
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -77,39 +114,32 @@ class ResolucionScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
-              const SizedBox(height: 16),
-              const Text(
-                'Reembolso',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF6B7280),
-                  fontWeight: FontWeight.w500,
+              if (reembolso != null) ...[
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Reembolso',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Text(
+                      reembolso,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Reembolso',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
-                  ),
-                  Text(
-                    reembolso,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
+                const SizedBox(height: 16),
+                const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
+              ],
               const Spacer(flex: 2),
               SizedBox(
                 width: double.infinity,
@@ -120,6 +150,12 @@ class ResolucionScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => DetalleResolucionScreen(
+                          disputeNumber: _texto(disputa['numero']) ?? _texto(disputa['id']) ?? '—',
+                          problema: _texto(disputa['problema']) ?? '—',
+                          resultado: resultado,
+                          reembolso: reembolso,
+                          comentarioAdmin: _texto(disputa['comentarioAdmin']),
+                          fechaResolucion: formatoFecha(disputa['fechaResolucion']) ?? '—',
                           onVolver: () {
                             Navigator.of(context).popUntil((route) => route.isFirst);
                           },

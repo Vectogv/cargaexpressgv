@@ -198,8 +198,7 @@ class _DisputaEnRevisionScreenState extends State<DisputaEnRevisionScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => ResolucionScreen(
-                                    resultado: _dispute?['resultado'] as String? ?? 'A favor del cliente',
-                                    reembolso: _dispute?['reembolso'] as String? ?? '\$0',
+                                    disputa: _dispute ?? const {},
                                   ),
                                 ),
                               );
