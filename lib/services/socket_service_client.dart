@@ -29,7 +29,6 @@ class SocketServiceClient {
   final _driverLocationCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _newOfferCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripOfferReceivedCtrl = StreamController<Map<String, dynamic>>.broadcast();
-  final _tripDeliveredCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -77,7 +76,6 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onDriverLocation => _driverLocationCtrl.stream;
   Stream<Map<String, dynamic>> get onNewOffer => _newOfferCtrl.stream;
   Stream<Map<String, dynamic>> get onTripOfferReceived => _tripOfferReceivedCtrl.stream;
-  Stream<Map<String, dynamic>> get onTripDelivered => _tripDeliveredCtrl.stream;
   Stream<Map<String, dynamic>> get onOfferAccepted => _offerAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onOfferRejected => _offerRejectedCtrl.stream;
 
@@ -324,10 +322,6 @@ class SocketServiceClient {
 
       safeOn('trip:offer_received', (data) {
         if (data is Map) safeAdd(_tripOfferReceivedCtrl, Map<String, dynamic>.from(data));
-      });
-
-      safeOn('trip:delivered', (data) {
-        if (data is Map) safeAdd(_tripDeliveredCtrl, Map<String, dynamic>.from(data));
       });
 
       safeOn('offer:accepted', (data) {
@@ -605,7 +599,6 @@ class SocketServiceClient {
     _driverLocationCtrl.close();
     _newOfferCtrl.close();
     _tripOfferReceivedCtrl.close();
-    _tripDeliveredCtrl.close();
     _offerAcceptedCtrl.close();
     _offerRejectedCtrl.close();
     _offerCancelledCtrl.close();
