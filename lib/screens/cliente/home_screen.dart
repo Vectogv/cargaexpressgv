@@ -71,11 +71,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
       // Redirigir a RastreoScreen cuando llegan ofertas
       if (tipo == SocketEvents.newOffer && mounted && _activeTrip != null) {
-        // Solo redirigir si estamos en la pantalla raíz (evitar push duplicado)
-        final route = ModalRoute.of(context);
-        if (route?.isFirst == true) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const RastreoScreen()));
-        }
+        _redirectToTracking();
       }
 
     });
@@ -109,10 +105,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
           final enDisputa = trip['estado'] == TripStatus.disputa ||
               trip['estado'] == TripStatus.enDisputa;
           if (!_redirected && !enDisputa) {
-            _redirected = true;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _redirectToTracking();
-            });
+            WidgetsBinding.instance.addPostFrameCallback((_) => _redirectToTracking());
           }
         }
       } else {
@@ -150,8 +143,13 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     });
   }
 
+  /// Abre el rastreo sólo si el inicio está al frente y no se abrió ya: tras
+  /// crear un envío, NuevoEnvio se reemplaza por RastreoScreen y la recarga
+  /// del inicio (o una oferta por socket) no debe apilar un segundo rastreo.
   void _redirectToTracking() {
-    if (!mounted) return;
+    if (!mounted || _redirected) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    _redirected = true;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const RastreoScreen()),
