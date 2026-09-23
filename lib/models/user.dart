@@ -30,6 +30,11 @@ class User {
     if (json['_id'] is! String) {
       json = <String, dynamic>{...json, '_id': rawId?.toString() ?? ''};
     }
+    // Columna decimal: el backend puede enviarla como texto ("4.50").
+    final cal = json['calificacion'];
+    if (cal != null && cal is! num) {
+      json = <String, dynamic>{...json, 'calificacion': double.tryParse(cal.toString())};
+    }
     return _$UserFromJson(json);
   }
   Map<String, dynamic> toJson() => _$UserToJson(this);

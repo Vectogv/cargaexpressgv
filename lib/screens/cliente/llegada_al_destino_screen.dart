@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../contracts/calificacion.dart';
 import 'confirmar_entrega_screen.dart' show AvisoConfirmacionPendiente;
 import '../../widgets/media_image.dart';
 
@@ -232,7 +233,7 @@ class _DriverCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nombre = conductor['nombre'] as String? ?? 'Conductor';
-    final rating = (conductor['rating'] as num?)?.toStringAsFixed(1) ?? '0.0';
+    final rating = etiquetaCalificacionConductor(conductor);
 
     return Row(
       children: [

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../contracts/calificacion.dart';
 import '../../services/api_client.dart';
 
 class CalificarConductorScreen extends StatefulWidget {
@@ -33,7 +34,7 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
   @override
   Widget build(BuildContext context) {
     final nombre = widget.conductor['nombre'] as String? ?? 'Conductor';
-    final ratingActual = (widget.conductor['rating'] as num?)?.toStringAsFixed(1) ?? '0.0';
+    final ratingActual = etiquetaCalificacionConductor(widget.conductor);
 
     return Scaffold(
       backgroundColor: Colors.white,

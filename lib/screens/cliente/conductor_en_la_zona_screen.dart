@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../contracts/calificacion.dart';
+
 class ConductorEnLaZonaScreen extends StatelessWidget {
   final Map<String, dynamic> conductor;
   final VoidCallback? onChat;
@@ -15,7 +17,7 @@ class ConductorEnLaZonaScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nombre = conductor['nombre'] as String? ?? 'Conductor';
-    final rating = (conductor['rating'] as num?)?.toDouble() ?? 0;
+    final rating = etiquetaCalificacionConductor(conductor);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -86,7 +88,7 @@ class ConductorEnLaZonaScreen extends StatelessWidget {
                               children: [
                                 const Icon(Icons.star, color: Color(0xFFFBBF24), size: 16),
                                 const SizedBox(width: 4),
-                                Text(rating.toStringAsFixed(1), style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
+                                Text(rating, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
                               ],
                             ),
                           ],

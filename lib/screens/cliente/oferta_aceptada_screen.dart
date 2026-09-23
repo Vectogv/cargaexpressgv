@@ -1,11 +1,15 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+import '../../contracts/calificacion.dart';
+
 class OfertaAceptadaScreen extends StatefulWidget {
   final String conductorNombre;
   final String camion;
   final String placa;
-  final double rating;
+  /// Calificación tal como llega del backend (número, texto decimal o null).
+  final Object? rating;
+  final Object? totalViajes;
   final VoidCallback? onVerSeguimiento;
 
   const OfertaAceptadaScreen({
@@ -13,9 +17,29 @@ class OfertaAceptadaScreen extends StatefulWidget {
     required this.conductorNombre,
     required this.camion,
     required this.placa,
-    this.rating = 0,
+    this.rating,
+    this.totalViajes,
     this.onVerSeguimiento,
   });
+
+  /// Pantalla a partir del conductor de `offer:accepted` o de la oferta.
+  factory OfertaAceptadaScreen.desdeConductor(
+    Map<String, dynamic>? conductor, {
+    Key? key,
+    VoidCallback? onVerSeguimiento,
+  }) {
+    final c = conductor ?? const <String, dynamic>{};
+    final nombre = c['nombre']?.toString().trim() ?? '';
+    return OfertaAceptadaScreen(
+      key: key,
+      conductorNombre: nombre.isEmpty ? 'Conductor' : nombre,
+      camion: c['tipoVehiculo']?.toString() ?? '',
+      placa: c['placa']?.toString() ?? '',
+      rating: c['rating'] ?? c['calificacion'],
+      totalViajes: c['totalViajes'] ?? c['total_viajes'],
+      onVerSeguimiento: onVerSeguimiento,
+    );
+  }
 
   @override
   State<OfertaAceptadaScreen> createState() => _OfertaAceptadaScreenState();
@@ -226,7 +250,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen>
                                         const Icon(Icons.star_rounded, color: Color(0xFFFBBC04), size: 20),
                                         const SizedBox(width: 6),
                                         Text(
-                                          widget.rating.toStringAsFixed(1),
+                                          etiquetaCalificacion(widget.rating, totalViajes: widget.totalViajes),
                                           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87),
                                         ),
                                       ],
