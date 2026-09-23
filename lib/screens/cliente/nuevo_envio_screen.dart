@@ -103,12 +103,15 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   /// el backend sigue validando al solicitar).
   List<Map<String, dynamic>>? _zonas;
 
-  /// El backend sólo valida la cobertura del ORIGEN (trip_controller.request).
-  bool get _origenFueraDeCobertura {
-    final o = _origenLatLng;
+  /// El backend valida la cobertura del origen y del destino
+  /// (`errorDeCobertura` en trip_controller: request y reserve, 422).
+  bool get _origenFueraDeCobertura => _fueraDeCobertura(_origenLatLng);
+  bool get _destinoFueraDeCobertura => _fueraDeCobertura(_destinoLatLng);
+
+  bool _fueraDeCobertura(LatLng? p) {
     final zonas = _zonas;
-    if (o == null || zonas == null) return false;
-    return !isInsideCoverage(zonas, o.latitude, o.longitude);
+    if (p == null || zonas == null) return false;
+    return !isInsideCoverage(zonas, p.latitude, p.longitude);
   }
 
   Future<void> _cargarCobertura() async {
@@ -778,6 +781,23 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     );
   }
 
+  Widget _avisoFueraDeCobertura(Key key, String texto) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(52, 0, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade800),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(texto, style: TextStyle(fontSize: 12, color: Colors.orange.shade900)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRutaCard() {
     final o = _origenLatLng;
     final d = _destinoLatLng;
@@ -801,23 +821,10 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
           ),
           if (_locError != null && _locParaOrigen) _buildLocError(isOrigen: true),
           if (_origenOk && _origenFueraDeCobertura)
-            Padding(
-              key: const Key('aviso_fuera_cobertura'),
-              padding: const EdgeInsets.fromLTRB(52, 0, 16, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade800),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Este punto de recogida está fuera de nuestra zona de cobertura. '
-                      'Elige otro origen.',
-                      style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
-                    ),
-                  ),
-                ],
-              ),
+            _avisoFueraDeCobertura(
+              const Key('aviso_fuera_cobertura'),
+              'Este punto de recogida está fuera de nuestra zona de cobertura. '
+              'Elige otro origen.',
             ),
           const Divider(height: 1, indent: 52, color: Color(0xFFF0F0F0)),
           _PuntoRow(
@@ -833,6 +840,12 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
             onTap: () => _elegirPunto(isOrigen: false),
           ),
           if (_locError != null && !_locParaOrigen) _buildLocError(isOrigen: false),
+          if (_destinoOk && _destinoFueraDeCobertura)
+            _avisoFueraDeCobertura(
+              const Key('aviso_destino_fuera_cobertura'),
+              'El destino está fuera de nuestra zona de cobertura. '
+              'Elige otro destino.',
+            ),
           if (o != null && d != null) ...[
             const Divider(height: 1, color: Color(0xFFF0F0F0)),
             Padding(

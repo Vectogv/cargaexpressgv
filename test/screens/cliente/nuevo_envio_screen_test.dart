@@ -129,6 +129,29 @@ void main() {
       expect(find.byKey(const Key('aviso_fuera_cobertura')), findsNothing);
       await _dispose(tester);
     });
+
+    // El backend también rechaza (422) un destino fuera de cobertura.
+    Future<void> conDestino(WidgetTester tester, String ll) async {
+      SharedPreferences.setMockInitialValues({
+        'nuevo_envio_destino': 'Destino guardado',
+        'nuevo_envio_destino_ll': ll,
+      });
+      await conOrigen(tester, 6.25, -75.56);
+    }
+
+    testWidgets('destino fuera de cobertura se avisa', (tester) async {
+      await conDestino(tester, '4.6,-74.1'); // Bogotá
+      expect(find.byKey(const Key('aviso_fuera_cobertura')), findsNothing);
+      expect(find.byKey(const Key('aviso_destino_fuera_cobertura')), findsOneWidget);
+      expect(find.textContaining('destino está fuera de nuestra zona de cobertura'), findsOneWidget);
+      await _dispose(tester);
+    });
+
+    testWidgets('destino dentro de cobertura no muestra aviso', (tester) async {
+      await conDestino(tester, '6.3,-75.6');
+      expect(find.byKey(const Key('aviso_destino_fuera_cobertura')), findsNothing);
+      await _dispose(tester);
+    });
   });
 
   testWidgets('sin señal GPS la carga de ubicación termina y ofrece alternativas',
