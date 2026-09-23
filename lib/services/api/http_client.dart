@@ -164,6 +164,7 @@ class HttpClient {
         _extractError(data, res.statusCode),
         statusCode: res.statusCode,
         code: data is Map ? data['code']?.toString() : null,
+        data: data is Map ? Map<String, dynamic>.from(data) : null,
       );
     }
     return parseListResponse(data, path);
@@ -381,7 +382,12 @@ class HttpClient {
       final error = _extractError(data, res.statusCode);
       final code = data is Map ? data['code']?.toString() : null;
       LoggerService.instance.error('HttpClient: ${res.statusCode} ${res.request?.url.path ?? ''} - $error');
-      throw ApiException(error, statusCode: res.statusCode, code: code);
+      throw ApiException(
+        error,
+        statusCode: res.statusCode,
+        code: code,
+        data: data is Map ? Map<String, dynamic>.from(data) : null,
+      );
     }
     if (data is Map<String, dynamic>) return data;
     if (data is Map) return Map<String, dynamic>.from(data);
@@ -444,7 +450,10 @@ class ApiException implements Exception {
   final int? statusCode;
   final String? code;
 
-  ApiException(this.message, {this.statusCode, this.code});
+  /// Cuerpo completo del error (p. ej. `distanciaKm` de CONDUCTOR_CERCA).
+  final Map<String, dynamic>? data;
+
+  ApiException(this.message, {this.statusCode, this.code, this.data});
 
   @override
   String toString() => 'Exception: $message';

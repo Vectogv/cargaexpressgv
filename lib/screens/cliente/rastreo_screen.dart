@@ -552,9 +552,13 @@ class _RastreoScreenState extends State<RastreoScreen> {
       _safePopUntilFirst();
     } on ApiException catch (e) {
       if (e.code == 'CONDUCTOR_CERCA') {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('No se puede cancelar: el conductor está a menos de 1 km del origen.')),
-        );
+        // El radio es configurable en el backend: su mensaje ya trae la
+        // distancia y el mínimo.
+        final km = (e.data?['distanciaKm'] as num?)?.toStringAsFixed(2);
+        final msg = e.message.isNotEmpty
+            ? e.message
+            : 'No se puede cancelar: el conductor está cerca del origen${km != null ? ' ($km km)' : ''}.';
+        messenger.showSnackBar(SnackBar(content: Text(msg)));
       } else if (e.code == 'JUSTIFICACION_REQUERIDA') {
         messenger.showSnackBar(
           SnackBar(content: Text('Justificaci\u00f3n requerida: ${e.message}')),
