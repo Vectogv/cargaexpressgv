@@ -2,6 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api/payment_service.dart';
 
+/// Cuenta suspendida hasta que el cliente pague (p. ej. tras una disputa
+/// resuelta con acuerdo de pago, admin_controller.resolveDispute).
+bool cuentaSuspendidaPorPago(Map<String, dynamic>? info) =>
+    info?['estadoCuenta'] == 'suspension_por_pago';
+
+/// true si GET /api/payments indica una deuda pendiente o un comprobante en
+/// revisión: sólo entonces el cliente necesita la sección Pagos.
+bool tieneDeudaPendiente(Map<String, dynamic>? info) {
+  if (info == null) return false;
+  final estado = info['estadoCuenta'];
+  if (estado == 'suspension_por_pago' || estado == 'esperando_confirmacion') return true;
+  if (info['tieneDeudaActiva'] == true) return true;
+  final monto = num.tryParse(info['montoDeuda']?.toString() ?? '') ?? 0;
+  return monto > 0;
+}
+
 class PagosScreen extends StatefulWidget {
   const PagosScreen({super.key});
 
@@ -185,12 +201,18 @@ class _PagosScreenState extends State<PagosScreen> {
             children: [
               Icon(suspendido ? Icons.warning_amber_rounded : Icons.verified_outlined, color: color),
               const SizedBox(width: 8),
-              Text('Estado de cuenta', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                child: Text(_estadoLabel(estado), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+              const Expanded(
+                child: Text('Estado de cuenta', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                  child: Text(_estadoLabel(estado),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+                ),
               ),
             ],
           ),
