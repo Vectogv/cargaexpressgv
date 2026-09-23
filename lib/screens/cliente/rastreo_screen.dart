@@ -460,8 +460,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
     _positionSub?.cancel();
   }
 
+  /// Distancia del conductor al origen; infinita mientras no llegue su
+  /// posición por socket (antes se medía desde 0,0).
   double _distanceToPickup() {
     if (_trip == null) return double.infinity;
+    if (_driverLat == 0 && _driverLng == 0) return double.infinity;
     final origen = _trip!.origen;
     if (origen == null) return double.infinity;
     return _haversine(_driverLat, _driverLng, origen.lat, origen.lng) / 1000;
@@ -1060,6 +1063,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final rating = conductor?.calificacion ?? 0;
     final telefono = conductor?.telefono;
     final distance = _distanceToPickup();
+    final eta = etaRecogida(
+      status: _status,
+      distanciaKm: distance,
+      tiempoEstimado: _trip?.tiempoEstimado,
+    );
     // Backend: el chat del viaje solo es válido en aceptado/en_curso (422 fuera).
     final chatEnabled = _status == TripStatus.aceptado || _status == TripStatus.enCurso;
 
@@ -1118,8 +1126,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _buildInfoChip(Icons.access_time, '5 min'),
-              const SizedBox(width: 12),
+              if (eta != null) ...[
+                _buildInfoChip(Icons.access_time, eta),
+                const SizedBox(width: 12),
+              ],
               _buildInfoChip(Icons.location_on, _formatDistance(distance)),
             ],
           ),
@@ -1381,6 +1391,21 @@ class _PulseSearchIndicatorState extends State<_PulseSearchIndicator> with Singl
 /// (`app/services/trip_state_machine.ts`). Ningún estado terminal o
 /// desconocido cae en la vista de "Buscando conductor".
 enum RastreoVista { busqueda, seguimiento, entrega, disputa, cerrado, reserva }
+
+/// Tiempo estimado de llegada del conductor al origen, o null si no hay
+/// datos reales (no se muestra). Con la posición en vivo usa la misma
+/// velocidad que el backend (30 km/h); si no, `tiempoEstimado` del viaje.
+@visibleForTesting
+String? etaRecogida({required String status, double? distanciaKm, num? tiempoEstimado}) {
+  if (status != TripStatus.aceptado && status != TripStatus.enCamino) return null;
+  int? minutos;
+  if (distanciaKm != null && distanciaKm.isFinite) {
+    minutos = max(1, (distanciaKm / 30 * 60).ceil());
+  } else if (tiempoEstimado != null && tiempoEstimado > 0) {
+    minutos = tiempoEstimado.ceil();
+  }
+  return minutos == null ? null : '$minutos min';
+}
 
 /// Pantalla de oferta aceptada que reemplaza al rastreo. "Ver seguimiento"
 /// usa el contexto de SU ruta (el del rastreo ya no existe tras el
