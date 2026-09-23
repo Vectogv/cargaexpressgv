@@ -135,7 +135,8 @@ class DriverLocationService {
   Future<void> _sendInitialLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        // Con límite: sin señal GPS la llamada nunca terminaría.
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
       );
       _lastLat = pos.latitude;
       _lastLng = pos.longitude;
@@ -268,7 +269,8 @@ class DriverLocationService {
   /// Si el backend limita la frecuencia (429), espera y reintenta una vez.
   Future<void> sendNow() async {
     final pos = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      // Con límite: sin señal GPS la llamada nunca terminaría.
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
     );
     _lastLat = pos.latitude;
     _lastLng = pos.longitude;

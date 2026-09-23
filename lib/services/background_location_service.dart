@@ -79,7 +79,8 @@ class BackgroundLocationService {
           if (ApiClient.instance.token == null) return;
         }
         final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+          // Con límite: sin señal GPS la llamada nunca terminaría.
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)),
         );
         await DriverService.updateLocation(pos.latitude, pos.longitude);
       } on ApiException catch (e) {

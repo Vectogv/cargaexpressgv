@@ -9,7 +9,7 @@ class SosService {
     Position pos;
     try {
       await LocationPermissionHelper.ensure();
-      pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+      pos = await LocationPermissionHelper.currentPosition();
     } catch (e) {
       LoggerService.instance.error('SosService: GPS error, using fallback position', e);
       pos = Position(longitude: 0, latitude: 0, timestamp: DateTime.now(), accuracy: 0, altitude: 0, altitudeAccuracy: 0, heading: 0, headingAccuracy: 0, speed: 0, speedAccuracy: 0);
