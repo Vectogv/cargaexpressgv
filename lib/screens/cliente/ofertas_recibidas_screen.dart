@@ -170,6 +170,12 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       await widget.onReject(offerId);
       if (mounted) _removeOffer(offerId);
     } on ApiException catch (e) {
+      // 404: la oferta ya no está pendiente (expiró o se procesó): quitarla.
+      if (e.statusCode == 404 && mounted) {
+        _removeOffer(offerId);
+        if (widget.tripId != null) _fetchOffers(replace: true);
+        return;
+      }
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       messenger.showSnackBar(
@@ -219,6 +225,12 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       if (!mounted) return;
       setState(() => _acceptingId = null);
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      // 400 YA_ASIGNADO: el viaje ya no acepta ofertas (se asignó o cambió
+      // de estado) → volver al rastreo, que muestra el estado real.
+      if (e.statusCode == 400) {
+        Navigator.of(context).maybePop();
+        return;
+      }
       // 404: la oferta ya no existe · 409: el conductor ya no está habilitado
       // · 422: la oferta expiró → quitarla y refrescar desde el servidor.
       if (e.statusCode == 404 || e.statusCode == 409 || e.statusCode == 422) {
@@ -412,14 +424,16 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: isAccepting || expired ? null : () => _rechazar(offerId ?? ''),
+                                  // Una oferta expirada no se acepta, pero sí se descarta.
+                                  onPressed: isAccepting ? null : () => _rechazar(offerId ?? ''),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.black87,
                                     side: const BorderSide(color: Color(0xFFDDDDDD)),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     padding: const EdgeInsets.symmetric(vertical: 11),
                                   ),
-                                  child: const Text('Rechazar', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                                  child: Text(expired ? 'Descartar' : 'Rechazar',
+                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                                 ),
                               ),
                               const SizedBox(width: 10),
