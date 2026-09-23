@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/screens/cliente/calificar_conductor_screen.dart';
 import 'package:cargaexpress/screens/cliente/confirmar_entrega_screen.dart';
+import 'package:cargaexpress/screens/cliente/disputa_creada_screen.dart';
+import 'package:cargaexpress/screens/cliente/reportar_problema_screen.dart';
 import 'package:cargaexpress/screens/cliente/home_screen.dart';
 import 'package:cargaexpress/screens/cliente/llegada_al_destino_screen.dart';
 import 'package:cargaexpress/screens/cliente/nuevo_envio_screen.dart';
@@ -130,6 +132,40 @@ void main() {
       expect(find.byType(CalificarConductorScreen), findsOneWidget);
     }, log: log);
     expect(log.any((r) => r.method == 'POST' && r.url.path == '/api/trips/t1/confirm-close'), isTrue);
+  });
+
+  testWidgets('rechazar la entrega abre la disputa que crea el backend (sin POST /api/disputes)',
+      (tester) async {
+    pantallaAlta(tester);
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      final p = req.url.path;
+      if (p == '/api/trips/active') return jsonResp(_viaje('pendiente_confirmacion'));
+      if (p == '/api/trips/t1/confirm-close') return jsonResp({'id': 't1', 'estado': 'disputa', 'disputaId': 9});
+      if (p == '/api/disputes/9') return jsonResp({'id': '9', 'numero': 'DSP-00009', 'estado': 'abierta'});
+      return jsonResp({});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      await tester.tap(find.text('Ir a confirmación'));
+      await avanzar(tester);
+      await tester.tap(find.text('Ver detalle'));
+      await avanzar(tester);
+
+      await tester.tap(find.text('Rechazar entrega'));
+      await avanzar(tester);
+      await tester.enterText(find.byType(TextField), 'Faltan cajas');
+      await tester.tap(find.text('Confirmar rechazo'));
+      await avanzar(tester, 2);
+
+      expect(find.byType(DisputaCreadaScreen), findsOneWidget);
+      expect(find.text('DSP-00009'), findsOneWidget);
+      expect(find.byType(ReportarProblemaScreen), findsNothing);
+    }, log: log);
+    expect(log.where((r) => r.url.path == '/api/disputes'), isEmpty);
+    final cierre = log.singleWhere((r) => r.url.path == '/api/trips/t1/confirm-close');
+    expect(cierre.body, contains('"confirmar":false'));
+    expect(cierre.body, contains('Faltan cajas'));
   });
 
   testWidgets('ConfirmarEntrega: si confirm-close falla se avisa y se puede reintentar', (tester) async {

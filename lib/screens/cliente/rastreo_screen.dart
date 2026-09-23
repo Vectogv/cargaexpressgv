@@ -23,6 +23,7 @@ import 'cancel_trip_screen.dart';
 import 'ofertas_recibidas_screen.dart';
 import 'oferta_aceptada_screen.dart';
 import 'confirmar_entrega_screen.dart';
+import 'disputa_creada_screen.dart';
 import 'viaje_finalizado.dart';
 import 'reportar_problema_screen.dart';
 import 'conductor_en_la_zona_screen.dart';
@@ -653,10 +654,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
             },
             onRechazar: (motivo) async {
               _isNavigating = true;
+              Map<String, dynamic>? respuesta;
               try {
                 final tripId = _trip?.id ?? '';
                 if (tripId.isNotEmpty) {
-                  await ApiClient.instance.confirmClose(tripId, confirmar: false, motivo: motivo, idempotencyKey: _rejectCloseKey.keyFor('$tripId|$motivo'));
+                  respuesta = await ApiClient.instance.confirmClose(tripId, confirmar: false, motivo: motivo, idempotencyKey: _rejectCloseKey.keyFor('$tripId|$motivo'));
                 }
                 _rejectCloseKey.settle();
               } on ApiException catch (e) {
@@ -682,14 +684,23 @@ class _RastreoScreenState extends State<RastreoScreen> {
                 'motivo': motivo,
                 'tripId': _trip?.id,
               });
+              // El backend ya creó (o reutilizó) la disputa al rechazar y dejó
+              // el viaje en 'disputa': no se abre otra con POST /api/disputes
+              // (siempre fallaría). Se muestra la disputa del backend.
+              final disputaId = respuesta?['disputaId']?.toString();
+              final numero = await _numeroDisputa(disputaId);
               if (!mounted) return;
-              Navigator.of(context).pushAndRemoveUntil(
+              final navigator = Navigator.of(context);
+              if (disputaId == null || disputaId.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Rechazaste la entrega. Un moderador revisará el caso.'),
+                ));
+                navigator.popUntil((route) => route.isFirst);
+                return;
+              }
+              navigator.pushAndRemoveUntil(
                 MaterialPageRoute(
-                  builder: (_) => ReportarProblemaScreen(
-                    trip: _trip?.toJson(),
-                    role: 'cliente',
-                    onSubmitted: () {},
-                  ),
+                  builder: (_) => DisputaCreadaScreen(disputeNumber: numero, disputeId: disputaId),
                 ),
                 (route) => route.isFirst,
               );
@@ -698,6 +709,20 @@ class _RastreoScreenState extends State<RastreoScreen> {
         ));
       },
     ));
+  }
+
+  /// Número visible de la disputa (GET /api/disputes/:id); si no se puede
+  /// consultar se muestra su id real.
+  Future<String> _numeroDisputa(String? disputaId) async {
+    if (disputaId == null || disputaId.isEmpty) return '—';
+    try {
+      final d = await ApiClient.instance.getDispute(disputaId);
+      final numero = d['numero']?.toString().trim();
+      if (numero != null && numero.isNotEmpty) return numero;
+    } catch (e) {
+      debugPrint('Rastreo: no se pudo leer la disputa $disputaId: $e');
+    }
+    return '#$disputaId';
   }
 
   String _montoFinalLabel() {
