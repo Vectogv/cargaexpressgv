@@ -17,6 +17,7 @@ import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
 import '../shared/action_key.dart';
+import 'busqueda_conductor_view.dart';
 import 'cancel_trip_screen.dart';
 import 'ofertas_recibidas_screen.dart';
 import 'oferta_aceptada_screen.dart';
@@ -82,6 +83,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   DateTime _lastDriverRebuild = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _driverRebuildTimer;
   Map<String, dynamic>? _pendingFinalizeRequest;
+  final DateTime _pantallaAbierta = DateTime.now();
   // Mapa de búsqueda: tiles y opciones creados una vez, no en cada build().
   late final TileLayer _tileLayer = TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app');
   MapOptions? _nearbyMapOptions;
@@ -777,19 +779,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
           children: [
             IconButton(
               icon: const Icon(Icons.local_offer, color: Color(0xFF1A1A2E)),
-              onPressed: () {
-                _safePush(OfertasRecibidasScreen(
-                  ofertas: _ofertas,
-                  tripId: _trip?.id,
-                  trip: _trip?.toJson() ?? {},
-                  onAccept: (offerId) async {
-                    await OfferService.acceptOffer(_trip?.id, offerId);
-                  },
-                  onReject: (offerId) async {
-                    await OfferService.rejectOffer(_trip?.id, offerId);
-                  },
-                ));
-              },
+              tooltip: 'Ver ofertas',
+              onPressed: _verOfertas,
             ),
             Positioned(
               right: 8,
@@ -930,129 +921,98 @@ class _RastreoScreenState extends State<RastreoScreen> {
     );
   }
 
+  /// Mapa de búsqueda: radio de 2 km alrededor del origen, pulso y vehículos
+  /// disponibles cercanos.
   Widget _buildNearbyMap() {
     final origen = _trip?.origen;
-    if (origen == null) return _buildPulseAnimation();
+    if (origen == null) {
+      return ColoredBox(
+        color: const Color(0xFFEFF4FF),
+        child: Center(child: _buildPulseAnimation()),
+      );
+    }
     final centro = LatLng(origen.lat, origen.lng);
     if (_nearbyMapCenter != centro) {
       _nearbyMapCenter = centro;
-      _nearbyMapOptions = MapOptions(initialCenter: centro, initialZoom: 14);
+      _nearbyMapOptions = MapOptions(initialCenter: centro, initialZoom: 13.5);
     }
-    return Column(
+    return FlutterMap(
+      options: _nearbyMapOptions!,
       children: [
-        SizedBox(
-          height: 260,
-          child: FlutterMap(
-            options: _nearbyMapOptions!,
-            children: [
-              _tileLayer,
-              CircleLayer(circles: [
-                CircleMarker(
-                  point: centro,
-                  radius: 2000,
-                  useRadiusInMeter: true,
-                  color: const Color(0x1A2563EB),
-                  borderColor: const Color(0x662563EB),
-                  borderStrokeWidth: 1,
-                ),
-              ]),
-              MarkerLayer(markers: [
-                for (final c in _cercanos)
-                  Marker(
-                    point: LatLng((c['lat'] as num).toDouble(), (c['lng'] as num).toDouble()),
-                    width: 34,
-                    height: 34,
-                    child: const Icon(Icons.local_shipping, color: Color(0xFF1A1A2E), size: 28),
-                  ),
-                Marker(
-                  point: centro,
-                  width: 36,
-                  height: 36,
-                  child: const Icon(Icons.location_on, color: Colors.red, size: 36),
-                ),
-              ]),
-            ],
+        _tileLayer,
+        CircleLayer(circles: [
+          CircleMarker(
+            point: centro,
+            radius: 2000,
+            useRadiusInMeter: true,
+            color: const Color(0x142563EB),
+            borderColor: const Color(0x662563EB),
+            borderStrokeWidth: 1.5,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _cercanos.isEmpty
-              ? 'Aún no hay vehículos disponibles a menos de 2 km'
-              : '${_cercanos.length} vehículo(s) disponible(s) a menos de 2 km',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-        ),
+        ]),
+        MarkerLayer(markers: [
+          Marker(
+            point: centro,
+            width: 140,
+            height: 140,
+            child: const PulsoBusqueda(size: 140),
+          ),
+          for (final c in _cercanos)
+            Marker(
+              point: LatLng((c['lat'] as num).toDouble(), (c['lng'] as num).toDouble()),
+              width: 34,
+              height: 34,
+              child: const Icon(Icons.local_shipping, color: Color(0xFF1A1A2E), size: 28),
+            ),
+          Marker(
+            point: centro,
+            width: 36,
+            height: 36,
+            alignment: Alignment.topCenter,
+            child: const Icon(Icons.location_on, color: Colors.red, size: 36),
+          ),
+        ]),
       ],
     );
   }
 
+  /// Inicio de la búsqueda: creación del viaje o, si no se conoce, la
+  /// apertura de esta pantalla.
+  DateTime get _inicioBusqueda {
+    final creado = DateTime.tryParse(_trip?.createdAt ?? '');
+    if (creado != null && creado.isBefore(DateTime.now())) return creado;
+    return _pantallaAbierta;
+  }
+
+  void _verOfertas() {
+    _safePush(OfertasRecibidasScreen(
+      ofertas: _ofertas,
+      tripId: _trip?.id,
+      trip: _trip?.toJson() ?? {},
+      onAccept: (offerId) async {
+        await OfferService.acceptOffer(_trip?.id, offerId);
+      },
+      onReject: (offerId) async {
+        await OfferService.rejectOffer(_trip?.id, offerId);
+      },
+    ));
+  }
+
+  Future<void> _cancelarBusqueda() async {
+    if (_cancelling) return;
+    if (await confirmarCancelarBusqueda(context)) _doCancel();
+  }
+
   Widget _buildSearchContent() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildNearbyMap(),
-        const SizedBox(height: 24),
-        const Text(
-          'Buscando conductor disponible...',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E)),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Por favor espera mientras encontramos un conductor cerca de ti.',
-          style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        if (_ofertas.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Card(
-              child: ListTile(
-                leading: const Icon(Icons.local_offer, color: Colors.green),
-                title: Text('${_ofertas.length} oferta(s) recibida(s)'),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {
-                  _safePush(OfertasRecibidasScreen(
-                    ofertas: _ofertas,
-                    tripId: _trip?.id,
-                    trip: _trip?.toJson() ?? {},
-                    onAccept: (offerId) async {
-                      await OfferService.acceptOffer(_trip?.id, offerId);
-                    },
-                    onReject: (offerId) async {
-                      await OfferService.rejectOffer(_trip?.id, offerId);
-                    },
-                  ));
-                },
-              ),
-            ),
-          ),
-        const Spacer(),
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _cancelling ? null : _cancelar,
-              icon: _cancelling
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.cancel_outlined),
-              label: Text(_cancelling ? 'Cancelando...' : 'Cancelar búsqueda'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFE53935),
-                side: const BorderSide(color: Color(0xFFE53935)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+    return BusquedaConductorView(
+      trip: _trip,
+      mapa: _buildNearbyMap(),
+      vehiculosCercanos: _cercanos.length,
+      ofertas: _ofertas.length,
+      cancelando: _cancelling,
+      inicioBusqueda: _inicioBusqueda,
+      onVerOfertas: _verOfertas,
+      onCancelar: _cancelarBusqueda,
     );
   }
 
