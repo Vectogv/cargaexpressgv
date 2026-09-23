@@ -38,11 +38,16 @@ class _ViajeFinalizadoState extends State<ViajeFinalizado> {
 
   @override
   Widget build(BuildContext context) {
-    final origen = widget.trip['origen'] as Map<String, dynamic>?;
-    final destino = widget.trip['destino'] as Map<String, dynamic>?;
-    final monto = (widget.trip['precioFinal'] as num?)?.toDouble() ?? (widget.trip['monto'] as num?)?.toDouble() ?? 0;
-    final comision = monto * 0.10;
-    final total = monto - comision;
+    final origen = widget.trip['origen'];
+    final destino = widget.trip['destino'];
+    String direccion(dynamic lugar) =>
+        (lugar is Map ? lugar['direccion']?.toString() : null) ?? 'N/A';
+    double? precio(dynamic v) => v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '');
+    // El cliente paga el precio acordado completo: la comisión de la
+    // plataforma se descuenta al conductor y no se muestra aquí.
+    final monto = precio(widget.trip['precioFinal']) ??
+        precio(widget.trip['monto']) ??
+        precio(widget.trip['precioEstimado']);
 
     String f(double v) {
       final clamped = v.abs();
@@ -100,19 +105,18 @@ class _ViajeFinalizadoState extends State<ViajeFinalizado> {
                   children: [
                     const Text('Resumen del viaje', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black)),
                     const SizedBox(height: 14),
-                    _ResumenRow(label: 'Origen', value: origen?['direccion'] as String? ?? 'N/A'),
+                    _ResumenRow(label: 'Origen', value: direccion(origen)),
                     const SizedBox(height: 10),
-                    _ResumenRow(label: 'Destino', value: destino?['direccion'] as String? ?? 'N/A'),
+                    _ResumenRow(label: 'Destino', value: direccion(destino)),
                     const SizedBox(height: 16),
                     const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
-                    const SizedBox(height: 16),
-                    _ResumenRow(label: 'Precio acordado', value: '\$${f(monto)}'),
-                    const SizedBox(height: 10),
-                    _ResumenRow(label: 'Comisi\u00f3n (10%)', value: '- \$${f(comision)}', valueColor: const Color(0xFFEF4444)),
                     const SizedBox(height: 14),
-                    const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
-                    const SizedBox(height: 14),
-                    _ResumenRow(label: 'Total pagado', value: '\$${f(total)}', labelBold: true, valueBold: true),
+                    _ResumenRow(
+                      label: 'Total pagado',
+                      value: monto == null ? '\u2014' : '\$${f(monto)}',
+                      labelBold: true,
+                      valueBold: true,
+                    ),
                   ],
                 ),
               ),
@@ -152,14 +156,12 @@ class _ViajeFinalizadoState extends State<ViajeFinalizado> {
 class _ResumenRow extends StatelessWidget {
   final String label;
   final String value;
-  final Color? valueColor;
   final bool labelBold;
   final bool valueBold;
 
   const _ResumenRow({
     required this.label,
     required this.value,
-    this.valueColor,
     this.labelBold = false,
     this.valueBold = false,
   });
@@ -170,7 +172,15 @@ class _ResumenRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: TextStyle(fontSize: 13, color: const Color(0xFF6B7280), fontWeight: labelBold ? FontWeight.w700 : FontWeight.w400)),
-        Text(value, style: TextStyle(fontSize: 13, color: valueColor ?? Colors.black, fontWeight: valueBold ? FontWeight.w700 : FontWeight.w500)),
+        const SizedBox(width: 12),
+        // Direcciones largas: se ajustan en vez de desbordar la fila.
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(fontSize: 13, color: Colors.black, fontWeight: valueBold ? FontWeight.w700 : FontWeight.w500),
+          ),
+        ),
       ],
     );
   }
