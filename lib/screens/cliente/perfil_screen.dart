@@ -1,9 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
 import '../user/auth_screen.dart';
+
+/// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre,
+/// apellido y correo vacíos no se envían (no se borran); teléfono y contacto
+/// de emergencia vacíos se envían como null (el backend los acepta nulos).
+Map<String, dynamic> cuerpoActualizacionPerfil({
+  required String nombre,
+  required String apellido,
+  required String email,
+  required String telefono,
+  required String contactoNombre,
+  required String contactoTelefono,
+}) {
+  String? opcional(String v) => v.trim().isEmpty ? null : v.trim();
+  return {
+    if (nombre.trim().isNotEmpty) 'nombre': nombre.trim(),
+    if (apellido.trim().isNotEmpty) 'apellido': apellido.trim(),
+    if (email.trim().isNotEmpty) 'email': email.trim(),
+    'telefono': opcional(telefono),
+    'contactoEmergenciaNombre': opcional(contactoNombre),
+    'contactoEmergenciaTelefono': opcional(contactoTelefono),
+  };
+}
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -76,57 +100,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
   }
 
   Future<void> _editInfo() async {
-    final nombreCtrl = TextEditingController(text: _profile?['nombre'] as String? ?? '');
-    final apellidoCtrl = TextEditingController(text: _profile?['apellido'] as String? ?? '');
-    final emailCtrl = TextEditingController(text: _profile?['email'] as String? ?? '');
-    final telefonoCtrl = TextEditingController(text: _profile?['telefono'] as String? ?? '');
-
+    // El diálogo es dueño de sus controladores: se liberan cuando termina su
+    // animación de salida (antes se liberaban aquí mientras aún se dibujaba).
+    final body = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _EditarPerfilDialog(perfil: _profile ?? const {}),
+    );
+    if (body == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Editar perfil'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-                const SizedBox(height: 8),
-                TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellido')),
-                const SizedBox(height: 8),
-                TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email'), keyboardType: TextInputType.emailAddress),
-                const SizedBox(height: 8),
-                TextField(controller: telefonoCtrl, decoration: const InputDecoration(labelText: 'Teléfono'), keyboardType: TextInputType.phone),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
-          ],
-        ),
-      );
-
-      if (result != true) return;
-      await ApiClient.instance.updateProfile({
-        'nombre': nombreCtrl.text.trim(),
-        'apellido': apellidoCtrl.text.trim(),
-        'email': emailCtrl.text.trim(),
-        'telefono': telefonoCtrl.text.trim(),
-      });
+      await ApiClient.instance.updateProfile(body);
       await _loadProfile();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
-      }
+      messenger.showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
-      }
-    } finally {
-      nombreCtrl.dispose();
-      apellidoCtrl.dispose();
-      emailCtrl.dispose();
-      telefonoCtrl.dispose();
+      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
     }
   }
 
@@ -258,6 +245,97 @@ class _PerfilScreenState extends State<PerfilScreen> {
           ),
         ),
         const Divider(height: 1, indent: 56, endIndent: 0),
+      ],
+    );
+  }
+}
+
+/// Formulario de edición del perfil. Devuelve el cuerpo para
+/// PUT /api/users/profile, o null si se cancela.
+class _EditarPerfilDialog extends StatefulWidget {
+  final Map<String, dynamic> perfil;
+  const _EditarPerfilDialog({required this.perfil});
+
+  @override
+  State<_EditarPerfilDialog> createState() => _EditarPerfilDialogState();
+}
+
+class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
+  late final _nombre = _ctrl('nombre');
+  late final _apellido = _ctrl('apellido');
+  late final _email = _ctrl('email');
+  late final _telefono = _ctrl('telefono');
+  late final _contactoNombre = _ctrl('contactoEmergenciaNombre');
+  late final _contactoTelefono = _ctrl('contactoEmergenciaTelefono');
+  String? _errorEmail;
+
+  TextEditingController _ctrl(String campo) =>
+      TextEditingController(text: widget.perfil[campo]?.toString() ?? '');
+
+  @override
+  void dispose() {
+    for (final c in [_nombre, _apellido, _email, _telefono, _contactoNombre, _contactoTelefono]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _campo(TextEditingController c, String label, int max,
+          {TextInputType tipo = TextInputType.text, String? error}) =>
+      TextField(
+        controller: c,
+        keyboardType: tipo,
+        inputFormatters: [LengthLimitingTextInputFormatter(max)],
+        decoration: InputDecoration(labelText: label, errorText: error),
+      );
+
+  void _guardar() {
+    // Correo vacío: no se cambia. Con texto, debe ser válido.
+    final email = _email.text.trim();
+    final error = email.isEmpty ? null : validarEmail(email);
+    if (error != null) {
+      setState(() => _errorEmail = error);
+      return;
+    }
+    Navigator.pop(
+      context,
+      cuerpoActualizacionPerfil(
+        nombre: _nombre.text,
+        apellido: _apellido.text,
+        email: _email.text,
+        telefono: _telefono.text,
+        contactoNombre: _contactoNombre.text,
+        contactoTelefono: _contactoTelefono.text,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar perfil'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _campo(_nombre, 'Nombre', LimitesUsuario.nombre),
+            const SizedBox(height: 8),
+            _campo(_apellido, 'Apellido', LimitesUsuario.apellido),
+            const SizedBox(height: 8),
+            _campo(_email, 'Email', LimitesUsuario.email, tipo: TextInputType.emailAddress, error: _errorEmail),
+            const SizedBox(height: 8),
+            _campo(_telefono, 'Teléfono', LimitesUsuario.telefono, tipo: TextInputType.phone),
+            const SizedBox(height: 16),
+            _campo(_contactoNombre, 'Contacto de emergencia', LimitesUsuario.contactoNombre),
+            const SizedBox(height: 8),
+            _campo(_contactoTelefono, 'Teléfono del contacto', LimitesUsuario.contactoTelefono,
+                tipo: TextInputType.phone),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        ElevatedButton(onPressed: _guardar, child: const Text('Guardar')),
       ],
     );
   }
