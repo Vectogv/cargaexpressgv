@@ -57,7 +57,7 @@ No hay router (`go_router` / rutas nombradas): todo es `Navigator.push` / `pushR
 | `oferta_aceptada_screen.dart` | Celebración al aceptar una oferta | `ofertas_recibidas_screen.dart`, `rastreo_screen.dart` (reemplaza ruta) | — | Ninguno | No |
 | `resolucion_screen.dart` | Resultado/reembolso de una disputa resuelta | `disputa_en_revision_screen.dart` | `detalle_resolucion_screen.dart` | Ninguno (datos recibidos por parámetros) | No |
 | `viaje_finalizado.dart` | Resumen del viaje: costo, comisión, total | `rastreo_screen.dart` | `calificar_conductor_screen.dart` | Ninguno directo | No |
-| `chat_screen.dart` | Chat en vivo cliente–conductor durante el viaje | `rastreo_screen.dart` | — | `ApiClient.getTripMessages`/`sendTripMessage`; socket `chat:message`, `typing:start/stop`, `message:read`, emite `message:send` (**ver §7**), `typing:start/stop`, `message:read` | No |
+| `chat_screen.dart` | Chat en vivo cliente–conductor durante el viaje | `rastreo_screen.dart` | — | `ApiClient.getTripMessages`/`sendTripMessage`; socket `chat:message`, `typing:start/stop`, `message:read`; emite `typing:start/stop`, `message:read` (los mensajes se envían sólo por REST) | No |
 | `chat_thread_screen.dart` | Widget genérico de hilo de chat (reusado) | `soporte_screen.dart`, `emergencia_chat_screen.dart` | — | Callbacks inyectados (fetch/enviar) + stream de socket inyectado | No |
 | `emergencia_chat_screen.dart` | Chat de la alerta SOS con soporte | `rastreo_screen.dart` (botón SOS) | — (envuelve `chat_thread_screen.dart`) | `SosService.getChatMessages/sendChatMessage`; socket `emergency:message` | No |
 | `soporte_screen.dart` | Lista de conversaciones de soporte | `home_screen.dart`, `rastreo_screen.dart` | pantalla de chat de soporte (envuelve `chat_thread_screen.dart`) | `ChatService` conversaciones; socket `conversation:message` | No |
@@ -170,7 +170,7 @@ Todas las rutas fueron contrastadas contra `bakend-cargaexpress/start/routes.ts`
 | GET | `/api/support/emergency` | `profile_service.dart` | — | números de emergencia (distinto de alertas SOS) |
 | GET | `/api/config/coverage` | `coverage_service.dart` | — | público, sin `auth` |
 | GET | `/api/config/mapbox` | `profile_service.dart` | — | `auth: true` |
-| POST | `/api/emergency` | `sos_service.dart` | `{viajeId?, motivo?, lat, lng}` | Ver §7: `lat/lng = 0,0` si no hay GPS |
+| POST | `/api/emergency` | `sos_service.dart` | `{viajeId?, motivo?, lat, lng}` | Sin GPS usa la última posición conocida o se envía sin coordenadas (nunca 0,0) |
 | GET/POST | `/api/emergency/:id/messages` | `sos_service.dart` | `{mensaje}` | chat de la alerta SOS |
 | GET | `https://nominatim.openstreetmap.org/reverse` y `/search` | directo desde `nuevo_envio_screen.dart` (no pasa por el backend) | `lat/lon` o `q` | `User-Agent` propio, `Accept-Language: es`, límite 1 req/s, timeout 10 s |
 
@@ -199,7 +199,6 @@ Endpoints de conductor/driver, moderador y admin (earnings, verification, modera
 | `trip:finalize_request` | escucha | `rastreo_screen.dart` → abre `LlegadaAlDestinoScreen` | Conductor pide cerrar el viaje |
 | `trip:finalize_cancelled` | escucha | `rastreo_screen.dart` | Conductor canceló la solicitud de cierre |
 | `trip:cancelled` | escucha | `rastreo_screen.dart`, `notification_service.dart`, `notification_provider.dart` | Viaje cancelado |
-| `trip:delivered` | escucha | listener registrado, **sin consumidor real** (comentario en `rastreo_screen.dart:216`) | El backend nunca lo emite (ver §7) |
 | `chat:message` | escucha | `chat_screen.dart` | Mensaje de chat del viaje |
 | `typing:start`/`typing:stop`, `message:read` | escucha/emite | `chat_screen.dart` | Indicador "escribiendo…", doble check |
 | `conversation:message` | escucha | `soporte_screen.dart` | Chat de soporte |
@@ -208,7 +207,6 @@ Endpoints de conductor/driver, moderador y admin (earnings, verification, modera
 | `sos:activated` | escucha | expuesto (`onSosActivated`) | Alerta SOS |
 | `join:trip` / `leave:trip` | emite | `rastreo_screen.dart` (`initState`/reconexión y `dispose`) | Unirse/salir de la sala del viaje |
 | `trip:finalize_response` | emite | `rastreo_screen.dart` (tras confirmar/rechazar entrega) | Aviso al conductor "por compatibilidad" |
-| `message:send` | emite | `chat_screen.dart._sendMessage()` | Ver §7: además del POST |
 
 Eventos emitidos por el backend que la app **no** escucha: `trip:reserved`, `trip:search_started`, `trip:declined` (ver §7). Eventos de conductor/admin/moderador (`driver:on_the_way`, `driver:stop_gps`, `admin:*`, `moderator:*`, `dispute:updated/resolved`, etc.) existen en `socket_service_client.dart` pero no los consume ninguna pantalla de cliente.
 
@@ -228,20 +226,21 @@ Eventos emitidos por el backend que la app **no** escucha: `trip:reserved`, `tri
 
 ---
 
-## 7. Desajustes conocidos (pendientes)
+## 7. Desajustes conocidos
 
-- [ ] `GET /api/trips/active` excluye `pendiente_confirmacion` (`bakend-cargaexpress/app/controllers/trip_controller.ts:505`, `.whereIn('estado', [...])` sin ese estado). Tras reiniciar la app no se puede volver a confirmar la entrega y se puede solicitar un 2º viaje.
-- [ ] La app escucha `trip:delivered` (`lib/services/socket_service_client.dart:329`) pero el backend nunca lo emite (confirmado por grep en `bakend-cargaexpress/app`); el propio código lo documenta en `rastreo_screen.dart:216`.
-- [ ] El aviso "Conductor asignado" depende de `trip:accepted`, que solo emite la ruta deprecada `TripController.accept` (`trip_controller.ts:518-520,653`, marcada `OBSOLETO`/`Deprecation`). El flujo actual de ofertas emite `offer:accepted` (`offer_controller.ts:372`), no `trip:accepted`, así que ese aviso normalmente no se dispara.
-- [ ] Los motivos de cancelación de "en curso" no se muestran en `conductor_llegada`: `rastreo_screen.dart:512` trata ambos estados igual para llamar `requestCancellation`, pero `rastreo_screen.dart:553` solo activa `CancelTripScreen(enCurso: true)` cuando el estado es exactamente `en_curso`; `conductor_llegada` recibe la lista genérica de motivos en `cancel_trip_screen.dart:43`.
+Marcados `[x]`: corregidos en la rama `fix/auditoria-app` (commit entre paréntesis). La lista conserva la descripción original para contexto; las líneas citadas pueden haber cambiado.
+
 - [ ] Eventos que emite el backend y la app no escucha: `trip:reserved` (`trip_controller.ts:306`), `trip:search_started` (`reservation_activation_service.ts:126`), `trip:declined` (`trip_controller.ts:830`).
-- [ ] SOS sin GPS envía `lat/lng = 0,0` como fallback (`lib/services/sos_service.dart:13-22`) en vez de omitir el campo o bloquear el envío.
-- [ ] `ConfirmarEntregaScreen`: el campo de motivo de rechazo no tiene `controller` (`lib/screens/cliente/confirmar_entrega_screen.dart:45-52`) — el texto escrito se descarta y siempre se envía el literal `'Cliente rechazó la entrega'` (línea 61). Además, si `confirm-close` falla, el padre (`rastreo_screen.dart:592-611,637-653`) solo muestra un SnackBar sin resetear el `_loading` del hijo: los botones quedan deshabilitados permanentemente tras un error.
-- [ ] Ofertas al reabrir Rastreo: `OfertasRecibidasScreen` sí hace `GET /api/trips/:id/offers` al abrir, pero el badge "Ver ofertas" de `rastreo_screen.dart` (`_hasOffers`/`_ofertas`) solo se alimenta del socket `new:offer` (`rastreo_screen.dart:249-257`) y nunca de un GET al reabrir la pantalla — si las ofertas llegaron antes de reabrir/reiniciar, el botón no aparece.
-- [ ] Posible doble apertura de Rastreo desde Home: `home_screen.dart:72-79` abre `RastreoScreen` en `new:offer` si la ruta es `isFirst`, sin comprobar `_redirected`; `_loadActiveTrip()`/`_redirectToTracking()` (líneas 99-116, 153-162) programan otra apertura vía `addPostFrameCallback` guardada solo por `_redirected`. Si un `new:offer` llega en esa ventana, ambos caminos pueden empujar `RastreoScreen` por separado.
-- [ ] `CalificarConductorScreen`: se puede enviar una calificación con 0 estrellas (el botón solo se deshabilita por `_submitting`, no valida `_rating > 0`, `calificar_conductor_screen.dart:168-190`). Además hay doble `popUntil(isFirst)`: una vez dentro de la pantalla (línea 181) y otra en el callback `onSubmitted` del padre (`viaje_finalizado.dart:27-29`).
-- [ ] `NotificationProvider`/`SessionMonitorService` no arrancan tras login o registro: solo se inician en frío en `main.dart:66,259` (o en el panel admin); no hay llamada en `login_screen.dart`, `register_screen.dart` ni `home_by_role.dart`.
-- [ ] El chat emite `message:send` por socket además del POST (`chat_screen.dart:212-218`). El backend escucha el evento (`socket.ts:316-326`) pero solo valida participación, no persiste ni reemite — no duplica el mensaje en BD, pero es código redundante/muerto.
-- [ ] Datos de demo fijos en `detalle_resolucion_screen.dart:12-25` (número de disputa, problema, resultado, reembolso, comentario y fecha de ejemplo): `resolucion_screen.dart:122-127` la abre sin pasar esos valores, así que en producción siempre muestra el ejemplo, nunca los datos reales de la disputa. (`reportar_problema_screen.dart` y `disputa_en_revision_screen.dart` sí usan datos reales de la API — no tienen este problema.)
-- [ ] ETA fijo `'5 min'` hardcodeado en `rastreo_screen.dart:1100`.
-- [ ] Comisión del 10% mostrada al cliente y restada de "Total pagado" en `viaje_finalizado.dart:44-45,111` — la comisión normalmente es un descuento del lado del conductor, no del cliente.
+- [x] (backend) `GET /api/trips/active` ya incluye `pendiente_confirmacion` para el cliente (`ESTADOS_VIAJE_ACTIVO_CLIENTE` en `trip_controller.ts`). Original: `GET /api/trips/active` excluía `pendiente_confirmacion` (`bakend-cargaexpress/app/controllers/trip_controller.ts:505`, `.whereIn('estado', [...])` sin ese estado). Tras reiniciar la app no se puede volver a confirmar la entrega y se puede solicitar un 2º viaje.
+- [x] (dd291c1) La app escuchaba `trip:delivered` (`lib/services/socket_service_client.dart:329`) pero el backend nunca lo emite (confirmado por grep en `bakend-cargaexpress/app`); el propio código lo documenta en `rastreo_screen.dart:216`.
+- [x] (b2daac1) El aviso "Conductor asignado" depende de `trip:accepted`, que solo emite la ruta deprecada `TripController.accept` (`trip_controller.ts:518-520,653`, marcada `OBSOLETO`/`Deprecation`). El flujo actual de ofertas emite `offer:accepted` (`offer_controller.ts:372`), no `trip:accepted`, así que ese aviso normalmente no se dispara.
+- [x] (ae84478) Los motivos de cancelación de "en curso" no se muestran en `conductor_llegada`: `rastreo_screen.dart:512` trata ambos estados igual para llamar `requestCancellation`, pero `rastreo_screen.dart:553` solo activa `CancelTripScreen(enCurso: true)` cuando el estado es exactamente `en_curso`; `conductor_llegada` recibe la lista genérica de motivos en `cancel_trip_screen.dart:43`.
+- [x] (a4095cd) `ConfirmarEntregaScreen`: el campo de motivo de rechazo no tiene `controller` (`lib/screens/cliente/confirmar_entrega_screen.dart:45-52`) — el texto escrito se descarta y siempre se envía el literal `'Cliente rechazó la entrega'` (línea 61). Además, si `confirm-close` falla, el padre (`rastreo_screen.dart:592-611,637-653`) solo muestra un SnackBar sin resetear el `_loading` del hijo: los botones quedan deshabilitados permanentemente tras un error.
+- [x] (fd761cd) Ofertas al reabrir Rastreo: `OfertasRecibidasScreen` sí hace `GET /api/trips/:id/offers` al abrir, pero el badge "Ver ofertas" de `rastreo_screen.dart` (`_hasOffers`/`_ofertas`) solo se alimenta del socket `new:offer` (`rastreo_screen.dart:249-257`) y nunca de un GET al reabrir la pantalla — si las ofertas llegaron antes de reabrir/reiniciar, el botón no aparece.
+- [x] (3362237) Posible doble apertura de Rastreo desde Home: `home_screen.dart:72-79` abre `RastreoScreen` en `new:offer` si la ruta es `isFirst`, sin comprobar `_redirected`; `_loadActiveTrip()`/`_redirectToTracking()` (líneas 99-116, 153-162) programan otra apertura vía `addPostFrameCallback` guardada solo por `_redirected`. Si un `new:offer` llega en esa ventana, ambos caminos pueden empujar `RastreoScreen` por separado.
+- [x] (764bba9) `CalificarConductorScreen`: se puede enviar una calificación con 0 estrellas (el botón solo se deshabilita por `_submitting`, no valida `_rating > 0`, `calificar_conductor_screen.dart:168-190`). Además hay doble `popUntil(isFirst)`: una vez dentro de la pantalla (línea 181) y otra en el callback `onSubmitted` del padre (`viaje_finalizado.dart:27-29`).
+- [x] (9afc7e6; `NotificationProvider` se eliminó en 8e4f7b5) `NotificationProvider`/`SessionMonitorService` no arrancaban tras login o registro: solo se inician en frío en `main.dart:66,259` (o en el panel admin); no hay llamada en `login_screen.dart`, `register_screen.dart` ni `home_by_role.dart`.
+- [x] (8c82b94) El chat emitía `message:send` por socket además del POST (`chat_screen.dart:212-218`). El backend escucha el evento (`socket.ts:316-326`) pero solo valida participación, no persiste ni reemite — no duplica el mensaje en BD, pero es código redundante/muerto.
+- [x] (6079bda) Datos de demo fijos en `detalle_resolucion_screen.dart:12-25` (número de disputa, problema, resultado, reembolso, comentario y fecha de ejemplo): `resolucion_screen.dart:122-127` la abre sin pasar esos valores, así que en producción siempre muestra el ejemplo, nunca los datos reales de la disputa. (`reportar_problema_screen.dart` y `disputa_en_revision_screen.dart` sí usan datos reales de la API — no tienen este problema.)
+- [x] (4dfa307; ETA en vivo con `trip:eta_update` en e125e9a) ETA fijo `'5 min'` hardcodeado en `rastreo_screen.dart:1100`.
+- [x] (8471f6a) Comisión del 10% mostrada al cliente y restada de "Total pagado" en `viaje_finalizado.dart:44-45,111` — la comisión normalmente es un descuento del lado del conductor, no del cliente.
