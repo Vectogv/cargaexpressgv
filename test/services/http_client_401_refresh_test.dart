@@ -21,13 +21,15 @@ void main() {
 
     setUpAll(() async {
       SharedPreferences.setMockInitialValues({});
-      Environment.testBaseUrl = 'http://localhost:3333';
 
       ErrorHandlerService.instance.onAuthExpired.listen((_) {
         authExpiredEvents++;
       });
 
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 3333);
+      // Puerto efímero (0): evita colisiones con otra suite o un proceso
+      // residual que tenga ocupado un puerto fijo.
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      Environment.testBaseUrl = 'http://127.0.0.1:${server.port}';
       server.listen((request) async {
         final path = request.uri.path;
         final method = request.method;
