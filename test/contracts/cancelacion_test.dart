@@ -41,6 +41,10 @@ void main() {
       expect(cancelacionRequiereSolicitud(TripStatus.llegada), isTrue);
     });
 
+    test('durante un SOS la cancelación también va por solicitud (revisión del admin)', () {
+      expect(cancelacionRequiereSolicitud(TripStatus.sos), isTrue);
+    });
+
     test('antes de la llegada se cancela directo', () {
       expect(cancelacionRequiereSolicitud(TripStatus.buscando), isFalse);
       expect(cancelacionRequiereSolicitud(TripStatus.aceptado), isFalse);

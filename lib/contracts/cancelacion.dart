@@ -1,10 +1,11 @@
 import 'trip_status.dart';
 
-/// El backend bloquea la cancelación directa (403) en `en_curso` y
-/// `conductor_llegada`: ahí el cliente envía una solicitud de cancelación y
-/// ve los motivos de "viaje en curso".
+/// El backend bloquea la cancelación directa (403) en `en_curso`,
+/// `conductor_llegada` y `sos`: ahí el cliente envía una solicitud de
+/// cancelación (la revisa un administrador) y ve los motivos de "viaje en
+/// curso".
 bool cancelacionRequiereSolicitud(String? estado) =>
-    estado == TripStatus.enCurso || estado == TripStatus.llegada;
+    estado == TripStatus.enCurso || estado == TripStatus.llegada || estado == TripStatus.sos;
 
 /// Aviso para el evento de socket `trip:cancelled` según quién canceló.
 ///
