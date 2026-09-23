@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../contracts/cancelacion.dart';
+import '../../contracts/cierre.dart';
 import '../../contracts/socket_events.dart';
 import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
@@ -74,6 +75,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   // Idempotencia: una clave por acción de cierre (reutilizada en reintentos).
   final ActionKey _completeKey = ActionKey();
   final ActionKey _finalizeKey = ActionKey();
+  // Código del último error de POST /complete (p. ej. JUSTIFICACION_REQUERIDA).
+  String? _ultimoErrorCierre;
   // Opciones del mapa y capa de tiles creadas una sola vez (no en cada build).
   MapOptions? _mapOptions;
   late final TileLayer _tileLayer = TileLayer(
@@ -532,6 +535,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   // esperando_confirmacion automáticamente. Devuelve false si no se pudo
   // completar (se aborta la solicitud de finalización).
   Future<bool> _completeTripIfNeeded(num? montoFinalOverride, {String? justificacion}) async {
+    _ultimoErrorCierre = null;
     final t = _trip;
     if (t == null) return true;
     if (t.estado != TripStatus.enCurso && t.estado != TripStatus.entregado) return true;
@@ -552,9 +556,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       return true;
     } on ApiException catch (e) {
       _completeKey.settle(e);
+      _ultimoErrorCierre = e.code;
       LoggerService.instance.error('trip_in_progress: completeTrip error', e);
       if (e.code == 'JUSTIFICACION_REQUERIDA') {
-        if (mounted) _snack('Justificaci\u00f3n requerida (m\u00ednimo 10 caracteres). Distancia: ${e.message}');
+        // El backend la exige (fuera del radio del destino): se pide la
+        // justificaci\u00f3n en el di\u00e1logo; su mensaje ya trae la distancia.
+        if (mounted) _snack(e.message);
       } else if (e.code == 'FUERA_DE_RANGO_ORIGEN') {
         if (mounted) _snack('Fuera de rango del origen. Distancia: ${e.message}');
       } else {
@@ -609,6 +616,71 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
     ctrl.dispose();
     return value ?? current;
+  }
+
+  /// Toma el GPS actual antes de decidir si el cierre necesita justificación.
+  /// Si falla se conserva la última posición conocida (o ninguna).
+  Future<void> _actualizarUbicacionParaCierre() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 8)),
+      );
+      _currentLat = pos.latitude;
+      _currentLng = pos.longitude;
+    } catch (e) {
+      LoggerService.instance.error('trip_in_progress: ubicación para el cierre', e);
+    }
+  }
+
+  /// Pide la justificación del cierre (mínimo 10 caracteres); null si el
+  /// conductor cancela.
+  Future<String?> _pedirJustificacionCierre(double radioKm) {
+    final radio = radioKm == radioKm.roundToDouble() ? radioKm.toStringAsFixed(0) : radioKm.toString();
+    // Fuera del builder: si se declara dentro, cada setDialogState() la
+    // reinicia a null y el botón "Continuar" nunca se habilita.
+    String? localJustificacion;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Justificación de cierre'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Estás a más de $radio km del destino (o no tenemos tu ubicación). '
+                    'Para cerrar el viaje escribe el motivo (mínimo 10 caracteres).'),
+                const SizedBox(height: 16),
+                TextField(
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'Motivo del cierre...',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  onChanged: (v) {
+                    localJustificacion = v.trim();
+                    setDialogState(() {});
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: (localJustificacion != null && localJustificacion!.length >= 10)
+                    ? () => Navigator.pop(ctx, localJustificacion)
+                    : null,
+                child: const Text('Continuar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _requestFinalization() async {
@@ -671,81 +743,40 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       return;
     }
 
-    // Pedir justificación para el cierre (antifraude)
-    String? justificacion;
-    bool needsJustificacion = true;
-    while (needsJustificacion) {
-      if (!mounted) return;
-      // Fuera del builder: si se declara dentro, cada setDialogState() la
-      // reinicia a null y el botón "Continuar" nunca se habilita.
-      String? localJustificacion;
-      final result = await showDialog<String>(
-        context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              title: const Text('Justificación de cierre'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('El cierre del viaje requiere una justificación (mínimo 10 caracteres).'),
-                  const SizedBox(height: 16),
-                  TextField(
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: 'Motivo del cierre...',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.all(12),
-                    ),
-                    onChanged: (v) {
-                      localJustificacion = v.trim();
-                      setDialogState(() {});
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, null),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: (localJustificacion != null && localJustificacion!.length >= 10)
-                      ? () => Navigator.pop(ctx, localJustificacion)
-                      : null,
-                  child: const Text('Continuar'),
-                ),
-              ],
-            );
-          },
-        ),
-      );
-      
-      if (result == null) {
-        if (mounted) setState(() => _actionLoading = false);
-        return;
-      }
-      
-      justificacion = result;
-      final completado = await _completeTripIfNeeded(montoFinal, justificacion: justificacion);
-      
-      if (!completado) {
-        // Check if it was a JUSTIFICACION_REQUERIDA error - we already showed the dialog
-        // If it was FUERA_DE_RANGO_ORIGEN, we showed the error but don't retry
-        if (mounted) setState(() => _actionLoading = false);
-        return;
-      }
-      
-      needsJustificacion = false;
-    }
-    
+    // Justificación de cierre (antifraude): el backend la exige sólo fuera
+    // del radio de cierre del destino. Sin ubicación conocida se pide igual.
+    final reglas = await ConfigClienteService.instance.cargar();
+    await _actualizarUbicacionParaCierre();
     if (!mounted) return;
-    final completado = await _completeTripIfNeeded(montoFinal, justificacion: justificacion);
-    if (!completado) {
-      if (mounted) setState(() => _actionLoading = false);
+    final destino = _trip?.destino;
+    var pedirJustificacion = cierreRequiereJustificacion(
+      lat: _currentLat,
+      lng: _currentLng,
+      destinoLat: destino?.lat,
+      destinoLng: destino?.lng,
+      radioKm: reglas.radioCierreKm,
+    );
+    String? justificacion;
+    while (true) {
+      if (pedirJustificacion) {
+        justificacion = await _pedirJustificacionCierre(reglas.radioCierreKm);
+        if (!mounted) return;
+        if (justificacion == null) {
+          setState(() => _actionLoading = false);
+          return;
+        }
+      }
+      final completado = await _completeTripIfNeeded(montoFinal, justificacion: justificacion);
+      if (!mounted) return;
+      if (completado) break;
+      // El backend es quien decide: si la exige, se muestra el campo.
+      if (!pedirJustificacion && _ultimoErrorCierre == 'JUSTIFICACION_REQUERIDA') {
+        pedirJustificacion = true;
+        continue;
+      }
+      setState(() => _actionLoading = false);
       return;
     }
-    if (!mounted) return;
 
     SocketServiceClient.instance.emit('trip:finalize_request', {
       'tripId': _trip!.id,
