@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/trip.dart';
+import '../../contracts/calificacion.dart';
 import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api/trip_service.dart';
@@ -50,6 +51,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
   bool _cancelling = false;
   bool _hasOffers = false;
   bool _offerAcceptedShown = false;
+  // Celebración "¡Oferta aceptada!" abierta encima del rastreo.
+  Route<void>? _celebracionRoute;
+  Timer? _celebracionTimer;
   bool _finalizeShown = false;
   bool _finalizedShown = false;
   // Una clave de idempotencia por acción del usuario (se reutiliza si reintenta).
@@ -133,11 +137,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
         _socketListenersSetUp = true;
       }
 
-      if (_trip != null && _status != TripStatus.buscando) {
+      if (_trip != null && !_buscando) {
         await _startLocationUpdates();
       }
 
-      if (_status == TripStatus.buscando && mounted) {
+      if (_buscando && mounted) {
         _startPolling();
         _cargarOfertasExistentes();
       }
@@ -207,17 +211,95 @@ class _RastreoScreenState extends State<RastreoScreen> {
     });
   }
 
-  void _safeReplace(Widget screen) {
-    if (_isNavigating) return;
-    _isNavigating = true;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
-    ).then((_) {
-      _isNavigating = false;
-    }).catchError((_) {
-      _isNavigating = false;
+  /// Cierra las pantallas abiertas encima del rastreo (ofertas, chat,
+  /// celebración…) para que la siguiente pantalla del flujo quede al frente.
+  void _volverARastreo() {
+    final route = _route;
+    if (!mounted || route == null || !route.isActive || route.isCurrent) return;
+    Navigator.of(context).popUntil((r) => r == route);
+    _isNavigating = false;
+  }
+
+  /// "¡Oferta aceptada!" se muestra ENCIMA del rastreo (no lo reemplaza):
+  /// el rastreo sigue vivo con sus sockets y sondeos, así la confirmación de
+  /// entrega aparece aunque el cliente nunca toque "Ver seguimiento". Se
+  /// cierra sola a los pocos segundos o cuando el viaje avanza.
+  void _mostrarOfertaAceptada(Map<String, dynamic> conductor) {
+    if (!mounted || _offerAcceptedShown) return;
+    _offerAcceptedShown = true;
+    if (rastreoVistaPara(_status) == RastreoVista.busqueda) {
+      setState(() => _status = TripStatus.aceptado);
+    }
+    _volverARastreo();
+    final route = MaterialPageRoute<void>(
+      builder: (_) => OfertaAceptadaScreen.desdeConductor(
+        conductor,
+        onVerSeguimiento: _cerrarCelebracion,
+      ),
+    );
+    _celebracionRoute = route;
+    Navigator.of(context).push(route).whenComplete(() {
+      if (_celebracionRoute == route) {
+        _celebracionRoute = null;
+        _celebracionTimer?.cancel();
+      }
     });
+    _celebracionTimer?.cancel();
+    _celebracionTimer = Timer(duracionCelebracionOferta, _cerrarCelebracion);
+    // Los eventos de socket traen poco del conductor: traer el viaje completo.
+    _refrescarViaje();
+  }
+
+  void _cerrarCelebracion() {
+    _celebracionTimer?.cancel();
+    _celebracionTimer = null;
+    final route = _celebracionRoute;
+    _celebracionRoute = null;
+    if (route == null || !mounted || !route.isActive) return;
+    final navigator = Navigator.of(context);
+    if (route.isCurrent) {
+      navigator.pop();
+    } else {
+      navigator.removeRoute(route);
+    }
+  }
+
+  Future<void> _refrescarViaje() async {
+    try {
+      final data = await TripService.getActiveTrip();
+      if (data == null || !mounted) return;
+      final parsed = Trip.fromJson(data);
+      final anterior = _status;
+      setState(() {
+        _trip = parsed;
+        final estado = parsed.estado;
+        // No retroceder a la búsqueda si el backend aún no reflejó la aceptación.
+        if (estado != null && rastreoVistaPara(estado) != RastreoVista.busqueda) {
+          _status = estado;
+        }
+      });
+      if (_status != anterior) _alCambiarEstado(_status);
+    } catch (e) {
+      debugPrint('Rastreo: no se pudo refrescar el viaje: $e');
+    }
+  }
+
+  /// Reacción de la pantalla a un nuevo estado del viaje, venga del socket o
+  /// de un sondeo: la solicitud de confirmación y el cierre se muestran
+  /// siempre, esté el cliente donde esté dentro del flujo del viaje.
+  void _alCambiarEstado(String estado) {
+    if (!mounted) return;
+    if (estado == TripStatus.finalizado) {
+      _showViajeFinalizado();
+      return;
+    }
+    if (estado == TripStatus.pendienteConfirmacion || estado == TripStatus.esperaConfirmacion) {
+      _showFinalizeConfirmation();
+      return;
+    }
+    if (rastreoVistaPara(estado) != RastreoVista.busqueda && estado != TripStatus.aceptado) {
+      _cerrarCelebracion();
+    }
   }
 
   void _safePopUntilFirst() {
@@ -253,10 +335,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
             if (monto != null) base['precioFinal'] = num.tryParse(monto.toString());
             _trip = Trip.fromJson(base);
           });
-          if (newStatus == TripStatus.finalizado) {
-            _showViajeFinalizado();
-            return;
-          }
+          _alCambiarEstado(newStatus);
+          if (newStatus == TripStatus.finalizado) return;
           if (newStatus == TripStatus.aceptado || newStatus == TripStatus.enCamino || newStatus == TripStatus.llegada || newStatus == TripStatus.enCurso) {
             _startLocationUpdates();
           }
@@ -289,15 +369,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
     _offerAcceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((data) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _offerAcceptedShown) return;
-        _offerAcceptedShown = true;
         final conductor = data['conductor'] is Map
             ? Map<String, dynamic>.from(data['conductor'] as Map)
             : <String, dynamic>{};
-        _safeReplace(ofertaAceptadaCliente(
-          conductor,
-          seguimiento: (_) => const RastreoScreen(),
-        ));
+        _mostrarOfertaAceptada(conductor);
       });
     });
 
@@ -375,10 +450,15 @@ class _RastreoScreenState extends State<RastreoScreen> {
     if (_finalizedShown || !mounted) return;
     _finalizedShown = true;
     final conductor = _trip?.conductor;
-    _safePush(ViajeFinalizado(
-      trip: _trip?.toJson() ?? {},
-      conductor: conductor?.toJson() ?? {},
-    ));
+    _cerrarCelebracion();
+    _volverARastreo();
+    _isNavigating = true;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ViajeFinalizado(
+        trip: _trip?.toJson() ?? {},
+        conductor: conductor?.toJson() ?? {},
+      ),
+    )).whenComplete(() => _isNavigating = false);
   }
 
   void _scheduleDriverRebuild() {
@@ -401,7 +481,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   void _startPolling() {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (t) async {
-      if (!mounted || _status != TripStatus.buscando) {
+      if (!mounted || !_buscando) {
         _pollingTimer?.cancel();
         return;
       }
@@ -411,14 +491,18 @@ class _RastreoScreenState extends State<RastreoScreen> {
       try {
         final trip = await TripService.getActiveTrip();
         if (trip != null && mounted) {
+          String? nuevo;
           setState(() {
             _trip = Trip.fromJson(trip);
             final estado = _trip?.estado;
-            if (estado == TripStatus.aceptado || estado == TripStatus.enCurso) {
-              _status = estado!;
+            if (estado != null && estado != _status &&
+                rastreoVistaPara(estado) != RastreoVista.busqueda) {
+              _status = estado;
+              nuevo = estado;
               _pollingTimer?.cancel();
             }
           });
+          if (nuevo != null) _alCambiarEstado(nuevo!);
         }
       } catch (_) {}
     });
@@ -433,7 +517,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 
   Future<void> _refreshCercanos() async {
-    if (!mounted || _status != TripStatus.buscando || _trip == null) {
+    if (!mounted || !_buscando || _trip == null) {
       _cercanosTimer?.cancel();
       return;
     }
@@ -447,18 +531,22 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   void _startFallbackPolling() {
     _fallbackPollingTimer?.cancel();
-    _fallbackPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+    _fallbackPollingTimer = Timer.periodic(const Duration(seconds: 10), (t) async {
       if (!mounted) { _fallbackPollingTimer?.cancel(); return; }
-      if (SocketServiceClient.instance.isConnected) return;
+      // Sin socket, cada 10 s; con socket, cada 30 s como red de seguridad
+      // por si se perdió un evento (p. ej. la solicitud de confirmación).
+      if (SocketServiceClient.instance.isConnected && t.tick % 3 != 0) return;
       try {
         final trip = await TripService.getActiveTrip();
         if (trip != null && mounted) {
           final parsed = Trip.fromJson(trip);
-          if (parsed.estado != null && parsed.estado != _status) {
+          final estado = parsed.estado;
+          if (estado != null && estado != _status) {
             setState(() {
               _trip = parsed;
-              _status = parsed.estado!;
+              _status = estado;
             });
+            _alCambiarEstado(estado);
           }
         }
       } catch (_) {}
@@ -602,19 +690,26 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 
   void _showFinalizeConfirmation() {
-    if (_finalizeShown) return;
+    if (_finalizeShown || !mounted) return;
     _finalizeShown = true;
     final conductor = _trip?.conductor;
-    final requestData = _pendingFinalizeRequest ?? {};
-    final fueraDeRango = requestData['fueraDeRango'] == true;
-    final distanciaKm = (requestData['distanciaKm'] as num?)?.toDouble() ?? 0.0;
-    final justificacionConductor = requestData['justificacion'] as String?;
+    // La celebración, el chat o cualquier otra pantalla del viaje no deben
+    // tapar la solicitud de confirmación.
+    _cerrarCelebracion();
+    _volverARastreo();
+    _isNavigating = true;
 
     // Primero mostrar LlegadaAlDestinoScreen
-    _safePush(LlegadaAlDestinoScreen(
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => LlegadaAlDestinoScreen(
       conductor: conductor?.toJson() ?? {},
       trip: _trip?.toJson() ?? {},
       onVerDetalle: () {
+        // Los datos de `trip:finalize_request` pueden llegar después del
+        // cambio de estado: se leen al abrir la confirmación.
+        final requestData = _pendingFinalizeRequest ?? {};
+        final fueraDeRango = requestData['fueraDeRango'] == true;
+        final distanciaKm = (requestData['distanciaKm'] as num?)?.toDouble() ?? 0.0;
+        final justificacionConductor = requestData['justificacion'] as String?;
         // Desde aquí ir a ConfirmarEntregaScreen
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => ConfirmarEntregaScreen(
@@ -726,7 +821,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
           ),
         ));
       },
-    ));
+    ))).whenComplete(() {
+      // Si el cliente vuelve atrás sin responder, "Ir a confirmación" y una
+      // nueva solicitud pueden volver a abrirla.
+      _isNavigating = false;
+      _finalizeShown = false;
+    });
   }
 
   /// Número visible de la disputa (GET /api/disputes/:id); si no se puede
@@ -759,6 +859,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   @override
   void dispose() {
+    _celebracionTimer?.cancel();
     _pollingTimer?.cancel();
     _cercanosTimer?.cancel();
     _fallbackPollingTimer?.cancel();
@@ -806,9 +907,15 @@ class _RastreoScreenState extends State<RastreoScreen> {
     );
   }
 
+  /// Aún sin conductor: `buscando_conductor`, o `pendiente` en cuanto llega
+  /// la primera oferta (el backend cambia el estado al recibirla).
+  bool get _buscando => rastreoVistaPara(_status) == RastreoVista.busqueda;
+
   String _getAppBarTitle() {
     switch (_status) {
+      case TripStatus.creado:
       case TripStatus.buscando:
+      case TripStatus.pendiente:
         return 'Buscando conductor';
       case TripStatus.aceptado:
         return 'Conductor asignado';
@@ -842,7 +949,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 
   List<Widget> _buildAppBarActions() {
-    if (_hasOffers && _status == TripStatus.buscando) {
+    if (_hasOffers && _buscando) {
       return [
         Stack(
           children: [
@@ -1060,7 +1167,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 
   void _verOfertas() {
-    _safePush(OfertasRecibidasScreen(
+    if (_isNavigating) return;
+    _isNavigating = true;
+    Navigator.of(context).push<Object?>(MaterialPageRoute(builder: (_) => OfertasRecibidasScreen(
       ofertas: _ofertas,
       tripId: _trip?.id,
       trip: _trip?.toJson() ?? {},
@@ -1070,7 +1179,16 @@ class _RastreoScreenState extends State<RastreoScreen> {
       onReject: (offerId) async {
         await OfferService.rejectOffer(_trip?.id, offerId);
       },
-    ));
+    ))).then((resultado) {
+      _isNavigating = false;
+      // Aceptada (con o sin socket): la celebración sale encima de ESTE
+      // rastreo; si `offer:accepted` ya la mostró, no se repite.
+      if (resultado is OfertaAceptadaResultado) {
+        _mostrarOfertaAceptada(resultado.conductor);
+      }
+    }, onError: (_) {
+      _isNavigating = false;
+    });
   }
 
   Future<void> _cancelarBusqueda() async {
@@ -1111,7 +1229,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   Widget _buildDriverPanel() {
     final conductor = _trip?.conductor;
     final conductorNombre = conductor?.nombre ?? 'Conductor';
-    final rating = conductor?.calificacion ?? 0;
+    final rating = etiquetaCalificacion(conductor?.calificacion);
     final telefono = conductor?.telefono;
     final distance = _distanceToPickup();
     final eta = etaRecogida(
@@ -1161,13 +1279,13 @@ class _RastreoScreenState extends State<RastreoScreen> {
                   ],
                 ),
               ),
-              if (rating > 0)
+              if (conductor != null)
                 Row(
                   children: [
                     const Icon(Icons.star, color: Color(0xFFF59E0B), size: 20),
                     const SizedBox(width: 4),
                     Text(
-                      rating.toStringAsFixed(1),
+                      rating,
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
                     ),
                   ],
@@ -1514,22 +1632,9 @@ String? etaRecogida({required String status, double? distanciaKm, num? tiempoEst
   return minutos == null ? null : '$minutos min';
 }
 
-/// Pantalla de oferta aceptada que reemplaza al rastreo. "Ver seguimiento"
-/// usa el contexto de SU ruta (el del rastreo ya no existe tras el
-/// reemplazo) y la sustituye por [seguimiento].
-Widget ofertaAceptadaCliente(Map<String, dynamic> conductor, {required WidgetBuilder seguimiento}) {
-  return Builder(
-    builder: (ctx) => OfertaAceptadaScreen(
-      conductorNombre: conductor['nombre']?.toString() ?? 'Conductor',
-      camion: conductor['tipoVehiculo']?.toString() ?? '',
-      placa: conductor['placa']?.toString() ?? '',
-      rating: (conductor['rating'] as num?)?.toDouble() ?? 0,
-      onVerSeguimiento: () => Navigator.of(ctx).pushReplacement(
-        MaterialPageRoute(builder: seguimiento),
-      ),
-    ),
-  );
-}
+/// Tiempo que la celebración "¡Oferta aceptada!" queda sobre el rastreo
+/// antes de cerrarse sola.
+const Duration duracionCelebracionOferta = Duration(seconds: 4);
 
 /// Suma a [actuales] las ofertas de [nuevas] que aún no están (por `_id`/`id`).
 /// Las ofertas llegan por socket (`new:offer`) y por GET al abrir la pantalla.

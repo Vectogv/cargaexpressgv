@@ -4,7 +4,13 @@ import 'package:flutter/material.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/offer_service.dart';
 import '../../services/socket_service_client.dart';
-import 'oferta_aceptada_screen.dart';
+
+/// Resultado con el que [OfertasRecibidasScreen] se cierra al aceptar una
+/// oferta: el conductor elegido (para la celebración en el rastreo).
+class OfertaAceptadaResultado {
+  final Map<String, dynamic> conductor;
+  const OfertaAceptadaResultado(this.conductor);
+}
 
 class OfertasRecibidasScreen extends StatefulWidget {
   final List<Map<String, dynamic>> ofertas;
@@ -195,32 +201,15 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
         (o) => _offerId(o!) == offerId,
         orElse: () => null,
       );
-      final conductor = offer?['conductor'] as Map<String, dynamic>?;
+      final conductor = offer?['conductor'] is Map
+          ? Map<String, dynamic>.from(offer!['conductor'] as Map)
+          : <String, dynamic>{};
 
-      // RastreoScreen (pantalla inferior) ya escucha `offer:accepted` y
-      // reemplaza la ruta con OfertaAceptadaScreen. Para evitar DOBLE push
-      // (éste + el del socket), volvemos a RastreoScreen y dejamos que el
-      // socket tome el control. Si el socket no está conectado, navegamos
-      // manualmente como respaldo.
-      if (SocketServiceClient.instance.isConnected) {
-        Navigator.of(context).pop();
-      } else {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OfertaAceptadaScreen(
-              conductorNombre: conductor?['nombre'] as String? ?? 'Conductor',
-              camion: conductor?['tipoVehiculo'] as String? ?? '',
-              placa: conductor?['placa']?.toString() ?? '',
-              rating: (conductor?['rating'] as num?)?.toDouble() ?? 0,
-              onVerSeguimiento: () => Navigator.pop(context),
-            ),
-          ),
-        );
-      }
-      if (mounted) {
-        setState(() => _acceptingId = null);
-      }
+      // Siempre se vuelve al ÚNICO RastreoScreen (pantalla inferior) con la
+      // oferta aceptada: él muestra la celebración encima de sí mismo y sigue
+      // escuchando el viaje (confirmación de entrega incluida). Si
+      // `offer:accepted` llega por socket, RastreoScreen no la repite.
+      Navigator.of(context).pop(OfertaAceptadaResultado(conductor));
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _acceptingId = null);
