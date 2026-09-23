@@ -38,6 +38,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
     }
   }
 
+  bool _saliendo = false;
+
+  /// Igual que el inicio: esperar a que se revoque la sesión y se limpien los
+  /// tokens antes de ir al login (logout() no lanza y tiene timeout de 5 s).
+  Future<void> _logout() async {
+    if (_saliendo) return;
+    setState(() => _saliendo = true);
+    await ApiClient.instance.logout();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
+  }
+
   Future<void> _pickAvatar() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -222,10 +234,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       child: Column(
         children: [
           _buildMenuItem(Icons.person_outline, 'Informaci\u00f3n personal', _editInfo),
-          _buildMenuItem(Icons.logout, 'Cerrar sesi\u00f3n', () {
-            ApiClient.instance.logout();
-            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
-          }),
+          _buildMenuItem(Icons.logout, 'Cerrar sesi\u00f3n', _saliendo ? null : _logout),
         ],
       ),
     );
