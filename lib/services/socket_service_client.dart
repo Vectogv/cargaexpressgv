@@ -33,6 +33,7 @@ class SocketServiceClient {
   final _offerAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _offerCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _offerExpiredCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripOfferAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverStopGpsCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _driverVerificationCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -83,6 +84,10 @@ class SocketServiceClient {
   /// `offer:cancelled {viajeId, ofertaId}`: el conductor reemplazó su oferta
   /// (re-ofertó); el cliente debe quitar la oferta anterior de la lista.
   Stream<Map<String, dynamic>> get onOfferCancelled => _offerCancelledCtrl.stream;
+
+  /// `offer:expired {viajeId, ofertaId}` (sólo conductor): su oferta pendiente
+  /// venció sin respuesta del cliente (el backend las expira cada 30 s).
+  Stream<Map<String, dynamic>> get onOfferExpired => _offerExpiredCtrl.stream;
   Stream<Map<String, dynamic>> get onTripOfferAccepted => _tripOfferAcceptedCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverStopGps => _driverStopGpsCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverVerification => _driverVerificationCtrl.stream;
@@ -337,6 +342,10 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_offerCancelledCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn('offer:expired', (data) {
+        if (data is Map) safeAdd(_offerExpiredCtrl, Map<String, dynamic>.from(data));
+      });
+
       safeOn('trip:offer_accepted', (data) {
         if (data is Map) safeAdd(_tripOfferAcceptedCtrl, Map<String, dynamic>.from(data));
       });
@@ -546,6 +555,8 @@ class SocketServiceClient {
       'driver:location': _driverLocationCtrl,
       'new:offer': _newOfferCtrl,
       'offer:accepted': _offerAcceptedCtrl,
+      'offer:rejected': _offerRejectedCtrl,
+      'offer:expired': _offerExpiredCtrl,
       'trip:cancelled': _tripCancelledCtrl,
       'trip:finalize_request': _finalizeRequestCtrl,
       'dispute:updated': _disputeUpdatedCtrl,
@@ -627,6 +638,7 @@ class SocketServiceClient {
     _offerAcceptedCtrl.close();
     _offerRejectedCtrl.close();
     _offerCancelledCtrl.close();
+    _offerExpiredCtrl.close();
     _tripOfferAcceptedCtrl.close();
     _driverStopGpsCtrl.close();
     _driverVerificationCtrl.close();

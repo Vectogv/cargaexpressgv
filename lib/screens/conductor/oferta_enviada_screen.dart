@@ -23,6 +23,7 @@ class OfertaEnviadaScreen extends StatefulWidget {
 class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
   StreamSubscription<Map<String, dynamic>>? _acceptedSub;
   StreamSubscription<Map<String, dynamic>>? _rejectedSub;
+  StreamSubscription<Map<String, dynamic>>? _expiredSub;
   bool _isNavigating = false;
   bool _hasError = false;
   Timer? _pollTimer;
@@ -52,18 +53,18 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
     });
 
     _rejectedSub = SocketServiceClient.instance.onOfferRejected.listen((data) {
-      if (_isNavigating) return;
       final id = data['viajeId']?.toString() ?? data['tripId']?.toString() ?? data['id']?.toString();
       LoggerService.instance.info('offer:rejected received: tripId=$id, expected=$tripIdStr');
       if (id != tripIdStr) return;
-      _isNavigating = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Navigator.of(context).maybePop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El cliente rechazó tu oferta')),
-        );
-      });
+      _salir('El cliente rechazó tu oferta');
+    });
+
+    // El backend expira las ofertas pendientes sin respuesta (~28 s) y avisa
+    // al conductor: se vuelve a la lista para que pueda ofertar de nuevo.
+    _expiredSub = SocketServiceClient.instance.onOfferExpired.listen((data) {
+      final id = data['viajeId']?.toString() ?? data['tripId']?.toString();
+      if (id != tripIdStr) return;
+      _salir('Tu oferta expiró sin respuesta del cliente. Puedes enviar una nueva.');
     });
 
     // Polling de respaldo cada 30 segundos (por si el socket falla)
@@ -89,15 +90,31 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
       } catch (_) {}
     });
 
-    // Timeout de 10 minutos sin respuesta
-    _timeoutTimer = Timer(const Duration(minutes: 10), () {
+    // Respaldo si no llega offer:expired (socket caído): la oferta vence a los
+    // 28 s y el backend la expira en su siguiente pasada (cada 30 s).
+    _timeoutTimer = Timer(const Duration(seconds: 90), () async {
       if (_isNavigating || !mounted) return;
-      _isNavigating = true;
-      Navigator.maybePop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La oferta expiró sin respuesta del cliente')),
-      );
+      try {
+        final detail = await ApiClient.instance.getTripDetail(tripIdStr);
+        final estado = detail['estado'] as String?;
+        if (estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada || estado == TripStatus.enCurso) {
+          await _redirectToAccepted({...detail, 'viajeId': tripIdStr});
+          return;
+        }
+      } catch (_) {}
+      _salir('Tu oferta expiró sin respuesta del cliente. Puedes enviar una nueva.');
     });
+  }
+
+  /// Sale de la pantalla (una sola vez) mostrando [mensaje]. Se llama desde
+  /// eventos de socket/timers (fuera de build): sin addPostFrameCallback, que
+  /// en una pantalla quieta no corre hasta que algo pida un frame.
+  void _salir(String mensaje) {
+    if (_isNavigating || !mounted) return;
+    _isNavigating = true;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).maybePop();
+    messenger.showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   Future<void> _redirectToAccepted(Map<String, dynamic> tripData) async {
@@ -159,6 +176,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
   void dispose() {
     _acceptedSub?.cancel();
     _rejectedSub?.cancel();
+    _expiredSub?.cancel();
     _pollTimer?.cancel();
     _timeoutTimer?.cancel();
     super.dispose();
