@@ -172,10 +172,11 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       case TripStatus.llegada: c = _accentGreen; label = 'Llegada al origen'; break;
       case TripStatus.enCurso: c = _primaryBlue; label = 'En curso — Realizando entrega'; break;
       case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
-      case TripStatus.esperaConfirmacion: c = _accentGreen; label = 'Esperando confirmación'; break;
+      case TripStatus.esperaConfirmacion:
+      case TripStatus.pendienteConfirmacion: c = _accentGreen; label = 'Esperando confirmación del cliente'; break;
       case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
       case TripStatus.reservado: c = Colors.grey; label = 'Reservado'; break;
-      default: c = Colors.grey; label = estado; break;
+      default: c = Colors.grey; label = TripStatus.label(estado); break;
     }
     return Container(
       width: double.infinity, padding: const EdgeInsets.all(12),
@@ -183,7 +184,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       child: Row(children: [
         Icon(Icons.info_outline, size: 18, color: c),
         const SizedBox(width: 8),
-        Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: c, fontSize: 13)),
+        Expanded(child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: c, fontSize: 13))),
       ]),
     );
   }
@@ -239,11 +240,12 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       case TripStatus.llegada: c = _accentGreen; label = 'Llegada'; break;
       case TripStatus.enCurso: c = _primaryBlue; label = 'En curso'; break;
       case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
-      case TripStatus.esperaConfirmacion: c = _primaryBlue; label = 'Esperando confirmación'; break;
+      case TripStatus.esperaConfirmacion:
+      case TripStatus.pendienteConfirmacion: c = _primaryBlue; label = 'Esperando confirmación'; break;
       case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
       case TripStatus.reservado: c = _textGrey; label = 'Reservado'; break;
       case TripStatus.cancelado: c = Colors.red; label = 'Cancelado'; break;
-      default: c = _textGrey; label = estado; break;
+      default: c = _textGrey; label = TripStatus.label(estado); break;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

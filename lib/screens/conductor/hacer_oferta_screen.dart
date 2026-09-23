@@ -95,7 +95,10 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
       if (e.statusCode == 429) {
         _snack('L\u00edmite de ofertas alcanzado. Espera un momento e intenta de nuevo.');
       } else {
-        _snack('Error: ${e.message}');
+        // FUERA_DE_ZONA (422), CONDUCTOR_OCUPADO (409), cuenta suspendida o
+        // no verificada (403), viaje sin ofertas (400)...: el backend ya
+        // explica el motivo en espa\u00f1ol.
+        _snack(e.message);
       }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
