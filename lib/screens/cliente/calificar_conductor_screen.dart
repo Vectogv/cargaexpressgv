@@ -143,6 +143,8 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
                 controller: _commentController,
                 maxLines: 4,
                 minLines: 3,
+                // calificaciones.comentario es varchar(255) (sin validador).
+                maxLength: 250,
                 style: const TextStyle(fontSize: 14, color: Colors.black),
                 decoration: InputDecoration(
                   hintText: 'Escribe un comentario (opcional)',

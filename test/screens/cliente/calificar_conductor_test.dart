@@ -13,6 +13,16 @@ void main() {
         onSubmitted: onSubmitted,
       );
 
+  testWidgets('el comentario se limita a 250 caracteres con contador', (tester) async {
+    pantallaAlta(tester);
+    await tester.pumpWidget(MaterialApp(home: pantalla(() {})));
+    final campo = find.byType(TextField);
+    await tester.enterText(campo, 'x' * 300);
+    await tester.pump();
+    expect(tester.widget<TextField>(campo).controller!.text.length, 250);
+    expect(find.text('250/250'), findsOneWidget);
+  });
+
   testWidgets('sin estrellas no se envía la calificación', (tester) async {
     pantallaAlta(tester);
     final log = <http.Request>[];
