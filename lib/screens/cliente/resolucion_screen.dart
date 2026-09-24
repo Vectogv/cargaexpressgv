@@ -100,6 +100,14 @@ class ResolucionScreen extends StatelessWidget {
                   color: Color(0xFF22C55E),
                 ),
               ),
+              if (consecuenciaParaCliente(disputa['resultado']).isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  consecuenciaParaCliente(disputa['resultado']),
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563), height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+              ],
               const SizedBox(height: 20),
               const Divider(color: Color(0xFFE5E7EB), thickness: 1, height: 1),
               if (reembolso != null) ...[
@@ -139,7 +147,7 @@ class ResolucionScreen extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => DetalleResolucionScreen(
                           disputeNumber: _texto(disputa['numero']) ?? _texto(disputa['id']) ?? '—',
-                          problema: _texto(disputa['problema']) ?? '—',
+                          problema: etiquetaProblemaDisputa(disputa['problema']),
                           resultado: resultado,
                           reembolso: reembolso,
                           comentarioAdmin: _texto(disputa['comentarioAdmin']),

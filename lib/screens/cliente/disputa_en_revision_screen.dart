@@ -144,7 +144,7 @@ class _DisputaEnRevisionScreenState extends State<DisputaEnRevisionScreen> {
                       children: [
                         const SizedBox(height: 24),
                         Text(
-                          'Disputa en revisi\u00f3n',
+                          esResuelta ? 'Disputa resuelta' : 'Disputa en revisi\u00f3n',
                           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.black),
                           textAlign: TextAlign.center,
                         ),
@@ -161,15 +161,19 @@ class _DisputaEnRevisionScreenState extends State<DisputaEnRevisionScreen> {
                           ),
                         ),
                         const SizedBox(height: 32),
-                        const Text(
-                          'Nuestro equipo est\u00e1 revisando\nla disputa.',
-                          style: TextStyle(fontSize: 16, color: Color(0xFF4B5563), height: 1.6),
+                        Text(
+                          esResuelta
+                              ? 'Revisamos la disputa y ya\nhay una decisi\u00f3n.'
+                              : 'Nuestro equipo est\u00e1 revisando\nla disputa.',
+                          style: const TextStyle(fontSize: 16, color: Color(0xFF4B5563), height: 1.6),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
-                        const Text(
-                          'Te notificaremos cuando\nhaya una resoluci\u00f3n.',
-                          style: TextStyle(fontSize: 16, color: Color(0xFF4B5563), height: 1.6),
+                        Text(
+                          esResuelta
+                              ? 'Toca "Ver resoluci\u00f3n" para ver el resultado.'
+                              : 'Te notificaremos cuando\nhaya una resoluci\u00f3n.',
+                          style: const TextStyle(fontSize: 16, color: Color(0xFF4B5563), height: 1.6),
                           textAlign: TextAlign.center,
                         ),
                         const Spacer(flex: 3),
