@@ -97,7 +97,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
   Timer? _proximityTimer;
   Timer? _cercanosTimer;
   List<Map<String, dynamic>> _cercanos = [];
-  bool _proximityAlertShown = false;
+  // El conductor ya está dentro del radio de aviso: cancelar desde ahora
+  // pide confirmación (no se interrumpe al cliente sin que lo pida).
+  bool _conductorCerca = false;
+  // Ruta de "Conductor en la zona", para cerrarla cuando el viaje arranca.
+  Route<void>? _zonaRoute;
   bool _conductorEnLaZonaShown = false;
   double _driverLat = 0;
   double _driverLng = 0;
@@ -321,6 +325,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     if (rastreoVistaPara(estado) != RastreoVista.busqueda && estado != TripStatus.aceptado) {
       _cerrarCelebracion();
     }
+    if (estado == TripStatus.enCurso || estado == TripStatus.sos) _cerrarConductorEnLaZona();
   }
 
   void _safePopUntilFirst() {
@@ -646,31 +651,19 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final cancelarPenaliza = _status == TripStatus.aceptado || _status == TripStatus.enCamino;
     // Radio del backend (GET /api/config/cliente); 1 km si no está.
     final proximidadKm = ConfigClienteService.instance.actual.radioAvisoConductorCercaKm;
-    if (dist < proximidadKm && !_proximityAlertShown && cancelarPenaliza) {
-      _proximityAlertShown = true;
-      _showProximityAlert();
-    }
+    if (dist < proximidadKm && cancelarPenaliza) _conductorCerca = true;
     if (dist < _zonaKm && !_conductorEnLaZonaShown) {
       _conductorEnLaZonaShown = true;
       _showConductorEnLaZona();
     }
   }
 
-  void _showProximityAlert() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      // "Cancelar de todas formas" abre la cancelación real (antes sólo
-      // cerraba pantallas). El backend decide si aún se puede cancelar
-      // (CONDUCTOR_CERCA) y el error se muestra al usuario.
-      DriverNearbyWarningSheet.show(context, onProceed: _cancelar);
-    });
-  }
-
   void _showConductorEnLaZona() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || _isNavigating) return;
       final conductor = _trip?.conductor;
-      _safePush(ConductorEnLaZonaScreen(
+      _isNavigating = true;
+      final route = MaterialPageRoute<void>(builder: (_) => ConductorEnLaZonaScreen(
         conductor: conductor?.toJson() ?? {},
         origen: MapaViaje.punto(_trip?.origen?.lat, _trip?.origen?.lng),
         ubicacionConductor: MapaViaje.punto(_driverLat, _driverLng),
@@ -687,7 +680,22 @@ class _RastreoScreenState extends State<RastreoScreen> {
           }
         },
       ));
+      _zonaRoute = route;
+      Navigator.of(context).push(route).whenComplete(() {
+        _isNavigating = false;
+        if (_zonaRoute == route) _zonaRoute = null;
+      });
     });
+  }
+
+  /// "Conductor en la zona" sólo tiene sentido antes de recoger la carga: al
+  /// iniciar el viaje se cierra para que el cliente vea el seguimiento.
+  void _cerrarConductorEnLaZona() {
+    final route = _zonaRoute;
+    if (route == null || !route.isActive || !mounted) return;
+    _zonaRoute = null;
+    Navigator.of(context).removeRoute(route);
+    _isNavigating = false;
   }
 
   Future<void> _doCancel({String? motivo}) async {
@@ -737,6 +745,17 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 
   void _cancelar() {
+    // Con el conductor cerca, cancelar puede penalizar: se avisa antes (el
+    // backend decide al final si aún se puede, CONDUCTOR_CERCA).
+    final penaliza = _status == TripStatus.aceptado || _status == TripStatus.enCamino;
+    if (_conductorCerca && penaliza) {
+      DriverNearbyWarningSheet.show(context, onProceed: _abrirCancelacion);
+      return;
+    }
+    _abrirCancelacion();
+  }
+
+  void _abrirCancelacion() {
     Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (_) => CancelTripScreen(enCurso: cancelacionRequiereSolicitud(_status))),

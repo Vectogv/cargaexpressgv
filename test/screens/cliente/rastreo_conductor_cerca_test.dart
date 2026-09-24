@@ -25,12 +25,22 @@ Future<void> _conductorA300m(WidgetTester tester, String estado) async {
   await avanzar(tester);
 }
 
+/// El aviso ya no interrumpe solo: sale cuando el cliente toca cancelar.
+Future<void> _tocarCancelar(WidgetTester tester) async {
+  await tester.ensureVisible(find.byKey(const Key('btn_cancelar_viaje')));
+  await avanzar(tester);
+  await tester.tap(find.byKey(const Key('btn_cancelar_viaje')));
+  await avanzar(tester);
+}
+
 void main() {
   setUp(() => ConfigClienteService.instance.reiniciarParaTest());
 
   testWidgets('"Cancelar viaje de todas formas" abre la cancelación real', (tester) async {
     await conApiFalsa((req) => jsonResp(_viaje('aceptado')), () async {
       await _conductorA300m(tester, 'aceptado');
+      expect(find.text('El conductor ya se encuentra cerca'), findsNothing);
+      await _tocarCancelar(tester);
       expect(find.text('El conductor ya se encuentra cerca'), findsOneWidget);
 
       await tester.tap(find.text('Cancelar viaje de todas formas'));
@@ -45,6 +55,7 @@ void main() {
       (tester) async {
     await conApiFalsa((req) => jsonResp(_viaje('conductor_en_camino')), () async {
       await _conductorA300m(tester, 'conductor_en_camino');
+      await _tocarCancelar(tester);
       expect(find.text('El conductor ya se encuentra cerca'), findsOneWidget);
     });
   });
@@ -58,7 +69,9 @@ void main() {
     }, () async {
       await _conductorA300m(tester, 'aceptado');
       expect(ConfigClienteService.instance.actual.radioCierreKm, 0.2);
+      await _tocarCancelar(tester);
       expect(find.text('El conductor ya se encuentra cerca'), findsNothing);
+      expect(find.byType(CancelTripScreen), findsOneWidget);
     });
   });
 
@@ -68,6 +81,7 @@ void main() {
       return jsonResp(_viaje('aceptado'));
     }, () async {
       await _conductorA300m(tester, 'aceptado');
+      await _tocarCancelar(tester);
       expect(find.text('El conductor ya se encuentra cerca'), findsOneWidget);
     });
   });
