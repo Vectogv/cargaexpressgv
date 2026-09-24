@@ -48,7 +48,7 @@ class _ForumScreenState extends State<ForumScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: _primaryDark),
+            style: ElevatedButton.styleFrom(foregroundColor: Colors.white, backgroundColor: _primaryDark),
             child: const Text('Publicar', style: TextStyle(color: Colors.white)),
           ),
         ],

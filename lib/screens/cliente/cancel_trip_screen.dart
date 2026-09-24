@@ -172,7 +172,7 @@ class _CancelTripScreenState extends State<CancelTripScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: _selected == null ? null : _confirm,
-                      style: ElevatedButton.styleFrom(
+                      style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
                         backgroundColor: const Color(0xFFE53935),
                         disabledBackgroundColor: const Color(0xFFE53935).withValues(alpha: 0.45),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

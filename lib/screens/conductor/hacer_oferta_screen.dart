@@ -427,7 +427,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           Expanded(
             child: ElevatedButton(
               onPressed: _sending ? null : _enviarOferta,
-              style: ElevatedButton.styleFrom(
+              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
                 backgroundColor: _accentBlue,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(

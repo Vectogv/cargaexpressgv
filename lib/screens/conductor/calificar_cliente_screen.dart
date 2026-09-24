@@ -226,7 +226,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
           onPressed: widget.onEnviar == null
               ? null
               : () => widget.onEnviar!(_estrellas, _comentarioCtrl.text.trim()),
-          style: ElevatedButton.styleFrom(
+          style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
             backgroundColor: _accentBlue,
             disabledBackgroundColor: _divider,
             padding: const EdgeInsets.symmetric(vertical: 16),

@@ -119,7 +119,7 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
               final escrito = _motivoCtrl.text.trim();
               Navigator.pop(ctx, escrito.isEmpty ? motivoRechazoPorDefecto : escrito);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
             child: const Text('Confirmar rechazo'),
           ),
         ],

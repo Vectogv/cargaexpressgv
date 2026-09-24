@@ -202,7 +202,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: (_busy || onIniciarViaje == null) ? null : onIniciarViaje,
-              style: ElevatedButton.styleFrom(
+              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
                 backgroundColor: _accentBlue,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

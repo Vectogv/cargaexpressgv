@@ -232,7 +232,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: onVerResumen,
-              style: ElevatedButton.styleFrom(
+              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
                 backgroundColor: _green,
                 disabledBackgroundColor: _divider,
                 disabledForegroundColor: Colors.white,

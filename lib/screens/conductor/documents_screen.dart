@@ -136,7 +136,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A3C6E)),
+              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, backgroundColor: const Color(0xFF1A3C6E)),
               child: const Text('Sí, subir', style: TextStyle(color: Colors.white)),
             ),
           ],
