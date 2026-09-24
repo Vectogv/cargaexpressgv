@@ -54,6 +54,9 @@ class DriverLocationService {
     _startTripPolling();
 
     if (!kIsWeb) {
+      // Android 13+: sin este permiso no se ve el aviso "Enviando ubicación".
+      // Si lo niega, igual se conecta.
+      await _requestNotificationPermission();
       try {
         await BackgroundLocationService.instance.initialize();
         await BackgroundLocationService.instance.start();
@@ -170,6 +173,9 @@ class DriverLocationService {
     }
   }
 
+  /// Desconectado o cierre de sesión: detiene también el servicio de ubicación
+  /// en segundo plano (a diferencia de [pause], que lo deja activo durante un
+  /// viaje).
   void stop() {
     _running = false;
     _online = false;
@@ -182,6 +188,7 @@ class DriverLocationService {
     _locationRetryAttempt = 0;
     _locationErrorCount = 0;
     _nearbyTrips = [];
+    if (!kIsWeb) unawaited(BackgroundLocationService.instance.stop());
   }
 
   void pause() {
@@ -226,6 +233,15 @@ class DriverLocationService {
     } catch (e) {
       LoggerService.instance.error('DriverLocationService permission error', e);
       return false;
+    }
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      if (await Permission.notification.isGranted) return;
+      await Permission.notification.request();
+    } catch (e) {
+      LoggerService.instance.error('DriverLocationService notification permission error', e);
     }
   }
 

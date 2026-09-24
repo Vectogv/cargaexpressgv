@@ -199,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_estadoPago.bloqueaConexion) {
         // Suspendido por pago o comprobante en revisión: el backend no lo deja
         // conectarse (el aviso del inicio explica qué hacer).
-        DriverLocationService.instance.pause();
+        DriverLocationService.instance.stop();
         setState(() => _online = false);
         return;
       }
@@ -209,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (e) {
         // El backend rechaza (403) si el conductor no está verificado o está
         // suspendido: no fingir que está en línea.
-        DriverLocationService.instance.pause();
+        DriverLocationService.instance.stop();
         if (mounted) setState(() => _online = false);
         if (e is ApiException && e.code == codigoSuspensionPago) {
           _aplicarBloqueoPago(e.data);
@@ -312,7 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Cuenta suspendida por pago (403 CUENTA_SUSPENDIDA_POR_PAGO o socket
   /// `account:payment_suspended`): queda desconectado sin cerrar sesión.
   void _aplicarBloqueoPago(Map<String, dynamic>? data) {
-    DriverLocationService.instance.pause();
+    DriverLocationService.instance.stop();
     if (!mounted) return;
     setState(() {
       _online = false;
@@ -397,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await ApiClient.instance.setDriverStatus(true);
         } catch (_) {
           // Revertir: el backend no nos marcó en línea (p.ej. 403 no verificado).
-          DriverLocationService.instance.pause();
+          DriverLocationService.instance.stop();
           if (mounted) setState(() => _online = false);
           rethrow;
         }
@@ -405,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         // Primero el backend; si falla seguimos en línea (estado coherente).
         await ApiClient.instance.setDriverStatus(false);
-        DriverLocationService.instance.pause();
+        DriverLocationService.instance.stop();
         if (mounted) setState(() => _online = false);
       }
     } catch (e) {
