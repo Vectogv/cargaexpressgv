@@ -98,6 +98,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   String? _estadoDibujado;
   // La cámara sigue al conductor hasta que él mueve el mapa.
   bool _seguir = false;
+  // Mientras el conductor no mueva el mapa, la cámara se reencuadra sola con
+  // el conductor y su objetivo (el cliente antes de recoger, el destino
+  // después) para que siempre vea hacia dónde va.
+  bool _autoEncuadre = true;
+  DateTime _ultimoAutoEncuadre = DateTime.fromMillisecondsSinceEpoch(0);
   // Alto del área del mapa y del panel (para encuadrar en la parte visible).
   double _mapAlto = 600;
   final GlobalKey _panelKey = GlobalKey();
@@ -1386,6 +1391,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (_currentLat != null && _currentLng != null) points.add(LatLng(_currentLat!, _currentLng!));
     if (objetivo != null && !(objetivo.lat == 0 && objetivo.lng == 0)) points.add(LatLng(objetivo.lat, objetivo.lng));
     if (points.length < 2) {
+      // Sin GPS todavía: se enfoca el objetivo (el cliente antes de recoger)
+      // en vez de toda la ruta origen→destino.
+      if (objetivo != null && !(objetivo.lat == 0 && objetivo.lng == 0)) {
+        try {
+          _mapController.move(LatLng(objetivo.lat, objetivo.lng), 16, offset: Offset(0, -_panelAlto / 2));
+        } catch (_) {}
+        return;
+      }
       final origen = t.origen;
       final destino = t.destino;
       points.clear();
@@ -1427,7 +1440,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   /// Reconstrucción por GPS (como mucho 1/s): panel, seguimiento y ruta.
   void _onGpsRebuild() {
     setState(() {});
-    if (_seguir) _centrarEnConductor();
+    if (_seguir) {
+      _centrarEnConductor();
+    } else if (_autoEncuadre &&
+        DateTime.now().difference(_ultimoAutoEncuadre) > const Duration(seconds: 6)) {
+      _ultimoAutoEncuadre = DateTime.now();
+      _fitMapBounds();
+    }
     _actualizarRuta();
   }
 
@@ -1460,6 +1479,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       // Cambió el estado (acción propia, socket o sondeo): nuevo objetivo en
       // el mapa y nueva ruta.
       _estadoDibujado = estado;
+      _autoEncuadre = true; // nuevo objetivo (cliente → destino): volver a enfocarlo
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _actualizarRuta(forzar: true);
@@ -1601,7 +1621,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   initialZoom: 14,
                   onMapReady: _fitMapBounds,
                   onPositionChanged: (_, hasGesture) {
-                    if (hasGesture && _seguir) setState(() => _seguir = false);
+                    if (!hasGesture) return;
+                    _autoEncuadre = false; // el conductor movió el mapa: no pelearle
+                    if (_seguir) setState(() => _seguir = false);
                   },
                 ),
                 children: [
@@ -1618,6 +1640,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               child: Column(children: [
                 _mapFab(Icons.zoom_out_map_rounded, 'Ver ruta completa', () {
                   setState(() => _seguir = false);
+                  _autoEncuadre = true;
                   _fitMapBounds();
                 }),
                 const SizedBox(height: 8),
