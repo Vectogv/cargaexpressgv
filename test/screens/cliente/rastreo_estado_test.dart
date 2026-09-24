@@ -75,4 +75,35 @@ void main() {
     expect(soporte, 1);
     expect(inicio, 1);
   });
+
+  testWidgets(
+      'RastreoEstadoInfo con acción primaria muestra "Intentar de nuevo" en vez de soporte',
+      (tester) async {
+    var reintentar = 0;
+    var inicio = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RastreoEstadoInfo(
+          icon: Icons.search_off_rounded,
+          color: Colors.red,
+          titulo: 'No encontramos conductor',
+          mensaje: 'Pasaron 15 minutos sin que un conductor aceptara tu envío, '
+              'así que lo cancelamos. No se te cobró nada. Puedes intentarlo de nuevo.',
+          accionPrimariaTexto: 'Intentar de nuevo',
+          accionPrimariaIcon: Icons.refresh_rounded,
+          onAccionPrimaria: () => reintentar++,
+          onInicio: () => inicio++,
+        ),
+      ),
+    ));
+
+    expect(find.text('No encontramos conductor'), findsOneWidget);
+    expect(find.text('Intentar de nuevo'), findsOneWidget);
+    expect(find.text('Contactar a soporte'), findsNothing);
+
+    await tester.tap(find.text('Intentar de nuevo'));
+    await tester.tap(find.text('Volver al inicio'));
+    expect(reintentar, 1);
+    expect(inicio, 1);
+  });
 }

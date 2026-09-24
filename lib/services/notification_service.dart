@@ -168,7 +168,14 @@ class NotificationService {
       case 'trip:cancelled':
         final msg = mensajeViajeCancelado(data, miRol: currentRol());
         if (msg == null) return; // lo canceló el propio usuario
-        _addLocal('viaje_cancelado', 'Viaje cancelado', msg, id);
+        if (esCanceladoPorSistema(
+          canceladoPor: data['canceladoPor']?.toString(),
+          motivo: data['motivo']?.toString(),
+        )) {
+          _addLocal('busqueda_sin_conductor', avisoSinConductor().titulo, msg, id);
+        } else {
+          _addLocal('viaje_cancelado', 'Viaje cancelado', msg, id);
+        }
         break;
       // El backend emite `offer:accepted` al aceptar una oferta (flujo real);
       // `trip:accepted` sólo sale de una ruta antigua. Un aviso por viaje.

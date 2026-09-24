@@ -62,11 +62,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'pago_recibido': return Icons.payments_outlined;
       case 'mensaje': return Icons.chat_bubble_outline;
       case 'documentacion': return Icons.description_outlined;
-      // Único tipo persistido que el backend envía al cliente
+      // Tipo persistido que el backend envía al cliente
       // (moderator_controller: cierre del viaje pasado a disputa).
       case 'disputa_cierre': return Icons.gavel_rounded;
       // Deuda de comisión vencida (DriverDebtSuspensionService).
       case 'suspension_por_pago': return Icons.money_off_rounded;
+      // Búsqueda de conductor vencida sin ofertas aceptadas
+      // (BusquedaTimeoutService, BUSQUEDA_TIMEOUT_MIN): al cliente.
+      case 'busqueda_sin_conductor': return Icons.search_off_rounded;
       default: return Icons.notifications_outlined;
     }
   }
@@ -82,6 +85,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'documentacion': return const Color(0xFFE65100);
       case 'disputa_cierre': return const Color(0xFFD97706);
       case 'suspension_por_pago': return const Color(0xFFC62828);
+      case 'busqueda_sin_conductor': return const Color(0xFFDC2626);
       default: return const Color(0xFF757575);
     }
   }
@@ -97,6 +101,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'documentacion': return const Color(0xFFFBE9E7);
       case 'disputa_cierre': return const Color(0xFFFEF3C7);
       case 'suspension_por_pago': return const Color(0xFFFFEBEE);
+      case 'busqueda_sin_conductor': return const Color(0xFFFFEBEE);
       default: return const Color(0xFFF5F5F5);
     }
   }

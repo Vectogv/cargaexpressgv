@@ -77,6 +77,23 @@ void main() {
     expect(n['mensaje'], 'El conductor canceló el viaje: Avería');
   });
 
+  test(
+      'viaje cancelado por el sistema (BusquedaTimeoutService) usa el aviso '
+      'y tipo busqueda_sin_conductor, no el genérico "Viaje cancelado"', () {
+    service.ingest({
+      '__event': 'trip:cancelled',
+      'id': 't2',
+      'canceladoPor': 'sistema',
+      'motivo': 'Sin conductores disponibles',
+    });
+    expect(service.unreadCount, 1);
+    final n = service.notifications.single;
+    expect(n['tipo'], 'busqueda_sin_conductor');
+    expect(n['titulo'], 'No encontramos conductor');
+    expect(n['mensaje'], contains('15 minutos'));
+    expect(n['mensaje'], contains('No se te cobró nada'));
+  });
+
   test('notification:new no duplica lo que ya vino del backend y notification:read lo marca', () async {
     backend = [remota('7')];
     await service.refresh();
@@ -175,6 +192,18 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.money_off_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_outlined), findsNothing);
+  });
+
+  testWidgets(
+      'la notificación busqueda_sin_conductor (BusquedaTimeoutService) tiene su propio icono',
+      (tester) async {
+    backend = [
+      {...remota('b1', fecha: DateTime.now().toIso8601String()), 'tipo': 'busqueda_sin_conductor'},
+    ];
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.search_off_rounded), findsOneWidget);
     expect(find.byIcon(Icons.notifications_outlined), findsNothing);
   });
 

@@ -24,6 +24,7 @@ import '../../widgets/mapa_viaje.dart';
 import '../shared/action_key.dart';
 import 'busqueda_conductor_view.dart';
 import 'cancel_trip_screen.dart';
+import 'nuevo_envio_screen.dart';
 import 'ofertas_recibidas_screen.dart';
 import 'oferta_aceptada_screen.dart';
 import 'confirmar_entrega_screen.dart';
@@ -57,6 +58,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
   Timer? _celebracionTimer;
   bool _finalizeShown = false;
   bool _finalizedShown = false;
+  // El viaje quedó cancelado porque BUSQUEDA_TIMEOUT_MIN se venció sin
+  // ofertas aceptadas (BusquedaTimeoutService): la vista de cierre debe
+  // decirlo, no mostrar el aviso genérico de "viaje cancelado".
+  bool _canceladoPorSistema = false;
+  int _minutosBusqueda = busquedaTimeoutMinPorDefecto;
   // Una clave de idempotencia por acción del usuario (se reutiliza si reintenta).
   final ActionKey _confirmCloseKey = ActionKey();
   final ActionKey _rejectCloseKey = ActionKey();
@@ -346,6 +352,16 @@ class _RastreoScreenState extends State<RastreoScreen> {
     });
 
     _tripCancelledSub = SocketServiceClient.instance.onTripCancelled.listen((data) {
+      // Sin conductor tras BUSQUEDA_TIMEOUT_MIN: se queda en esta pantalla
+      // con el aviso honesto y las acciones para reintentar (no se saca al
+      // cliente con un snackbar genérico de "viaje cancelado").
+      if (esCanceladoPorSistema(
+        canceladoPor: data['canceladoPor']?.toString(),
+        motivo: data['motivo']?.toString(),
+      )) {
+        _mostrarCanceladoPorSistema(data);
+        return;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() => _loading = true);
@@ -504,10 +520,33 @@ class _RastreoScreenState extends State<RastreoScreen> {
             }
           });
           if (nuevo != null) _alCambiarEstado(nuevo!);
+        } else if (trip == null && mounted && _trip != null) {
+          // GET /api/trips/active ya no lo devuelve como activo: puede que
+          // BusquedaTimeoutService lo haya cancelado y se perdiera el socket
+          // (pantalla en segundo plano, reconexión...).
+          await _detectarCancelacionAlSondear();
         }
       } catch (_) {}
     });
     _startCercanosPolling();
+  }
+
+  /// Confirma por qué el viaje dejó de estar activo cuando el sondeo lo nota
+  /// antes que el socket: si fue BusquedaTimeoutService, mismo aviso honesto
+  /// que si hubiera llegado por `trip:cancelled`.
+  Future<void> _detectarCancelacionAlSondear() async {
+    final tripId = _trip?.id;
+    if (tripId == null) return;
+    try {
+      final detalle = await TripService.getTripDetail(tripId);
+      if (!mounted || detalle['estado'] != TripStatus.cancelado) return;
+      final motivo = detalle['motivoCancelacion'] as String?;
+      if (esCanceladoPorSistema(motivo: motivo)) {
+        _mostrarCanceladoPorSistema(const {});
+      } else if (mounted) {
+        setState(() => _status = TripStatus.cancelado);
+      }
+    } catch (_) {}
   }
 
   /// Refresca cada 10 s los vehículos disponibles a <= 2 km del origen mientras se busca conductor.
@@ -1025,6 +1064,19 @@ class _RastreoScreenState extends State<RastreoScreen> {
           onInicio: _volverAlInicio,
         );
       case RastreoVista.cerrado:
+        if (_canceladoPorSistema) {
+          final aviso = avisoSinConductor(minutos: _minutosBusqueda);
+          return RastreoEstadoInfo(
+            icon: Icons.search_off_rounded,
+            color: const Color(0xFFDC2626),
+            titulo: aviso.titulo,
+            mensaje: aviso.mensaje,
+            accionPrimariaTexto: 'Intentar de nuevo',
+            accionPrimariaIcon: Icons.refresh_rounded,
+            onAccionPrimaria: _reintentarEnvio,
+            onInicio: _volverAlInicio,
+          );
+        }
         final rechazado = _status == TripStatus.rechazado;
         return RastreoEstadoInfo(
           icon: Icons.cancel_outlined,
@@ -1052,6 +1104,33 @@ class _RastreoScreenState extends State<RastreoScreen> {
   void _volverAlInicio() {
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  /// Muestra el aviso honesto de "sin conductor" (BusquedaTimeoutService)
+  /// en esta misma pantalla, en vez de sacar al cliente con un snackbar
+  /// genérico. Llega por el socket `trip:cancelled` o, si se perdió el
+  /// evento, al detectarlo en un sondeo ([_detectarCancelacionAlSondear]).
+  void _mostrarCanceladoPorSistema(Map<String, dynamic> data) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _cerrarCelebracion();
+      _volverARastreo();
+      setState(() {
+        _status = TripStatus.cancelado;
+        _canceladoPorSistema = true;
+        _minutosBusqueda = minutosBusquedaDesde(data);
+      });
+    });
+  }
+
+  /// "Intentar de nuevo": abre un envío nuevo. `NuevoEnvioScreen` recupera
+  /// origen/destino/carga del borrador que se guarda mientras se escribe
+  /// (no se borró al solicitar este viaje), así que quedan precargados.
+  void _reintentarEnvio() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const NuevoEnvioScreen()),
+    );
   }
 
   Widget _buildDeliveryContent() {
@@ -1701,7 +1780,8 @@ RastreoVista rastreoVistaPara(String status) {
 }
 
 /// Panel informativo de estado (disputa, cancelado, reserva) con acciones
-/// para salir de la pantalla: contactar a soporte y volver al inicio.
+/// para salir de la pantalla: una acción primaria (contactar a soporte, o
+/// [accionPrimariaTexto] si se da otra) y volver al inicio.
 class RastreoEstadoInfo extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -1711,6 +1791,12 @@ class RastreoEstadoInfo extends StatelessWidget {
   final VoidCallback onInicio;
   final String? textoCancelar;
   final VoidCallback? onCancelar;
+  // Reemplaza el botón "Contactar a soporte" por una acción primaria propia
+  // (p. ej. "Intentar de nuevo" cuando el sistema canceló por falta de
+  // conductor). Si se da, [onSoporte] se ignora.
+  final String? accionPrimariaTexto;
+  final IconData? accionPrimariaIcon;
+  final VoidCallback? onAccionPrimaria;
 
   const RastreoEstadoInfo({
     super.key,
@@ -1722,6 +1808,9 @@ class RastreoEstadoInfo extends StatelessWidget {
     this.onSoporte,
     this.textoCancelar,
     this.onCancelar,
+    this.accionPrimariaTexto,
+    this.accionPrimariaIcon,
+    this.onAccionPrimaria,
   });
 
   @override
@@ -1746,7 +1835,24 @@ class RastreoEstadoInfo extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            if (onSoporte != null) ...[
+            if (onAccionPrimaria != null) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  key: const Key('btn_accion_primaria_rastreo_estado'),
+                  onPressed: onAccionPrimaria,
+                  icon: Icon(accionPrimariaIcon ?? Icons.refresh_rounded),
+                  label: Text(accionPrimariaTexto ?? 'Reintentar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ] else if (onSoporte != null) ...[
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(

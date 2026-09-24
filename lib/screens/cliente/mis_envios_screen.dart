@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import 'viaje_detalle_screen.dart';
@@ -32,14 +33,14 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
     }
   }
 
-  String _estadoLabel(String estado) {
+  String _estadoLabel(String estado, {String? motivoCancelacion}) {
     switch (estado) {
       case 'buscando_conductor': return 'Buscando conductor';
       case 'aceptado': return 'Aceptado';
       case 'en_curso': return 'En curso';
       case 'esperando_confirmacion': return 'Esperando confirmación';
       case 'finalizado': return 'Finalizado';
-      case 'cancelado': return 'Cancelado';
+      case 'cancelado': return etiquetaCancelacion(motivoCancelacion);
       default: return TripStatus.label(estado);
     }
   }
@@ -135,7 +136,10 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: _estadoColor(estado).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                  child: Text(_estadoLabel(estado), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _estadoColor(estado))),
+                  child: Text(
+                    _estadoLabel(estado, motivoCancelacion: v['motivoCancelacion'] as String?),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _estadoColor(estado)),
+                  ),
                 ),
                 const Spacer(),
                 Text(_formatDate(v['createdAt'] as String?), style: const TextStyle(fontSize: 11, color: Colors.black45)),

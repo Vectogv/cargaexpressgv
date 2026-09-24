@@ -33,6 +33,63 @@ void main() {
       expect(mensajeViajeCancelado({'id': '1'}, miRol: 'cliente'), 'El viaje fue cancelado');
       expect(mensajeViajeCancelado({'id': '1'}, miRol: null), 'El viaje fue cancelado');
     });
+
+    test('sin conductor tras BUSQUEDA_TIMEOUT_MIN: aviso honesto, no genérico', () {
+      final msg = mensajeViajeCancelado(
+        {'canceladoPor': 'sistema', 'motivo': motivoCancelacionSistema},
+        miRol: 'cliente',
+      );
+      expect(msg, contains('15 minutos'));
+      expect(msg, contains('No se te cobró nada'));
+      expect(msg, isNot(contains('El viaje fue cancelado')));
+    });
+
+    test('payload viejo sin canceladoPor pero con el motivo del sistema también es honesto', () {
+      final msg = mensajeViajeCancelado({'motivo': motivoCancelacionSistema}, miRol: 'cliente');
+      expect(msg, contains('15 minutos'));
+    });
+  });
+
+  group('esCanceladoPorSistema', () {
+    test('canceladoPor "sistema" del payload en vivo', () {
+      expect(esCanceladoPorSistema(canceladoPor: 'sistema'), isTrue);
+    });
+
+    test('motivoCancelacion persistido al recargar (sin canceladoPor)', () {
+      expect(esCanceladoPorSistema(motivo: motivoCancelacionSistema), isTrue);
+    });
+
+    test('cancelación normal del cliente/conductor/admin no es del sistema', () {
+      expect(esCanceladoPorSistema(canceladoPor: 'cliente', motivo: 'Cambié de opinión'), isFalse);
+      expect(esCanceladoPorSistema(canceladoPor: 'admin'), isFalse);
+      expect(esCanceladoPorSistema(motivo: 'Cancelado por el conductor'), isFalse);
+      expect(esCanceladoPorSistema(), isFalse);
+    });
+  });
+
+  group('minutosBusquedaDesde', () {
+    test('usa el valor del payload si viene', () {
+      expect(minutosBusquedaDesde({'busquedaTimeoutMin': 20}), 20);
+      expect(minutosBusquedaDesde({'timeoutMin': '10'}), 10);
+      expect(minutosBusquedaDesde({'minutos': 5}), 5);
+    });
+
+    test('sin valor en el payload, 15 por defecto (BUSQUEDA_TIMEOUT_MIN)', () {
+      expect(minutosBusquedaDesde({}), 15);
+      expect(minutosBusquedaDesde({'id': '1'}), busquedaTimeoutMinPorDefecto);
+    });
+  });
+
+  group('etiquetaCancelacion', () {
+    test('motivo del sistema: etiqueta específica', () {
+      expect(etiquetaCancelacion(motivoCancelacionSistema), 'Cancelado: sin conductor disponible');
+    });
+
+    test('cualquier otro motivo (o ninguno): etiqueta genérica', () {
+      expect(etiquetaCancelacion('Cambié de opinión'), 'Cancelado');
+      expect(etiquetaCancelacion(null), 'Cancelado');
+      expect(etiquetaCancelacion('Cancelado por el conductor'), 'Cancelado');
+    });
   });
 
   group('cancelacionRequiereSolicitud', () {

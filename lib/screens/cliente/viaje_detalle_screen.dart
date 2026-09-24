@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
@@ -68,7 +69,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       case 'en_curso': return 'En curso';
       case 'esperando_confirmacion': return 'Esperando confirmación';
       case 'finalizado': return 'Finalizado';
-      case 'cancelado': return 'Cancelado';
+      case 'cancelado': return etiquetaCancelacion(_trip?['motivoCancelacion'] as String?);
       default: return TripStatus.label(estado);
     }
   }
