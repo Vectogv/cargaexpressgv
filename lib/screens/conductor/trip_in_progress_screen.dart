@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_location_marker_plus/flutter_map_location_marker_plus.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -11,8 +10,8 @@ import '../../contracts/cancelacion.dart';
 import '../../contracts/cierre.dart';
 import '../../contracts/socket_events.dart';
 import '../../contracts/trip_status.dart';
+import '../../models/location_model.dart';
 import '../../models/trip.dart';
-import '../../models/user.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
@@ -28,11 +27,12 @@ import '../../services/api/trip_service.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/route_service.dart';
 import '../../services/config_cliente_service.dart';
+import '../../widgets/capa_vehiculos.dart';
 import '../../widgets/mapa_viaje.dart';
+import '../../widgets/persona_mapa.dart';
+import '../../widgets/vehiculo_mapa.dart';
 import 'esperando_confirmacion_cliente.dart';
 import 'trip_chat_screen.dart';
-import 'viaje_en_camino_screen.dart';
-import 'viaje_llegada_destino_screen.dart';
 import 'entrega_confirmada_screen.dart';
 import 'resumen_viaje_screen.dart';
 import 'calificar_cliente_screen.dart';
@@ -61,6 +61,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   double? _currentLat;
   double? _currentLng;
   double? _currentSpeed;
+  // Rumbo del GPS (grados) sólo cuando el vehículo se mueve; si no, el
+  // dibujo se orienta por el desplazamiento.
+  double? _currentHeading;
   // El cronómetro vive en un ValueNotifier: sólo el texto del tiempo se
   // reconstruye cada segundo (antes setState() reconstruía toda la pantalla,
   // FlutterMap incluido, 1 vez por segundo).
@@ -86,6 +89,25 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     maxZoom: 22,
   );
   List<Polyline> _routePolylines = const [];
+  // Ruta al objetivo del estado (ver _actualizarRuta).
+  String? _rutaClave;
+  LatLng? _rutaDesde;
+  DateTime _ultimaRuta = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _cargandoRuta = false;
+  // Estado con el que se dibujó el mapa por última vez (encuadre/ruta al cambiar).
+  String? _estadoDibujado;
+  // La cámara sigue al conductor hasta que él mueve el mapa.
+  bool _seguir = false;
+  // Alto del área del mapa y del panel (para encuadrar en la parte visible).
+  double _mapAlto = 600;
+  final GlobalKey _panelKey = GlobalKey();
+  bool _rutaPendiente = false;
+
+  double get _panelAlto {
+    final box = _panelKey.currentContext?.findRenderObject();
+    if (box is RenderBox && box.hasSize) return box.size.height;
+    return _mapAlto * 0.5;
+  }
   String? _deliveryPhotoUrl;
   Timer? _elapsedTimer;
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
@@ -108,7 +130,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   static const Color _textGrey = Color(0xFF757575);
   static const Color _bgLight = Color(0xFFF5F7FA);
   static const Color _white = Colors.white;
-  static const Color _activeStep = Color(0xFF1565C0);
 
   @override
   void initState() {
@@ -142,10 +163,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       _fetchActiveTrip();
     }
 
-    _loadRoute();
+    _actualizarRuta(forzar: true);
     // Radio de cierre y plazo de confirmación del cliente (con valores por
-    // defecto si el endpoint no responde).
-    ConfigClienteService.instance.cargar();
+    // defecto si el endpoint no responde). Al llegar se refrescan los avisos
+    // de distancia del panel.
+    ConfigClienteService.instance.cargar().then((_) {
+      if (mounted) setState(() {});
+    });
 
     _lifecycleSub = AppLifecycleService.instance.onBackgroundChanged.listen((isBackground) {
       try {
@@ -200,26 +224,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
-  Future<void> _loadRoute() async {
-    final t = _trip ?? widget.trip;
-    if (t == null) return;
-    final origen = t.origen;
-    final destino = t.destino;
-    if (origen == null || destino == null) return;
-    final points = await RouteService.getRoute(LatLng(origen.lat, origen.lng), LatLng(destino.lat, destino.lng));
-    if (mounted) {
-      setState(() {
-        _routePoints = points;
-        _routePolylines = points.isEmpty
-            ? const []
-            : [
-                Polyline(points: points, color: Colors.black.withValues(alpha: 0.2), strokeWidth: 8),
-                Polyline(points: points, color: const Color(0xFF2563EB), strokeWidth: 5),
-              ];
-      });
-    }
-  }
-
   Future<void> _restoreAfterBackground() async {
     try {
       final data = await ApiClient.instance.getActiveTrip();
@@ -269,36 +273,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _countdownTimer = null;
   }
 
-  void _fitMapBounds() {
-    final origen = _trip?.origen;
-    final destino = _trip?.destino;
-    final points = <LatLng>[];
-    if (_currentLat != null && _currentLng != null) {
-      points.add(LatLng(_currentLat!, _currentLng!));
-    }
-    if (origen != null) {
-      points.add(LatLng(origen.lat, origen.lng));
-    }
-    if (destino != null) {
-      points.add(LatLng(destino.lat, destino.lng));
-    }
-    if (points.length < 2) {
-      if (points.length == 1) {
-        _mapController.move(points.first, 14);
-      }
-      return;
-    }
-    try {
-      final bounds = LatLngBounds.fromPoints(points);
-      _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: bounds,
-          padding: const EdgeInsets.all(60),
-        ),
-      );
-    } catch (_) {}
-  }
-
   Future<void> _initLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -309,9 +283,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       );
       if (mounted) {
         setState(() {
-        _currentLat = pos.latitude;
-        _currentLng = pos.longitude;
-      });
+          _currentLat = pos.latitude;
+          _currentLng = pos.longitude;
+        });
+        // Primera posición: ruta desde el conductor y encuadre con él.
+        _actualizarRuta(forzar: true);
+        _fitMapBounds();
       }
     } catch (e) {
       LoggerService.instance.error('trip_in_progress._initLocation error', e);
@@ -325,10 +302,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _posErrors = 0;
 
     try {
-      final settings = LocationSettings(
+      // Sin `timeLimit`: geolocator CIERRA el flujo tras ese tiempo sin
+      // posiciones nuevas y, con distanceFilter de 5 m, un vehículo parado
+      // 30 s dejaba la pantalla sin GPS el resto del viaje (distancia
+      // congelada, botones bloqueados y ubicación vieja en el backend).
+      const settings = LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 5,
-        timeLimit: const Duration(seconds: 30),
       );
 
       _positionStreamSub = Geolocator.getPositionStream(
@@ -345,6 +325,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             _currentLat = pos.latitude;
             _currentLng = pos.longitude;
             _currentSpeed = pos.speed;
+            _currentHeading = (pos.speed > 1.5 && pos.heading.isFinite && pos.heading > 0) ? pos.heading : null;
             _scheduleGpsRebuild();
           } catch (e) {
             LoggerService.instance.error('trip_in_progress: GPS data handler error', e);
@@ -359,6 +340,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               if (mounted) _startPositionStream();
             });
           }
+        },
+        onDone: () {
+          // Si el plugin cierra el flujo, se reabre: el GPS no puede
+          // quedarse mudo durante el viaje.
+          if (!mounted) return;
+          _posRetryTimer?.cancel();
+          _posRetryTimer = Timer(const Duration(seconds: 5), () {
+            if (mounted) _startPositionStream();
+          });
         },
         cancelOnError: false,
       );
@@ -376,14 +366,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     const minGap = Duration(seconds: 1);
     if (since >= minGap) {
       _lastGpsRebuild = DateTime.now();
-      setState(() {});
+      _onGpsRebuild();
       return;
     }
     _gpsRebuildTimer ??= Timer(minGap - since, () {
       _gpsRebuildTimer = null;
       if (!mounted) return;
       _lastGpsRebuild = DateTime.now();
-      setState(() {});
+      _onGpsRebuild();
     });
   }
 
@@ -688,23 +678,26 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Finalizar entrega'),
-        content: const Text('\u00bfDesea tomar una foto como evidencia de la entrega?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Sin foto'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Tomar foto'),
-          ),
-        ],
-      ),
-    );
+    // Si ya subi\u00f3 la foto desde el panel no se vuelve a preguntar.
+    final confirm = _deliveryPhotoUrl != null
+        ? false
+        : await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Finalizar entrega'),
+              content: const Text('\u00bfDesea tomar una foto como evidencia de la entrega?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Sin foto'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Tomar foto'),
+                ),
+              ],
+            ),
+          );
 
     if (confirm == true) {
       _deliveryPhotoUrl = await _takeDeliveryPhoto();
@@ -1210,13 +1203,185 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     return _estadosSeguidos.contains(e);
   }
 
-  bool get _isNearDestination {
-    if (_currentLat == null || _currentLng == null) return false;
-    final destino = _trip?.destino;
-    if (destino == null) return false;
-    final dist = _haversine(_currentLat!, _currentLng!, destino.lat, destino.lng) * 1000;
-    return dist <= 150;
+  // ---------------------------------------------------------------------------
+  // Distancias y reglas antifraude (el backend es quien decide; aquí sólo se
+  // explica y se evita un intento que sabemos que va a fallar).
+  // ---------------------------------------------------------------------------
+
+  /// Radio (km) con el que el backend considera al conductor "en" el origen o
+  /// el destino (`radioCierreKm` de GET /api/config/cliente; la recogida usa
+  /// `radioRecogidaKm`, que por defecto vale lo mismo: 1 km).
+  double get _radioKm => ConfigClienteService.instance.actual.radioCierreKm;
+
+  /// Antes de recoger la carga el objetivo es el origen; después, el destino.
+  static bool _antesDeRecoger(String? estado) =>
+      estado == TripStatus.aceptado || estado == TripStatus.enCamino || estado == TripStatus.llegada;
+
+  double? _distanciaA(LocationModel? p) {
+    if (_currentLat == null || _currentLng == null || p == null) return null;
+    if (p.lat == 0 && p.lng == 0) return null;
+    return _haversine(_currentLat!, _currentLng!, p.lat, p.lng);
   }
+
+  double? get _distOrigenKm => _distanciaA(_trip?.origen);
+  double? get _distDestinoKm => _distanciaA(_trip?.destino);
+
+  bool get _isNearDestination {
+    final d = _distDestinoKm;
+    return d != null && d < _radioKm;
+  }
+
+  /// Con GPS y a `radioKm` o más del origen el backend rechaza la llegada y
+  /// el inicio (FUERA_DE_RANGO_ORIGEN) y lo registra como posible fraude: se
+  /// bloquea el botón y se explica. Sin GPS se deja intentar (decide el backend).
+  bool get _lejosDelOrigen {
+    final d = _distOrigenKm;
+    return d != null && d >= _radioKm;
+  }
+
+  static String _fmtDist(double km) => km < 1 ? '${(km * 1000).round()} m' : '${km.toStringAsFixed(1)} km';
+
+  static String _fmtRadio(double km) =>
+      km == km.roundToDouble() ? '${km.toStringAsFixed(0)} km' : '${km.toStringAsFixed(1)} km';
+
+  /// Precio con separador de miles: 17000 -> "$17.000".
+  static String _fmtPrecio(num? v) {
+    if (v == null) return '--';
+    final s = v.round().abs().toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
+      b.write(s[i]);
+    }
+    return '${v < 0 ? '-' : ''}\$$b';
+  }
+
+  /// Tiempo estimado a la velocidad actual (o 30 km/h si va despacio/parado).
+  String _fmtEta(double km) {
+    final spd = (_currentSpeed ?? 0) * 3.6;
+    final v = spd > 5 ? spd : 30.0;
+    final min = (km / v * 60).round();
+    if (min < 1) return 'menos de 1 min';
+    if (min >= 60) return '~${min ~/ 60} h ${min % 60} min';
+    return '~$min min';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mapa: ruta al objetivo, encuadre y seguimiento del conductor.
+  // ---------------------------------------------------------------------------
+
+  /// Ruta por calles desde el conductor hasta el objetivo del estado (origen
+  /// antes de recoger, destino después). Se vuelve a pedir al cambiar de
+  /// estado, o si el conductor se alejó >250 m de donde se calculó y pasaron
+  /// 45 s (para no saturar el servicio de rutas).
+  Future<void> _actualizarRuta({bool forzar = false}) async {
+    final t = _trip;
+    if (t == null) return;
+    final origen = t.origen;
+    final destino = t.destino;
+    if (origen == null || destino == null) return;
+    final antes = _antesDeRecoger(t.estado);
+    final pos = (_currentLat != null && _currentLng != null) ? LatLng(_currentLat!, _currentLng!) : null;
+    // Sin GPS todavía se dibuja el recorrido origen -> destino.
+    final desde = pos ?? LatLng(origen.lat, origen.lng);
+    final objetivo = (antes && pos != null) ? LatLng(origen.lat, origen.lng) : LatLng(destino.lat, destino.lng);
+    final clave = '${antes ? 'origen' : 'destino'}|${pos != null}';
+    final anterior = _rutaDesde;
+    if (!forzar && clave == _rutaClave && anterior != null) {
+      final movido = _haversine(desde.latitude, desde.longitude, anterior.latitude, anterior.longitude);
+      if (movido < 0.25 || DateTime.now().difference(_ultimaRuta) < const Duration(seconds: 45)) return;
+    }
+    if (_cargandoRuta) {
+      // Se repite al terminar la petición en curso (p. ej. llegó el GPS).
+      _rutaPendiente = true;
+      return;
+    }
+    _cargandoRuta = true;
+    _rutaClave = clave;
+    _rutaDesde = desde;
+    _ultimaRuta = DateTime.now();
+    try {
+      final points = await RouteService.getRoute(desde, objetivo);
+      if (!mounted) return;
+      setState(() {
+        _routePoints = points;
+        _routePolylines = points.length < 2
+            ? const []
+            : [
+                Polyline(points: points, color: Colors.black.withValues(alpha: 0.2), strokeWidth: 8),
+                Polyline(points: points, color: const Color(0xFF2563EB), strokeWidth: 5),
+              ];
+      });
+    } catch (e) {
+      LoggerService.instance.error('trip_in_progress: ruta', e);
+    } finally {
+      _cargandoRuta = false;
+    }
+    if (_rutaPendiente && mounted) {
+      _rutaPendiente = false;
+      _actualizarRuta(forzar: true);
+    }
+  }
+
+  /// Encuadra al conductor y su objetivo (o el origen y el destino si aún no
+  /// hay GPS) en la parte del mapa que no tapa el panel.
+  void _fitMapBounds() {
+    final t = _trip;
+    if (t == null) return;
+    final antes = _antesDeRecoger(t.estado);
+    final objetivo = antes ? t.origen : t.destino;
+    final points = <LatLng>[];
+    if (_currentLat != null && _currentLng != null) points.add(LatLng(_currentLat!, _currentLng!));
+    if (objetivo != null && !(objetivo.lat == 0 && objetivo.lng == 0)) points.add(LatLng(objetivo.lat, objetivo.lng));
+    if (points.length < 2) {
+      final origen = t.origen;
+      final destino = t.destino;
+      points.clear();
+      if (origen != null) points.add(LatLng(origen.lat, origen.lng));
+      if (destino != null) points.add(LatLng(destino.lat, destino.lng));
+    }
+    try {
+      if (points.isEmpty) return;
+      if (points.length == 1) {
+        _mapController.move(points.first, 15);
+        return;
+      }
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(points),
+          padding: EdgeInsets.fromLTRB(50, 70, 50, _panelAlto + 40),
+          maxZoom: 17,
+        ),
+      );
+    } catch (_) {
+      // El mapa aún no está listo: onMapReady vuelve a encuadrar.
+    }
+  }
+
+  void _centrarEnConductor() {
+    if (_currentLat == null || _currentLng == null) return;
+    try {
+      final zoom = _mapController.camera.zoom;
+      _mapController.move(
+        LatLng(_currentLat!, _currentLng!),
+        zoom < 15 ? 16 : zoom,
+        // El panel tapa la parte inferior: el conductor se dibuja en el
+        // centro de la parte visible.
+        offset: Offset(0, -_panelAlto / 2),
+      );
+    } catch (_) {}
+  }
+
+  /// Reconstrucción por GPS (como mucho 1/s): panel, seguimiento y ruta.
+  void _onGpsRebuild() {
+    setState(() {});
+    if (_seguir) _centrarEnConductor();
+    _actualizarRuta();
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -1239,12 +1404,22 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     final t = _trip!;
     final estado = t.estado ?? '';
+    if (estado != _estadoDibujado) {
+      // Cambió el estado (acción propia, socket o sondeo): nuevo objetivo en
+      // el mapa y nueva ruta.
+      _estadoDibujado = estado;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _actualizarRuta(forzar: true);
+        _fitMapBounds();
+      });
+    }
 
     return PopScope(
       canPop: !_isTripActive,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && mounted) {
-          _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
+          _snack('Acción no permitida hasta finalizar el viaje.');
         }
       },
       child: Scaffold(
@@ -1260,425 +1435,588 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
-  Widget _buildHeader(BuildContext context, String estado) {
-    String label;
+  static String _etiquetaEstado(String estado) {
     switch (estado) {
-      case TripStatus.aceptado: label = 'Aceptado'; break;
-      case TripStatus.enCamino: label = 'En camino'; break;
-      case TripStatus.llegada: label = 'Llegada al origen'; break;
-      case TripStatus.enCurso: label = 'En curso'; break;
-      case TripStatus.entregado: label = 'Entregado'; break;
-      case TripStatus.esperaConfirmacion: label = 'Esperando confirmación'; break;
-      case TripStatus.pendienteConfirmacion: label = 'Esperando confirmación'; break;
-      case TripStatus.finalizado: label = 'Finalizado'; break;
-      default: label = 'Viaje en curso';
+      case TripStatus.aceptado: return 'Aceptado';
+      case TripStatus.enCamino: return 'En camino';
+      case TripStatus.llegada: return 'En el origen';
+      case TripStatus.enCurso: return 'En curso';
+      case TripStatus.entregado: return 'Entregado';
+      case TripStatus.esperaConfirmacion:
+      case TripStatus.pendienteConfirmacion: return 'Esperando confirmación';
+      case TripStatus.finalizado: return 'Finalizado';
+      default: return TripStatus.label(estado);
     }
+  }
+
+  Widget _buildHeader(BuildContext context, String estado) {
     return Container(
       color: _white,
-      padding: const EdgeInsets.only(top: 44, left: 16, right: 16, bottom: 12),
-      child: Row(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (_isTripActive) {
+                    _snack('Acción no permitida hasta finalizar el viaje.');
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Viaje en curso', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
+              ),
+              const SizedBox(width: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 190),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _accentGreen.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _accentGreen.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    _etiquetaEstado(estado),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _accentGreen, fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Un solo mapa (ruta, origen, destino y conductor) con el panel del estado
+  /// encima, en la parte inferior. El panel nunca ocupa más del 58 % del alto.
+  Widget _buildMapWithContent(Trip t, String estado) {
+    final origen = MapaViaje.punto(t.origen?.lat, t.origen?.lng);
+    final destino = MapaViaje.punto(t.destino?.lat, t.destino?.lng);
+    final centro = (_currentLat != null && _currentLng != null)
+        ? LatLng(_currentLat!, _currentLng!)
+        : (origen ?? destino ?? const LatLng(0, 0));
+
+    // El cliente en el punto de recogida se dibuja como una persona con su
+    // nombre; el destino, como un pin claro.
+    final cajaPersona = PersonaMapa.caja(40, conEtiqueta: true);
+    final markers = <Marker>[
+      if (origen != null)
+        Marker(
+          point: origen,
+          width: cajaPersona.width,
+          height: cajaPersona.height,
+          child: PersonaMapa(etiqueta: PersonaMapa.etiquetaDe(t.cliente?.nombre)),
+        ),
+      if (destino != null)
+        Marker(point: destino, width: 40, height: 40, alignment: Alignment.topCenter, child: const Icon(Icons.location_on, color: Color(0xFFEF4444), size: 40, shadows: [Shadow(color: Colors.black38, blurRadius: 4)])),
+    ];
+    // El propio conductor: su vehículo visto desde arriba (según tipoVehiculo),
+    // orientado al rumbo del GPS o, si no lo hay, al de su movimiento.
+    final vehiculoConductor = (_currentLat != null && _currentLng != null)
+        ? [
+            VehiculoEnMapa(
+              id: 'conductor',
+              punto: LatLng(_currentLat!, _currentLng!),
+              tipo: tipoVehiculoMapaDe(t.conductor?.tipoVehiculo),
+              color: colorVehiculoAsignado,
+              rumbo: _currentHeading,
+              tamano: 48,
+              halo: true,
+            ),
+          ]
+        : const <VehiculoEnMapa>[];
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        _mapAlto = c.maxHeight;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: FlutterMap(
+                mapController: _mapController,
+                options: _mapOptions ??= MapOptions(
+                  initialCenter: centro,
+                  initialZoom: 14,
+                  onMapReady: _fitMapBounds,
+                  onPositionChanged: (_, hasGesture) {
+                    if (hasGesture && _seguir) setState(() => _seguir = false);
+                  },
+                ),
+                children: [
+                  _tileLayer,
+                  if (_routePoints.length > 1) PolylineLayer(polylines: _routePolylines),
+                  MarkerLayer(markers: markers),
+                  CapaVehiculos(vehiculos: vehiculoConductor),
+                ],
+              ),
+            ),
+            Positioned(
+              right: 12,
+              top: 12,
+              child: Column(children: [
+                _mapFab(Icons.zoom_out_map_rounded, 'Ver ruta completa', () {
+                  setState(() => _seguir = false);
+                  _fitMapBounds();
+                }),
+                const SizedBox(height: 8),
+                _mapFab(Icons.my_location_rounded, 'Seguir mi posición', () {
+                  setState(() => _seguir = true);
+                  _centrarEnConductor();
+                }, activo: _seguir),
+              ]),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: c.maxHeight * 0.6),
+                child: _buildPanelEstado(t, estado),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _mapFab(IconData icon, String tooltip, VoidCallback onTap, {bool activo = false}) {
+    return Material(
+      color: activo ? _primaryBlue : _white,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Tooltip(
+          message: tooltip,
+          child: SizedBox(width: 42, height: 42, child: Icon(icon, size: 22, color: activo ? _white : _textDark)),
+        ),
+      ),
+    );
+  }
+
+  // ---- Panel inferior por estado ----
+
+  /// Datos del viaje desplazables arriba; la acción principal siempre visible
+  /// abajo.
+  Widget _buildPanelEstado(Trip t, String estado) {
+    final acciones = _accionesEstado(t, estado);
+    return Container(
+      key: _panelKey,
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 14, offset: const Offset(0, -3))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          GestureDetector(
-            onTap: () {
-              if (_isTripActive) {
-                _snack('Acci\u00f3n no permitida hasta finalizar el viaje.');
-              } else {
-                Navigator.pop(context);
-              }
-            },
-            child: Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
+          const SizedBox(height: 8),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _bannerEstado(t, estado),
+                  const SizedBox(height: 10),
+                  _clienteFila(t, estado),
+                  const SizedBox(height: 10),
+                  _rutaFilas(t, estado),
+                  const SizedBox(height: 10),
+                  _precioFila(t),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(width: 12),
-          const Text('Viaje en curso', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20), border: Border.all(color: _accentGreen.withValues(alpha: 0.4))),
-            child: Text(label, style: TextStyle(color: _accentGreen, fontSize: 11, fontWeight: FontWeight.w700)),
-          ),
+          if (acciones.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: acciones),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildEnCaminoPanel(Trip t) {
-    final cliente = t.cliente;
-    final origen = t.origen;
-    final oLat = origen?.lat ?? 0;
-    final oLng = origen?.lng ?? 0;
-    final distOrigen = (_currentLat != null && _currentLng != null && oLat != 0)
-        ? _haversine(_currentLat!, _currentLng!, oLat, oLng)
-        : 0.0;
-    final etaMin = distOrigen > 0 ? (distOrigen / 30 * 60).round() : 0;
-
-    return ViajeEnCaminoScreen(
-      nombreCliente: cliente?.nombre ?? 'Cliente',
-      ratingCliente: cliente?.calificacion ?? 5.0,
-      tiempoEstimado: etaMin > 0 ? '~$etaMin min' : '--',
-      distancia: distOrigen > 0 ? '${distOrigen.toStringAsFixed(1)} km' : '--',
-      origenPos: MapaViaje.punto(t.origen?.lat, t.origen?.lng),
-      destinoPos: MapaViaje.punto(t.destino?.lat, t.destino?.lng),
-      vehiculoPos: MapaViaje.punto(_currentLat, _currentLng),
-      onChat: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => TripChatScreen(trip: t.toJson()))),
-      onLlamar: () => _showClientPhone(t),
-      onCancelarViaje: () => _cancelTrip(t),
-      actionLabel: t.estado == TripStatus.enCamino ? 'Llegué al origen' : 'Conducir hacia el origen',
-      actionIcon: Icons.location_on_outlined,
-      onAction: t.estado == TripStatus.enCamino ? _confirmPickup : _confirmArrival,
-      bannerMessage: t.estado == TripStatus.enCamino
-          ? 'Has llegado al origen. Confirma para continuar.'
-          : 'Conduce hacia el punto de recogida del cliente.',
-    );
+  ({String titulo, String detalle, IconData icono, Color color}) _infoEstado(String estado) {
+    switch (estado) {
+      case TripStatus.aceptado:
+        return (titulo: 'Conduce al punto de recogida', detalle: 'Avísale al cliente que vas en camino.', icono: Icons.navigation_rounded, color: _primaryBlue);
+      case TripStatus.enCamino:
+        return (titulo: 'En camino al origen', detalle: 'Confirma la llegada cuando estés en el punto de recogida.', icono: Icons.local_shipping_rounded, color: _primaryBlue);
+      case TripStatus.llegada:
+        return (titulo: 'Estás en el origen', detalle: 'Recibe la carga e inicia el viaje.', icono: Icons.inventory_2_rounded, color: _accentGreen);
+      case TripStatus.enCurso:
+        return _isNearDestination
+            ? (titulo: 'Estás en el destino', detalle: 'Entrega la carga y finaliza el viaje.', icono: Icons.flag_rounded, color: _accentGreen)
+            : (titulo: 'Viaje en curso', detalle: 'Conduce hacia el punto de entrega.', icono: Icons.route_rounded, color: _primaryBlue);
+      case TripStatus.entregado:
+        return (titulo: 'Carga entregada', detalle: 'Finaliza el viaje para que el cliente confirme.', icono: Icons.flag_rounded, color: _accentGreen);
+      case TripStatus.esperaConfirmacion:
+      case TripStatus.pendienteConfirmacion:
+        return (titulo: 'Esperando al cliente', detalle: 'El cliente debe confirmar la entrega para cerrar el viaje.', icono: Icons.hourglass_top_rounded, color: const Color(0xFFEF6C00));
+      default:
+        return (titulo: TripStatus.label(estado), detalle: '', icono: Icons.info_outline, color: _textGrey);
+    }
   }
 
-  Widget _buildLlegadaOrigenPanel(Trip t) {
-    final cliente = t.cliente;
-    return ViajeEnCaminoScreen(
-      nombreCliente: cliente?.nombre ?? 'Cliente',
-      ratingCliente: cliente?.calificacion ?? 5.0,
-      tiempoEstimado: '--',
-      distancia: '0.0 km',
-      origenPos: MapaViaje.punto(t.origen?.lat, t.origen?.lng),
-      destinoPos: MapaViaje.punto(t.destino?.lat, t.destino?.lng),
-      vehiculoPos: MapaViaje.punto(_currentLat, _currentLng),
-      onChat: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => TripChatScreen(trip: t.toJson()))),
-      onLlamar: () => _showClientPhone(t),
-      actionLabel: 'Iniciar viaje',
-      actionIcon: Icons.play_arrow_rounded,
-      onAction: _startTrip,
-      bannerMessage: 'Has llegado al origen. Inicia el viaje cuando estés listo.',
-    );
-  }
-
-  Widget _buildLlegadaDestinoPanel(Trip t) {
-    final cliente = t.cliente;
-    return LlegadaDestinoScreen(
-      nombreCliente: cliente?.nombre ?? 'Cliente',
-      ratingCliente: cliente?.calificacion ?? 5.0,
-      isFinalizando: _actionLoading,
-      origenPos: MapaViaje.punto(t.origen?.lat, t.origen?.lng),
-      destinoPos: MapaViaje.punto(t.destino?.lat, t.destino?.lng),
-      vehiculoPos: MapaViaje.punto(_currentLat, _currentLng),
-      onChat: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => TripChatScreen(trip: t.toJson()))),
-      onLlamar: () => _showClientPhone(t),
-      onHeLlegado: _requestFinalization,
-      onSubirFoto: () async {
-        // _takeDeliveryPhoto ya muestra el error del backend si falla.
-        final url = await _takeDeliveryPhoto();
-        if (url != null && mounted) {
-          setState(() => _deliveryPhotoUrl = url);
-          _snack('Foto de evidencia subida correctamente');
-        }
-      },
-    );
-  }
-
-  Widget _buildTripPanel(Trip t, String estado) {
-    final origen = t.origen;
-    final destino = t.destino;
-    final oLat = origen?.lat ?? 0;
-    final oLng = origen?.lng ?? 0;
-    final dLat = destino?.lat ?? 0;
-    final dLng = destino?.lng ?? 0;
-
+  Widget _bannerEstado(Trip t, String estado) {
+    final info = _infoEstado(estado);
+    final antes = _antesDeRecoger(estado);
+    final d = antes ? _distOrigenKm : _distDestinoKm;
+    final muestraDistancia = antes || estado == TripStatus.enCurso || estado == TripStatus.entregado;
     return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(color: _white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (_currentLat != null)
-            _buildTripInfoBar(oLat, oLng, dLat, dLng),
-          const SizedBox(height: 12),
-          _buildStepper(estado),
-          const SizedBox(height: 12),
-          _routeRow(Icons.trip_origin, 'Origen', origen?.direccion ?? '', Colors.green),
-          const SizedBox(height: 6),
-          _routeRow(Icons.location_on, 'Destino', destino?.direccion ?? '', Colors.red),
-          if (estado == TripStatus.enCurso && _isNearDestination) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: _accentGreen.withValues(alpha: 0.3))),
-              child: Row(children: [
-                Icon(Icons.check_circle, size: 18, color: _accentGreen),
-                const SizedBox(width: 8),
-                const Expanded(child: Text('Has llegado al destino', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-              ]),
-            ),
-          ],
-          if (estado == TripStatus.enCurso && _currentLat == null) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _actionLoading ? null : _requestFinalization,
-                icon: const Icon(Icons.location_off, size: 18),
-                label: const Text('Finalizar sin GPS', style: TextStyle(fontSize: 13)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orange.shade800,
-                  side: BorderSide(color: Colors.orange.shade300),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            _infoChip('Carga', t.carga ?? 'N/A'),
-            _infoChip('Precio', '\$${(t.precioFinal ?? t.precioEstimado)?.toStringAsFixed(0) ?? '0'}'),
-          ]),
-          const SizedBox(height: 12),
-          _clientSection(t.cliente, t),
-          const SizedBox(height: 12),
-          if (estado == TripStatus.aceptado)
-            _actionButton('Conducir hacia el origen', _confirmArrival, _primaryDark)
-          else if (estado == TripStatus.enCamino)
-            _actionButton('Llegué al origen', _confirmPickup, _primaryDark)
-          else if (estado == TripStatus.llegada)
-            _actionButton('Iniciar viaje', _startTrip, _primaryDark)
-          else if (estado == TripStatus.enCurso) ...[
-            if (_isNearDestination)
-              _actionButton('Finalizar viaje ✓', _requestFinalization, _accentGreen)
-            else ...[
-              _actionButton('Finalizar viaje', _requestFinalization, _primaryBlue),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.amber.shade300),
-                ),
-                child: Row(children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.amber.shade800),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(
-                    'Finaliza cuando estés en el punto de destino',
-                    style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
-                  )),
-                ]),
-              ),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: info.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: info.color.withValues(alpha: 0.25)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(color: info.color, borderRadius: BorderRadius.circular(12)),
+            child: Icon(info.icono, color: _white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(info.titulo, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
+            if (info.detalle.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(info.detalle, style: const TextStyle(fontSize: 12, color: _textGrey, height: 1.3)),
             ],
-          ]
-          else if (estado == TripStatus.esperaConfirmacion || estado == TripStatus.pendienteConfirmacion)
-            // Sólo el cliente confirma la entrega (confirmClose exige rol
-            // cliente): el conductor espera y puede consultar el estado real.
-            ValueListenableBuilder<ReglasCliente>(
-              valueListenable: ConfigClienteService.instance.reglas,
-              builder: (_, reglas, _) => EsperandoConfirmacionCliente(
-                minutosRevision: reglas.confirmacionTimeoutMin,
-                cargando: _actionLoading,
-                onActualizar: _finalizeTrip,
+          ])),
+        ]),
+        if (muestraDistancia) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            Icon(d == null ? Icons.gps_off_rounded : Icons.near_me_rounded, size: 16, color: d == null ? _textGrey : info.color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                d == null
+                    ? 'Buscando señal GPS…'
+                    : '${_fmtDist(d)} ${antes ? 'al origen' : 'al destino'}  ·  ${_fmtEta(d)}',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: d == null ? _textGrey : _textDark),
               ),
             ),
+            if (estado == TripStatus.enCurso || estado == TripStatus.entregado)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.timer_outlined, size: 14, color: _primaryBlue),
+                const SizedBox(width: 4),
+                ValueListenableBuilder<int>(
+                  valueListenable: _elapsed,
+                  builder: (_, _, _) => Text(_formatElapsed(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: _primaryBlue)),
+                ),
+              ]),
+          ]),
+        ],
+      ]),
+    );
+  }
+
+  Widget _clienteFila(Trip t, String estado) {
+    final cliente = t.cliente;
+    final nombre = cliente?.nombre ?? 'Cliente';
+    final rating = cliente?.calificacion;
+    return Row(children: [
+      CircleAvatar(
+        radius: 22,
+        backgroundColor: const Color(0xFFD1FAE5),
+        child: Text(_initials(nombre), style: const TextStyle(color: Color(0xFF15803D), fontSize: 15, fontWeight: FontWeight.w700)),
+      ),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(nombre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark), maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Row(children: [
+          if (rating != null) ...[
+            const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 15),
+            const SizedBox(width: 2),
+            Text(rating.toStringAsFixed(1), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+            const SizedBox(width: 6),
+          ],
+          const Text('Cliente', style: TextStyle(fontSize: 12, color: _textGrey)),
         ]),
+      ])),
+      if (TripStatus.chatHabilitado(estado))
+        _iconoRedondo(Icons.chat_bubble_outline_rounded, 'Chat', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
+        }),
+      const SizedBox(width: 8),
+      _iconoRedondo(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
+    ]);
+  }
+
+  Widget _iconoRedondo(IconData icon, String tooltip, VoidCallback onTap) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: _bgLight,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 20, color: _primaryDark)),
+        ),
       ),
     );
   }
 
-  Widget _buildMapWithContent(Trip t, String estado) {
-    final origen = t.origen;
-    final destino = t.destino;
-    final oLat = origen?.lat ?? 0;
-    final oLng = origen?.lng ?? 0;
-    final dLat = destino?.lat ?? 0;
-    final dLng = destino?.lng ?? 0;
-    final centerLat = _currentLat ?? oLat;
-    final centerLng = _currentLng ?? oLng;
-
-    final markers = <Marker>[
-      Marker(point: LatLng(oLat, oLng), width: 40, height: 40, child: Container(
-        decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-        child: const Icon(Icons.check, color: Colors.white, size: 20),
-      )),
-      Marker(point: LatLng(dLat, dLng), width: 40, height: 40, child: Container(
-        decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-        child: const Icon(Icons.location_on, color: Colors.white, size: 20),
-      )),
-    ];
-
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: _mapOptions ??= MapOptions(
-            initialCenter: LatLng(centerLat, centerLng),
-            initialZoom: 13,
-            onMapReady: _fitMapBounds,
-          ),
-          children: [
-            _tileLayer,
-            if (_routePoints.isNotEmpty)
-              PolylineLayer(polylines: _routePolylines),
-            MarkerLayer(markers: markers),
-            CurrentLocationLayer(
-              alignPositionOnUpdate: AlignOnUpdate.always,
-              style: const LocationMarkerStyle(
-                marker: DefaultLocationMarker(
-                  color: Color(0xFF2563EB),
-                  child: Icon(Icons.navigation, color: Colors.white, size: 20),
-                ),
-                markerSize: Size(40, 40),
-              ),
-            ),
-          ],
-        ),
-        Positioned(
-          left: 0, right: 0, bottom: 0,
-          child: estado == TripStatus.aceptado || estado == TripStatus.enCamino
-              ? _buildEnCaminoPanel(t)
-              : (estado == TripStatus.llegada)
-                  ? _buildLlegadaOrigenPanel(t)
-                  : (estado == TripStatus.enCurso && _isNearDestination)
-                      ? _buildLlegadaDestinoPanel(t)
-                      : _buildTripPanel(t, estado),
-        ),
-      ],
-    );
+  Widget _rutaFilas(Trip t, String estado) {
+    final antes = _antesDeRecoger(estado);
+    return Column(children: [
+      _rutaFila(Icons.trip_origin, const Color(0xFF16A34A), 'Origen', t.origen?.direccion ?? '', destacada: antes),
+      const SizedBox(height: 6),
+      _rutaFila(Icons.location_on, const Color(0xFFEF4444), 'Destino', t.destino?.direccion ?? '', destacada: !antes),
+    ]);
   }
 
-  Widget _buildTripInfoBar(double oLat, double oLng, double dLat, double dLng) {
-    final distOrigen = _haversine(_currentLat!, _currentLng!, oLat, oLng);
-    final distDestino = _haversine(_currentLat!, _currentLng!, dLat, dLng);
-    final spdKmph = (_currentSpeed ?? 0) * 3.6;
-    final velocidad = spdKmph > 5 ? spdKmph : 30.0;
-    final minDestino = distDestino > 0 ? (distDestino / velocidad * 60).round() : 0;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: _bgLight, borderRadius: BorderRadius.circular(14)),
-      child: Row(children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('A ${distOrigen.toStringAsFixed(1)} km del origen', style: TextStyle(fontSize: 12, color: _textGrey)),
-          const SizedBox(height: 4),
-          Row(children: [
-            Text('Destino: ', style: TextStyle(fontSize: 12, color: _textGrey)),
-            Text('~$minDestino min', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _primaryDark)),
-            if (spdKmph > 5) ...[
-              const SizedBox(width: 6),
-              Text('${spdKmph.toStringAsFixed(0)} km/h', style: TextStyle(fontSize: 11, color: _primaryBlue)),
-            ],
-          ]),
-        ]),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: _primaryBlue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.timer_outlined, size: 14, color: _primaryBlue),
-            const SizedBox(width: 4),
-            ValueListenableBuilder<int>(
-              valueListenable: _elapsed,
-              builder: (_, _, _) => Text(_formatElapsed(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: _primaryBlue)),
-            ),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildStepper(String estado) {
-    const steps = ['Aceptado', 'En camino', 'Llegada', 'En curso', 'Entregado', 'Esperando conf.', 'Finalizado'];
-    const estados = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion, TripStatus.finalizado];
-    final current = estados.indexOf(estado == TripStatus.pendienteConfirmacion ? TripStatus.esperaConfirmacion : estado);
-    if (current < 0) return const SizedBox.shrink();
-    return Row(
-      children: List.generate(steps.length * 2 - 1, (i) {
-        if (i.isOdd) {
-          return Expanded(child: Container(height: 2, color: i ~/ 2 < current ? _activeStep : Colors.grey.shade300));
-        }
-        final idx = i ~/ 2;
-        final active = idx <= current;
-        return Container(
-          width: 28, height: 28,
-          decoration: BoxDecoration(color: active ? _activeStep : Colors.grey.shade300, shape: BoxShape.circle),
-          child: Center(
-            child: idx < current
-                ? const Icon(Icons.check, size: 16, color: Colors.white)
-                : Text('${idx + 1}', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _routeRow(IconData icon, String label, String dir, Color color) {
-    return Row(children: [
-      Icon(icon, size: 18, color: color),
+  Widget _rutaFila(IconData icon, Color color, String label, String dir, {required bool destacada}) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 18, color: color)),
       const SizedBox(width: 10),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black45)),
-        Text(dir, style: const TextStyle(fontWeight: FontWeight.w500)),
+        Text(label, style: const TextStyle(fontSize: 11, color: _textGrey)),
+        Text(
+          dir.isEmpty ? '--' : dir,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 13, fontWeight: destacada ? FontWeight.w600 : FontWeight.w400, color: destacada ? _textDark : _textGrey),
+        ),
       ])),
     ]);
   }
 
-  Widget _infoChip(String label, String value) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 12, color: _textGrey)),
-      const SizedBox(height: 2),
-      Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-    ]);
-  }
-
-  Widget _clientSection(User? cliente, Trip t) {
-    if (cliente == null) return const SizedBox.shrink();
+  Widget _precioFila(Trip t) {
+    final precio = t.precioFinal ?? t.precioEstimado;
+    final carga = t.carga ?? t.descripcion;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(color: _bgLight, borderRadius: BorderRadius.circular(12)),
       child: Row(children: [
-        CircleAvatar(radius: 16, backgroundColor: _primaryDark, child: Text(_initials(cliente.nombre), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
-        const SizedBox(width: 10),
-        Expanded(child: Text(cliente.nombre ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
-        if (cliente.telefono != null)
-          IconButton(icon: const Icon(Icons.phone, size: 20), color: _primaryBlue, onPressed: () => _showClientPhone(t)),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Precio acordado', style: TextStyle(fontSize: 11, color: _textGrey)),
+          Text(_fmtPrecio(precio), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _primaryDark)),
+        ])),
+        if (carga != null && carga.isNotEmpty)
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            const Text('Carga', style: TextStyle(fontSize: 11, color: _textGrey)),
+            Text(carga, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+          ])),
       ]),
     );
   }
 
-  Widget _actionButton(String label, VoidCallback onPressed, Color color) {
-    return SizedBox(
-      width: double.infinity, height: 48,
-      child: ElevatedButton(
-        onPressed: _actionLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color, foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0,
+  /// Acción principal (y avisos) de cada estado. Las transiciones son las del
+  /// backend: confirm-arrival -> conductor_en_camino, confirm-pickup ->
+  /// conductor_llegada, start-trip -> en_curso, complete -> pendiente_confirmacion.
+  List<Widget> _accionesEstado(Trip t, String estado) {
+    switch (estado) {
+      case TripStatus.aceptado:
+        return [_botonPrincipal('Voy en camino al origen', Icons.navigation_rounded, _confirmArrival, _primaryDark)];
+      case TripStatus.enCamino:
+        return [
+          ..._avisoOrigen('confirmar la llegada'),
+          _botonPrincipal('Llegué al origen', Icons.where_to_vote_rounded, _lejosDelOrigen ? null : _confirmPickup, _primaryDark),
+        ];
+      case TripStatus.llegada:
+        return [
+          ..._avisoOrigen('iniciar el viaje'),
+          _botonPrincipal('Iniciar viaje', Icons.play_arrow_rounded, _lejosDelOrigen ? null : _startTrip, _accentGreen),
+        ];
+      case TripStatus.enCurso:
+      case TripStatus.entregado:
+        return [
+          ..._avisoDestino(),
+          _botonFoto(),
+          const SizedBox(height: 8),
+          _botonPrincipal('Finalizar viaje', Icons.flag_rounded, _requestFinalization, _isNearDestination ? _accentGreen : _primaryBlue),
+        ];
+      case TripStatus.esperaConfirmacion:
+      case TripStatus.pendienteConfirmacion:
+        // Sólo el cliente confirma la entrega (confirm-close exige rol
+        // cliente): el conductor espera y puede consultar el estado real.
+        return [
+          if (_deliveryPhotoUrl != null) ...[_avisoFotoLista(), const SizedBox(height: 8)],
+          ValueListenableBuilder<ReglasCliente>(
+            valueListenable: ConfigClienteService.instance.reglas,
+            builder: (_, reglas, _) => EsperandoConfirmacionCliente(
+              minutosRevision: reglas.confirmacionTimeoutMin,
+              cargando: _actionLoading,
+              onActualizar: _finalizeTrip,
+            ),
+          ),
+        ];
+      default:
+        return const [];
+    }
+  }
+
+  List<Widget> _avisoOrigen(String accion) {
+    final d = _distOrigenKm;
+    if (d == null) {
+      return [
+        _aviso(Icons.gps_off_rounded, 'Sin señal GPS todavía. El servidor comprobará tu ubicación al $accion.', Colors.blueGrey),
+        const SizedBox(height: 8),
+      ];
+    }
+    if (d >= _radioKm) {
+      return [
+        _aviso(
+          Icons.warning_amber_rounded,
+          'Estás a ${_fmtDist(d)} del origen. Acércate a menos de ${_fmtRadio(_radioKm)} para $accion.',
+          Colors.amber,
+          accion: 'Actualizar GPS',
+          onAccion: _refrescarUbicacion,
         ),
-        child: _actionLoading
+        const SizedBox(height: 8),
+      ];
+    }
+    return const [];
+  }
+
+  /// Pide una posición nueva al GPS (por si el flujo va con retraso) y
+  /// reenvía la ubicación al backend.
+  Future<void> _refrescarUbicacion() async {
+    await _actualizarUbicacionParaCierre();
+    if (!mounted) return;
+    setState(() {});
+    _lastLocationSent = null;
+    _sendLocation();
+  }
+
+  List<Widget> _avisoDestino() {
+    final d = _distDestinoKm;
+    if (d == null) {
+      return [
+        _aviso(Icons.gps_off_rounded, 'Sin señal GPS. Al finalizar se te pedirá una justificación del cierre.', Colors.blueGrey),
+        const SizedBox(height: 8),
+      ];
+    }
+    if (d >= _radioKm) {
+      return [
+        _aviso(Icons.info_outline_rounded, 'Estás a ${_fmtDist(d)} del destino. Fuera de ${_fmtRadio(_radioKm)} el cierre requiere una justificación.', Colors.amber),
+        const SizedBox(height: 8),
+      ];
+    }
+    return const [];
+  }
+
+  Widget _aviso(IconData icon, String texto, MaterialColor color, {String? accion, VoidCallback? onAccion}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: color.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: color.shade200)),
+      child: Row(children: [
+        Icon(icon, size: 18, color: color.shade800),
+        const SizedBox(width: 8),
+        Expanded(child: Text(texto, style: TextStyle(fontSize: 12, color: color.shade900, height: 1.3))),
+        if (accion != null && onAccion != null)
+          TextButton(
+            onPressed: onAccion,
+            style: TextButton.styleFrom(
+              foregroundColor: color.shade900,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(accion, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+      ]),
+    );
+  }
+
+  Widget _avisoFotoLista() => _aviso(Icons.check_circle_rounded, 'Foto de entrega subida como evidencia.', Colors.green);
+
+  Widget _botonFoto() {
+    final lista = _deliveryPhotoUrl != null;
+    return SizedBox(
+      height: 46,
+      child: OutlinedButton.icon(
+        onPressed: _actionLoading ? null : _subirFotoEntrega,
+        icon: Icon(lista ? Icons.check_circle_rounded : Icons.photo_camera_outlined, size: 20),
+        label: Text(lista ? 'Foto de entrega lista (tomar otra)' : 'Tomar foto de entrega'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: lista ? const Color(0xFF15803D) : _primaryBlue,
+          side: BorderSide(color: lista ? const Color(0xFF15803D) : _primaryBlue, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _subirFotoEntrega() async {
+    // _takeDeliveryPhoto ya muestra el error del backend si falla.
+    final url = await _takeDeliveryPhoto();
+    if (url != null && mounted) {
+      setState(() => _deliveryPhotoUrl = url);
+      _snack('Foto de evidencia subida correctamente');
+    }
+  }
+
+  Widget _botonPrincipal(String label, IconData icon, VoidCallback? onPressed, Color color) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton.icon(
+        onPressed: (_actionLoading || onPressed == null) ? null : onPressed,
+        icon: _actionLoading
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            : Icon(icon, size: 22),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: color.withValues(alpha: 0.35),
+          disabledForegroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 0,
+        ),
       ),
     );
   }
 
   Widget _buildBottomNav(Trip t, String estado) {
     return Container(
-      padding: const EdgeInsets.only(bottom: 24, top: 8),
       decoration: const BoxDecoration(color: _white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))]),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-        _navItem(Icons.chat_bubble_outline, 'Chat', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
-        }),
-        _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
-        _navItem(Icons.info_outline, 'Detalle', () => _showClientDetail(t)),
-        _navItem(Icons.gavel_outlined, 'Reportar', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
-        }),
-        _navItem(Icons.emergency_outlined, 'SOS', () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
-        }),
-        if (estado == TripStatus.aceptado || estado == TripStatus.enCamino)
-          _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
-        if (estado == TripStatus.enCurso || estado == TripStatus.llegada)
-          _navItem(Icons.report_problem_outlined, 'Solicitar cancelaci\u00f3n', _isCancelling ? () {} : () => _requestCancellation(t)),
-      ]),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 6),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            _navItem(Icons.chat_bubble_outline, 'Chat', () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
+            }),
+            _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
+            _navItem(Icons.info_outline, 'Detalle', () => _showClientDetail(t)),
+            _navItem(Icons.gavel_outlined, 'Reportar', () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
+            }),
+            _navItem(Icons.emergency_outlined, 'SOS', () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
+            }),
+            if (estado == TripStatus.aceptado || estado == TripStatus.enCamino)
+              _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
+            if (estado == TripStatus.enCurso || estado == TripStatus.llegada)
+              _navItem(Icons.report_problem_outlined, 'Solicitar\ncancelación', _isCancelling ? () {} : () => _requestCancellation(t)),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -1688,7 +2026,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 22, color: _textGrey),
         const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 10, color: _textGrey)),
+        Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: _textGrey, height: 1.1)),
       ]),
     );
   }
