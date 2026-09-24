@@ -165,10 +165,20 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     onRefresh: () async { setState(() => _loading = true); await _loadData(); },
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
+                      // Espacio para la barra de navegación del teléfono: el
+                      // botón "Subir comprobante" quedaba tapado e inalcanzable.
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Con deuda, lo primero es cómo pagarla ("Ver cómo
+                          // pagar" abre esta pantalla).
+                          if (_tieneDeuda) ...[
+                            _buildSectionTitle('Deuda'),
+                            const SizedBox(height: 8),
+                            _buildDebtCard(),
+                            const SizedBox(height: 16),
+                          ],
                           _buildTodayCard(),
                           const SizedBox(height: 12),
                           _buildPeriodRow(),
@@ -180,10 +190,12 @@ class _EarningsScreenState extends State<EarningsScreen> {
                           _buildHistoryCard(),
                           const SizedBox(height: 12),
                           _buildPdfCard(),
-                          const SizedBox(height: 16),
-                          _buildSectionTitle('Deuda'),
-                          const SizedBox(height: 8),
-                          _buildDebtCard(),
+                          if (!_tieneDeuda) ...[
+                            const SizedBox(height: 16),
+                            _buildSectionTitle('Deuda'),
+                            const SizedBox(height: 8),
+                            _buildDebtCard(),
+                          ],
                         ],
                       ),
                     ),
@@ -472,6 +484,21 @@ class _EarningsScreenState extends State<EarningsScreen> {
     }
   }
 
+  bool get _tieneDeuda {
+    final monto = numeroDe(_debt?['montoDeuda']) ?? 0;
+    final estado = _debt?['estadoCuenta'] as String?;
+    return monto > 0 || (estado != null && estado != 'activa');
+  }
+
+  /// "Paga antes del 08/10/2026" con la fecha límite real del backend
+  /// (antes decía un "plazo de 15 días" fijo que no coincidía con el inicio).
+  String? _fechaLimiteTexto(dynamic raw) {
+    final f = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (f == null) return null;
+    String dos(int n) => n.toString().padLeft(2, '0');
+    return 'Paga antes del ${dos(f.day)}/${dos(f.month)}/${f.year}';
+  }
+
   Widget _buildDebtCard() {
     final monto = numeroDe(_debt?['montoDeuda']) ?? 0;
     final dias = numeroDe(_debt?['diasRestantes'])?.toInt() ?? 0;
@@ -525,7 +552,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(10)),
             child: Text(
-              'Tienes un plazo de 15 días para pagar tu deuda (restan $dias día${dias == 1 ? '' : 's'}). '
+              '${_fechaLimiteTexto(_debt?['deudaFechaLimite']) ?? 'Tienes un plazo para pagar tu deuda'} '
+              '(restan $dias día${dias == 1 ? '' : 's'}). '
               'Pasado ese plazo tu cuenta podría ser suspendida.',
               style: TextStyle(fontSize: 12, color: const Color(0xFFBF360C), height: 1.4),
             ),
