@@ -396,7 +396,8 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
 
   Widget _buildBottomButtons() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      // Por encima de la barra de navegación del teléfono.
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _divider)),

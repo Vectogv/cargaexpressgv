@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
@@ -35,23 +36,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final expiresIn = widget.trip['expiresIn'] as int?;
-    if (expiresIn != null) {
-      _secondsLeft = expiresIn;
-    } else {
-      final createdAt = widget.trip['created_at'] as String?;
-      if (createdAt != null) {
-        try {
-          final created = DateTime.parse(createdAt);
-          final elapsed = DateTime.now().difference(created).inSeconds;
-          _secondsLeft = (28 - elapsed).clamp(0, 28);
-        } catch (_) {
-          _secondsLeft = 28;
-        }
-      } else {
-        _secondsLeft = 28;
-      }
-    }
+    _secondsLeft = segundosRestantesSolicitud(widget.trip, DateTime.now());
     _expireTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_secondsLeft <= 0) {
         t.cancel();
@@ -185,10 +170,10 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     final t = widget.trip;
     final origen = t['origen'] as Map<String, dynamic>?;
     final destino = t['destino'] as Map<String, dynamic>?;
-    final precio = (_toNum(t['precioEstimado'])?.toStringAsFixed(0) ?? '0');
+    final precio = _formatMonto(t['precioEstimado']);
     final distancia = t['distancia'] is num
         ? '${(t['distancia'] as num).toStringAsFixed(1)} km'
-        : (t['distancia'] != null ? '${t['distancia']}' : '--');
+        : (t['distancia'] != null ? '${t['distancia']}' : distanciaRectaTexto(origen, destino));
     final descripcionCarga = (t['descripcion'] ?? t['carga']) as String? ?? 'No especificada';
     final tipoVehiculoStr = _tipoVehiculo ?? t['tipoVehiculo'] as String? ?? 'No especificado';
 
@@ -378,7 +363,8 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
 
   Widget _buildBottomButtons() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      // Por encima de la barra de navegación del teléfono.
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _divider)),
@@ -434,4 +420,36 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     if (v is num) return v;
     return num.tryParse(v.toString());
   }
+}
+
+/// Minutos que el backend deja buscar conductor (BUSQUEDA_TIMEOUT_MIN,
+/// BusquedaTimeoutService): la solicitud sigue abierta a ofertas hasta
+/// entonces, salvo que otro conductor la gane o el cliente cancele (eso lo
+/// avisan los sockets). Antes la app la cerraba a los 28 s por su cuenta.
+const int busquedaTimeoutMin = 15;
+
+/// Segundos que le quedan a la solicitud según el backend: `expiresIn` si
+/// viene; si no, desde `createdAt`/`created_at` + [busquedaTimeoutMin].
+int segundosRestantesSolicitud(Map<String, dynamic> trip, DateTime ahora) {
+  const total = busquedaTimeoutMin * 60;
+  final expiresIn = trip['expiresIn'];
+  if (expiresIn is num) return expiresIn.toInt().clamp(0, total);
+  final raw = (trip['createdAt'] ?? trip['created_at'])?.toString();
+  final creado = raw == null ? null : DateTime.tryParse(raw);
+  if (creado == null) return total;
+  return (total - ahora.difference(creado).inSeconds).clamp(0, total);
+}
+
+/// Distancia origen→destino en línea recta cuando el backend no la manda.
+String distanciaRectaTexto(Map<String, dynamic>? origen, Map<String, dynamic>? destino) {
+  double? n(Object? v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+  final lat1 = n(origen?['lat']), lng1 = n(origen?['lng']);
+  final lat2 = n(destino?['lat']), lng2 = n(destino?['lng']);
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return '--';
+  double rad(double g) => g * math.pi / 180;
+  final dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(rad(lat1)) * math.cos(rad(lat2)) * math.sin(dLng / 2) * math.sin(dLng / 2);
+  final km = 6371 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  return '≈ ${km.toStringAsFixed(1)} km en línea recta';
 }
