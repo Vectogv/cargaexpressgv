@@ -9,6 +9,7 @@ import '../../services/api_client.dart';
 import '../../services/api/payment_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/socket_service_client.dart';
 import '../user/auth_screen.dart';
 import '../conductor/notifications_screen.dart';
 import 'cliente_inicio_view.dart';
@@ -47,6 +48,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   bool _tieneDeuda = false;
   bool _suspendidoPorPago = false;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
+  // Resolución de disputa y verificación de pago cambian la deuda y el
+  // estado de los envíos: se refresca sin esperar a que el cliente recargue.
+  final List<StreamSubscription<Map<String, dynamic>>> _cuentaSubs = [];
 
   @override
   void initState() {
@@ -81,6 +85,15 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
     });
 
+    final socket = SocketServiceClient.instance;
+    for (final stream in [socket.onDisputeResolved, socket.onPaymentConfirmed, socket.onPaymentRejected]) {
+      _cuentaSubs.add(stream.listen((_) {
+        if (!mounted) return;
+        _loadDeuda();
+        _loadRecientes();
+      }));
+    }
+
   }
 
   @override
@@ -95,6 +108,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _socketSub?.cancel();
+    for (final s in _cuentaSubs) {
+      s.cancel();
+    }
     super.dispose();
   }
 

@@ -101,7 +101,8 @@ class _PagosScreenState extends State<PagosScreen> {
 
   String _currency(dynamic value) {
     final n = (value is num) ? value.toDouble() : double.tryParse(value?.toString() ?? '') ?? 0.0;
-    return '\$${n.toStringAsFixed(0)}';
+    final miles = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+    return '\$$miles';
   }
 
   String? _formatDate(dynamic ts) {
@@ -165,21 +166,8 @@ class _PagosScreenState extends State<PagosScreen> {
           const SizedBox(height: 16),
           _buildUploadCard(),
         ],
-        const SizedBox(height: 16),
-        _buildSection('M\u00e9todos de pago', [
-          _buildMethodCard(
-            Icons.account_balance_wallet,
-            'Efectivo',
-            'Pago al conductor',
-          ),
-          _buildMethodCard(
-            Icons.phone_android,
-            'Nequi',
-            deuda['nequiNombre'] != null
-                ? '${deuda['nequiNombre']} ${deuda['nequiNumero']}'
-                : 'Transferencia electr\u00f3nica',
-          ),
-        ]),
+        // La deuda es con la plataforma y se paga por Nequi (tarjeta de
+        // arriba): la lista "Efectivo \u00b7 Pago al conductor" confund\u00eda.
       ],
     );
   }
@@ -325,37 +313,4 @@ class _PagosScreenState extends State<PagosScreen> {
     );
   }
 
-  Widget _buildSection(String title, List<Widget> children) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
-        ),
-        // Material (no Container con color): los ListTile pintan su fondo y
-        // el efecto de toque en el Material más cercano.
-        Material(
-          color: _white,
-          borderRadius: BorderRadius.circular(14),
-          clipBehavior: Clip.antiAlias,
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMethodCard(IconData icon, String title, String subtitle) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: _primaryDark.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-        child: Icon(icon, size: 22, color: _primaryDark),
-      ),
-      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: _textGrey)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: () {},
-    );
-  }
 }
