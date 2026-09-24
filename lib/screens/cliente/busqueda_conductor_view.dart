@@ -6,15 +6,18 @@ import '../../models/trip.dart';
 import 'cancel_trip_screen.dart' show componerMotivoCancelacion;
 import 'nuevo_envio_screen.dart' show formatearMiles;
 
-const Color _kPrimary = Color(0xFF2563EB);
-const Color _kTexto = Color(0xFF1A1A2E);
-const Color _kGris = Color(0xFF6B7280);
-const Color _kRojo = Color(0xFFE53935);
-const Color _kVerde = Color(0xFF16A34A);
+import 'rastreo_ui.dart';
 
-/// Vista "Buscando conductor" del cliente: mapa grande con el radio de
-/// búsqueda arriba y un panel inferior con el estado, las ofertas recibidas,
-/// el resumen del viaje y el botón para cancelar.
+const Color _kPrimary = RastreoColores.primario;
+const Color _kTexto = RastreoColores.texto;
+const Color _kGris = RastreoColores.gris;
+const Color _kRojo = Color(0xFFE53935);
+const Color _kVerde = RastreoColores.verde;
+
+/// Vista "Buscando conductor" del cliente: el mapa ocupa toda la pantalla
+/// (radio de búsqueda, pulso en el origen y vehículos cercanos), con una
+/// barra superior flotante y una tarjeta inferior con el estado, las ofertas
+/// recibidas, el resumen del viaje y el botón para cancelar.
 ///
 /// No tiene lógica de negocio: [RastreoScreen] le pasa los datos y callbacks.
 class BusquedaConductorView extends StatelessWidget {
@@ -32,6 +35,10 @@ class BusquedaConductorView extends StatelessWidget {
   final VoidCallback onVerOfertas;
   final VoidCallback onCancelar;
 
+  /// Título y acciones de la barra superior flotante.
+  final String titulo;
+  final List<Widget> acciones;
+
   const BusquedaConductorView({
     super.key,
     required this.trip,
@@ -43,119 +50,115 @@ class BusquedaConductorView extends StatelessWidget {
     required this.onVerOfertas,
     required this.onCancelar,
     this.radioKm = 2,
+    this.titulo = 'Buscando conductor',
+    this.acciones = const [],
   });
+
+  /// Fracción de la altura que la tarjeta inferior puede ocupar como máximo.
+  static const double fraccionTarjeta = 0.62;
 
   @override
   Widget build(BuildContext context) {
-    final maxPanel = MediaQuery.sizeOf(context).height * 0.62;
+    final maxPanel = MediaQuery.sizeOf(context).height * fraccionTarjeta;
     return ColoredBox(
-      color: const Color(0xFFF5F7FA),
-      child: Column(
+      color: RastreoColores.fondo,
+      child: Stack(
         children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(child: mapa),
-                Positioned(
-                  top: 12,
-                  left: 16,
-                  right: 16,
-                  child: Center(
-                    child: _ChipCercanos(
-                      cantidad: vehiculosCercanos,
-                      radioKm: radioKm,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          Positioned.fill(child: mapa),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: BarraRastreo(titulo: titulo, acciones: acciones),
           ),
-          Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x1A000000),
-                  blurRadius: 16,
-                  offset: Offset(0, -4),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxPanel),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    Flexible(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _Encabezado(
-                              ofertas: ofertas,
-                              inicio: inicioBusqueda,
-                            ),
-                            if (ofertas > 0) ...[
-                              const SizedBox(height: 16),
-                              _OfertasCard(
-                                cantidad: ofertas,
-                                onTap: onVerOfertas,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    blurRadius: 20,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                top: false,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxPanel),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const AsaHojaRastreo(),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _Encabezado(
+                                ofertas: ofertas,
+                                inicio: inicioBusqueda,
                               ),
+                              if (ofertas > 0) ...[
+                                const SizedBox(height: 14),
+                                _OfertasCard(
+                                  cantidad: ofertas,
+                                  onTap: onVerOfertas,
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              _LineaCercanos(
+                                cantidad: vehiculosCercanos,
+                                radioKm: radioKm,
+                              ),
+                              const SizedBox(height: 14),
+                              _ResumenViaje(trip: trip),
                             ],
-                            const SizedBox(height: 16),
-                            _ResumenViaje(trip: trip),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: OutlinedButton.icon(
-                          key: const Key('btn_cancelar_busqueda'),
-                          onPressed: cancelando ? null : onCancelar,
-                          icon: cancelando
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.close_rounded),
-                          label: Text(
-                            cancelando ? 'Cancelando…' : 'Cancelar búsqueda',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _kRojo,
-                            side: const BorderSide(color: Color(0xFFF3B4B2)),
-                            textStyle: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            key: const Key('btn_cancelar_busqueda'),
+                            onPressed: cancelando ? null : onCancelar,
+                            icon: cancelando
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.close_rounded),
+                            label: Text(
+                              cancelando ? 'Cancelando…' : 'Cancelar búsqueda',
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _kRojo,
+                              side: const BorderSide(color: Color(0xFFF3B4B2)),
+                              textStyle: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -333,49 +336,43 @@ class _MotivoCancelacionSheetState extends State<_MotivoCancelacionSheet> {
   }
 }
 
-class _ChipCercanos extends StatelessWidget {
+/// Vehículos disponibles cerca del origen, o el aviso honesto de que aún
+/// no hay ninguno.
+class _LineaCercanos extends StatelessWidget {
   final int cantidad;
   final double radioKm;
-  const _ChipCercanos({required this.cantidad, required this.radioKm});
+  const _LineaCercanos({required this.cantidad, required this.radioKm});
 
   @override
   Widget build(BuildContext context) {
     final radio = radioKm == radioKm.roundToDouble()
         ? radioKm.toStringAsFixed(0)
         : radioKm.toString();
-    final texto = cantidad == 0
-        ? 'Sin vehículos disponibles a menos de $radio km'
-        : '$cantidad ${cantidad == 1 ? 'vehículo disponible' : 'vehículos disponibles'} a menos de $radio km';
+    final hay = cantidad > 0;
+    final texto = hay
+        ? '$cantidad ${cantidad == 1 ? 'vehículo disponible' : 'vehículos disponibles'} a menos de $radio km'
+        : 'Aún no hay vehículos cerca, seguimos buscando';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
+        color: hay ? RastreoColores.primarioSuave : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.local_shipping_outlined,
-            size: 16,
-            color: cantidad == 0 ? _kGris : _kPrimary,
+            size: 18,
+            color: hay ? _kPrimary : _kGris,
           ),
-          const SizedBox(width: 6),
-          Flexible(
+          const SizedBox(width: 8),
+          Expanded(
             child: Text(
               texto,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12.5,
+              style: TextStyle(
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: _kTexto,
+                color: hay ? _kTexto : _kGris,
               ),
             ),
           ),
@@ -397,15 +394,23 @@ class _Encabezado extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            // Icono fijo (el pulso animado ya está en el mapa).
+            Container(
+              width: 30,
+              height: 30,
+              decoration: const BoxDecoration(
+                color: RastreoColores.primarioSuave,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.radar_rounded, size: 18, color: _kPrimary),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
               child: Text(
-                hayOfertas
-                    ? 'Tienes ofertas de conductores'
-                    : 'Buscando conductor disponible',
-                style: const TextStyle(
-                  fontSize: 18,
+                'Buscando conductor…',
+                style: TextStyle(
+                  fontSize: 19,
                   fontWeight: FontWeight.w700,
                   color: _kTexto,
                   height: 1.25,
@@ -465,7 +470,7 @@ class _TiempoBuscandoState extends State<_TiempoBuscando> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF4FF),
+        color: RastreoColores.primarioSuave,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -504,7 +509,7 @@ class _OfertasCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFA7E3BD)),
@@ -530,28 +535,33 @@ class _OfertasCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      cantidad == 1
-                          ? '1 oferta recibida'
-                          : '$cantidad ofertas recibidas',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF14532D),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Toca para ver y elegir',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF166534)),
-                    ),
-                  ],
+                child: Text(
+                  cantidad == 1
+                      ? '1 oferta recibida'
+                      : '$cantidad ofertas recibidas',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF14532D),
+                  ),
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: Color(0xFF166534)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _kVerde,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'Ver ofertas',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -576,38 +586,32 @@ class _ResumenViaje extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: RastreoColores.borde),
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'TU SOLICITUD',
-            style: TextStyle(
-              fontSize: 11,
-              letterSpacing: 0.5,
-              fontWeight: FontWeight.w700,
-              color: _kGris,
-            ),
-          ),
+          const TituloSeccionRastreo('Tu solicitud'),
           const SizedBox(height: 10),
-          _Linea(
+          LineaDatoRastreo(
             icon: Icons.trip_origin,
             color: _kVerde,
             label: 'Origen',
             valor: t?.origen?.direccion,
+            maxLines: 1,
           ),
           const SizedBox(height: 10),
-          _Linea(
+          LineaDatoRastreo(
             icon: Icons.location_on,
-            color: Color(0xFFDC2626),
+            color: RastreoColores.rojo,
             label: 'Destino',
             valor: t?.destino?.direccion,
+            maxLines: 1,
           ),
           if (carga.isNotEmpty) ...[
             const SizedBox(height: 10),
-            _Linea(
+            LineaDatoRastreo(
               icon: Icons.inventory_2_outlined,
               color: _kGris,
               label: 'Carga',
@@ -615,7 +619,7 @@ class _ResumenViaje extends StatelessWidget {
             ),
           ],
           if (precio != null) ...[
-            const Divider(height: 22, color: Color(0xFFE5E7EB)),
+            const Divider(height: 22, color: RastreoColores.borde),
             Row(
               children: [
                 const Expanded(
@@ -637,54 +641,6 @@ class _ResumenViaje extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _Linea extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String label;
-  final String? valor;
-  const _Linea({
-    required this.icon,
-    required this.color,
-    required this.label,
-    required this.valor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final v = (valor ?? '').trim();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, size: 18, color: color),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 12, color: _kGris)),
-              const SizedBox(height: 1),
-              Text(
-                v.isEmpty ? '—' : v,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: _kTexto,
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

@@ -11,6 +11,11 @@ class User {
   final String? rol;
   final String? telefono;
   final double? calificacion;
+  // Datos del conductor que envía el backend en el viaje
+  // (`TripController.formatViajeResponse`): se muestran en el rastreo.
+  final String? placa;
+  final String? tipoVehiculo;
+  final num? totalViajes;
 
   User({
     required this.id,
@@ -19,6 +24,9 @@ class User {
     this.rol,
     this.telefono,
     this.calificacion,
+    this.placa,
+    this.tipoVehiculo,
+    this.totalViajes,
   });
 
   /// El backend a veces envía el usuario anidado con `id` en vez de `_id`
@@ -34,6 +42,14 @@ class User {
     final cal = json['calificacion'];
     if (cal != null && cal is! num) {
       json = <String, dynamic>{...json, 'calificacion': double.tryParse(cal.toString())};
+    }
+    final total = json['totalViajes'];
+    if (total != null && total is! num) {
+      json = <String, dynamic>{...json, 'totalViajes': num.tryParse(total.toString())};
+    }
+    for (final k in const ['placa', 'tipoVehiculo']) {
+      final v = json[k];
+      if (v != null && v is! String) json = <String, dynamic>{...json, k: v.toString()};
     }
     return _$UserFromJson(json);
   }

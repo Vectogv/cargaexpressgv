@@ -47,10 +47,12 @@ void main() {
   testWidgets('muestra estado, tiempo, radio y resumen del viaje', (tester) async {
     await _pump(tester);
 
-    expect(find.text('Buscando conductor disponible'), findsOneWidget);
+    expect(find.text('Buscando conductor…'), findsOneWidget);
+    expect(find.text('Buscando conductor'), findsOneWidget); // barra superior flotante
+    expect(find.byKey(const Key('mapa')), findsOneWidget);
     // Con la máquina cargada puede pasar un segundo entre el test y el widget.
     expect(find.textContaining(RegExp(r'^02:0[56]$')), findsOneWidget);
-    expect(find.text('Sin vehículos disponibles a menos de 2 km'), findsOneWidget);
+    expect(find.text('Aún no hay vehículos cerca, seguimos buscando'), findsOneWidget);
     expect(find.text('Calle 10 # 43-20, Medellín'), findsOneWidget);
     expect(find.text('Carrera 70, Envigado'), findsOneWidget);
     expect(find.text('3 cajas medianas'), findsOneWidget);
@@ -69,7 +71,8 @@ void main() {
   testWidgets('sin desbordes en pantalla pequeña con ofertas', (tester) async {
     await _pump(tester, ofertas: 3, cercanos: 4, size: const Size(320, 540));
     expect(tester.takeException(), isNull);
-    expect(find.text('Tienes ofertas de conductores'), findsOneWidget);
+    expect(find.text('3 ofertas recibidas'), findsOneWidget);
+    expect(find.text('Ver ofertas'), findsOneWidget);
     expect(find.text('4 vehículos disponibles a menos de 2 km'), findsOneWidget);
   });
 

@@ -51,7 +51,10 @@ void main() {
     }, () async {
       await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
       await avanzar(tester);
-      await tester.tap(find.text('Cancelar'));
+      await tester.ensureVisible(find.byKey(const Key('btn_cancelar_viaje')));
+      await avanzar(tester);
+      expect(find.text('Cancelar viaje'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('btn_cancelar_viaje')));
       await avanzar(tester);
       await tester.tap(find.text('Cambié de opinión'));
       await tester.pump();

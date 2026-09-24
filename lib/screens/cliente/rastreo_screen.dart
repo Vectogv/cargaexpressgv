@@ -17,6 +17,7 @@ import '../../services/api/http_client.dart';
 import '../../services/api_client.dart';
 import '../../services/config_cliente_service.dart';
 import '../../services/map_config.dart';
+import '../../services/route_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
@@ -31,6 +32,8 @@ import 'confirmar_entrega_screen.dart';
 import 'disputa_creada_screen.dart';
 import 'viaje_finalizado.dart';
 import 'reportar_problema_screen.dart';
+import 'rastreo_ui.dart';
+import 'seguimiento_viaje_view.dart';
 import 'conductor_en_la_zona_screen.dart';
 import 'llegada_al_destino_screen.dart';
 import 'chat_screen.dart';
@@ -105,6 +108,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
   late final TileLayer _tileLayer = TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app');
   MapOptions? _nearbyMapOptions;
   LatLng? _nearbyMapCenter;
+  // Seguimiento: ruta dibujada (geometría del servicio de rutas) y cámara.
+  List<LatLng>? _ruta;
+  String? _rutaDeClave;
+  String? _rutaClave;
+  DateTime? _rutaPedidaEn;
+  bool _seguirCamara = true;
 
   @override
   void initState() {
@@ -940,6 +949,17 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Buscando conductor y viaje en curso: el mapa ocupa toda la pantalla y
+    // la barra superior flota encima (la dibuja cada vista).
+    final vista = rastreoVistaPara(_status);
+    final pantallaCompleta = !(_loading && _trip == null) &&
+        (vista == RastreoVista.busqueda || vista == RastreoVista.seguimiento);
+    if (pantallaCompleta) {
+      return Scaffold(
+        backgroundColor: RastreoColores.fondo,
+        body: _buildBody(),
+      );
+    }
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -955,7 +975,6 @@ class _RastreoScreenState extends State<RastreoScreen> {
             color: Color(0xFF1A1A2E),
           ),
         ),
-        actions: _buildAppBarActions(),
       ),
       body: _buildBody(),
     );
@@ -1002,43 +1021,49 @@ class _RastreoScreenState extends State<RastreoScreen> {
     }
   }
 
-  List<Widget> _buildAppBarActions() {
-    if (_hasOffers && _buscando) {
-      return [
-        Stack(
+  /// Acceso a las ofertas en la barra flotante, con su contador.
+  List<Widget> _accionesBusqueda() {
+    if (!(_hasOffers && _buscando)) return const [];
+    return [
+      BotonFlotanteRastreo(
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
           children: [
             IconButton(
-              icon: const Icon(Icons.local_offer, color: Color(0xFF1A1A2E)),
+              icon: const Icon(Icons.local_offer_outlined, color: RastreoColores.primario),
               tooltip: 'Ver ofertas',
               onPressed: _verOfertas,
             ),
             Positioned(
-              right: 8,
-              top: 8,
-              // El contador tapa el centro del icono: que no absorba el toque.
+              right: 4,
+              top: 4,
+              // El contador tapa parte del icono: que no absorba el toque.
               child: IgnorePointer(
                 child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '${_ofertas.length}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: RastreoColores.rojo,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: Text(
+                    '${_ofertas.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
               ),
             ),
           ],
         ),
-      ];
-    }
-    return [];
+      ),
+    ];
   }
 
   Widget _buildBody() {
@@ -1197,8 +1222,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
     );
   }
 
-  /// Mapa de búsqueda: radio de 2 km alrededor del origen, pulso y vehículos
-  /// disponibles cercanos.
+  /// Mapa de búsqueda a pantalla completa: radio de 2 km alrededor del
+  /// origen, pulso y vehículos disponibles cercanos. La cámara encuadra el
+  /// radio por encima de la tarjeta inferior.
   Widget _buildNearbyMap() {
     final origen = _trip?.origen;
     if (origen == null) {
@@ -1210,7 +1236,25 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final centro = LatLng(origen.lat, origen.lng);
     if (_nearbyMapCenter != centro) {
       _nearbyMapCenter = centro;
-      _nearbyMapOptions = MapOptions(initialCenter: centro, initialZoom: 13.5);
+      final media = MediaQuery.of(context);
+      // Radio de búsqueda + un margen, en grados.
+      const radioKm = 2.2;
+      final dLat = radioKm / 110.574;
+      final dLng = radioKm / (111.320 * cos(_toRad(origen.lat)).abs().clamp(0.01, 1.0));
+      _nearbyMapOptions = MapOptions(
+        initialCameraFit: CameraFit.bounds(
+          bounds: LatLngBounds(
+            LatLng(origen.lat - dLat, origen.lng - dLng),
+            LatLng(origen.lat + dLat, origen.lng + dLng),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            media.padding.top + 72,
+            16,
+            media.size.height * 0.45,
+          ),
+        ),
+      );
     }
     return FlutterMap(
       options: _nearbyMapOptions!,
@@ -1233,19 +1277,21 @@ class _RastreoScreenState extends State<RastreoScreen> {
             height: 140,
             child: const PulsoBusqueda(size: 140),
           ),
+          // Sin rumbo en /nearby-drivers: los camiones van sin rotar.
           for (final c in _cercanos)
-            Marker(
-              point: LatLng((c['lat'] as num).toDouble(), (c['lng'] as num).toDouble()),
-              width: 34,
-              height: 34,
-              child: const Icon(Icons.local_shipping, color: Color(0xFF1A1A2E), size: 28),
-            ),
+            if (c['lat'] is num && c['lng'] is num)
+              Marker(
+                point: LatLng((c['lat'] as num).toDouble(), (c['lng'] as num).toDouble()),
+                width: 34,
+                height: 34,
+                child: const MarcadorCamion(),
+              ),
           Marker(
             point: centro,
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             alignment: Alignment.topCenter,
-            child: const Icon(Icons.location_on, color: Colors.red, size: 36),
+            child: const Icon(Icons.location_on, color: RastreoColores.rojo, size: 40),
           ),
         ]),
       ],
@@ -1301,231 +1347,211 @@ class _RastreoScreenState extends State<RastreoScreen> {
       inicioBusqueda: _inicioBusqueda,
       onVerOfertas: _verOfertas,
       onCancelar: _cancelarBusqueda,
+      titulo: _getAppBarTitle(),
+      acciones: _accionesBusqueda(),
     );
   }
 
   Widget _buildPulseAnimation() => const _PulseSearchIndicator();
 
-  Widget _buildTrackingContent() {
-    return Stack(
-      children: [
-        Container(color: const Color(0xFFE5E7EB)),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: _buildDriverPanel(),
-        ),
-      ],
-    );
+  /// Con el conductor yendo por la carga la ruta va del conductor al origen;
+  /// desde que llega al origen, del origen al destino.
+  bool get _faseRecogida => _status == TripStatus.aceptado || _status == TripStatus.enCamino;
+
+  /// Pide la geometría de la ruta sólo cuando cambia la fase o sus extremos,
+  /// o si el conductor se desvió mucho de la ruta de recogida; nunca en cada
+  /// posición del GPS.
+  void _asegurarRuta({required LatLng? conductor, required LatLng? origen, required LatLng? destino}) {
+    final desde = _faseRecogida ? conductor : origen;
+    final hasta = _faseRecogida ? origen : destino;
+    if (desde == null || hasta == null) return;
+    final fase = _faseRecogida ? 'recogida' : 'destino';
+    final clave = _faseRecogida
+        ? '$fase|${hasta.latitude},${hasta.longitude}'
+        : '$fase|${desde.latitude},${desde.longitude}|${hasta.latitude},${hasta.longitude}';
+    if (clave == _rutaClave) {
+      if (!_faseRecogida || conductor == null || !_desviadoDeRuta(conductor)) return;
+      // Desvío: como mucho una nueva consulta cada 30 s.
+      final pedida = _rutaPedidaEn;
+      if (pedida != null && DateTime.now().difference(pedida) < const Duration(seconds: 30)) return;
+    }
+    _rutaClave = clave;
+    _rutaPedidaEn = DateTime.now();
+    RouteService.getRoute(desde, hasta).then((puntos) {
+      if (!mounted || _rutaClave != clave) return;
+      setState(() {
+        _ruta = puntos;
+        _rutaDeClave = clave;
+      });
+    }).catchError((_) {});
   }
 
-  Widget _buildDriverPanel() {
+  /// Más de 500 m del punto más cercano de la ruta real.
+  bool _desviadoDeRuta(LatLng conductor) {
+    final ruta = _ruta;
+    if (ruta == null || ruta.length <= 2) return false;
+    var minimo = double.infinity;
+    for (final p in ruta) {
+      final d = _haversine(conductor.latitude, conductor.longitude, p.latitude, p.longitude);
+      if (d < minimo) minimo = d;
+    }
+    return minimo > 500;
+  }
+
+  String _formatKm(num km) {
+    if (km < 1) return '${(km * 1000).round()} m';
+    return '${km.toStringAsFixed(km < 10 ? 1 : 0)} km';
+  }
+
+  /// Distancia total del viaje: la del backend si viene; si no, la recta
+  /// entre origen y destino, dicha como aproximada.
+  String? _distanciaViaje() {
+    final d = _trip?.distancia;
+    if (d != null && d > 0) return _formatKm(d);
+    final o = _trip?.origen;
+    final de = _trip?.destino;
+    if (o == null || de == null) return null;
+    if ((o.lat == 0 && o.lng == 0) || (de.lat == 0 && de.lng == 0)) return null;
+    final km = _haversine(o.lat, o.lng, de.lat, de.lng) / 1000;
+    return '≈ ${_formatKm(km)} en línea recta';
+  }
+
+  ({String estado, String? detalle, Color color}) _estadoSeguimiento() {
+    switch (_status) {
+      case TripStatus.aceptado:
+        return (
+          estado: 'Tu conductor va por tu carga',
+          detalle: 'Te avisaremos cuando esté cerca del punto de recogida.',
+          color: RastreoColores.primario,
+        );
+      case TripStatus.enCamino:
+        return (
+          estado: 'Tu conductor va hacia el punto de recogida',
+          detalle: 'Ten la carga lista para entregarla.',
+          color: RastreoColores.primario,
+        );
+      case TripStatus.llegada:
+        return (
+          estado: 'Tu conductor está en el punto de recogida',
+          detalle: 'Entrégale la carga para comenzar el viaje.',
+          color: RastreoColores.verde,
+        );
+      case TripStatus.enCurso:
+        return (
+          estado: 'Tu carga va hacia el destino',
+          detalle: 'Sigue el camión en el mapa en tiempo real.',
+          color: RastreoColores.verde,
+        );
+      case TripStatus.sos:
+        return (
+          estado: 'Alerta SOS activa',
+          detalle: 'El equipo de soporte fue notificado y está atento a tu viaje.',
+          color: RastreoColores.rojo,
+        );
+      default:
+        return (estado: 'Seguimiento del viaje', detalle: null, color: RastreoColores.primario);
+    }
+  }
+
+  Widget _buildTrackingContent() {
     final conductor = _trip?.conductor;
-    final conductorNombre = conductor?.nombre ?? 'Conductor';
-    final rating = etiquetaCalificacion(conductor?.calificacion);
     final telefono = conductor?.telefono;
-    final distance = _distanceToPickup();
+    final origen = MapaViaje.punto(_trip?.origen?.lat, _trip?.origen?.lng);
+    final destino = MapaViaje.punto(_trip?.destino?.lat, _trip?.destino?.lng);
+    final vehiculo = MapaViaje.punto(_driverLat, _driverLng);
+
+    _asegurarRuta(conductor: vehiculo, origen: origen, destino: destino);
+
+    // Ruta real si ya llegó la de esta fase; si no (o si el servicio de rutas
+    // falló y devolvió los extremos), línea recta punteada.
+    final desde = _faseRecogida ? vehiculo : origen;
+    final hasta = _faseRecogida ? origen : destino;
+    final rutaReal = _ruta != null && _ruta!.length > 2 && _rutaDeClave == _rutaClave;
+    final List<LatLng>? ruta = rutaReal
+        ? _ruta
+        : (desde != null && hasta != null ? [desde, hasta] : null);
+
+    final encuadre = <LatLng>[
+      if (vehiculo != null) vehiculo else if (desde != null) desde,
+      if (hasta != null) hasta,
+    ];
+
+    final double distanciaKm;
+    final String distanciaEtiqueta;
+    if (_faseRecogida || _status == TripStatus.llegada) {
+      distanciaKm = _distanceToPickup();
+      distanciaEtiqueta = 'Del conductor al punto de recogida';
+    } else {
+      distanciaKm = (vehiculo == null || destino == null)
+          ? double.infinity
+          : _haversine(vehiculo.latitude, vehiculo.longitude, destino.latitude, destino.longitude) / 1000;
+      distanciaEtiqueta = 'Del camión al destino';
+    }
     final eta = etaRecogida(
       status: _status,
-      distanciaKm: distance,
+      distanciaKm: _distanceToPickup(),
       tiempoEstimado: _trip?.tiempoEstimado,
       minutosServidor: _etaServidorMin,
     );
-    final chatEnabled = TripStatus.chatHabilitado(_status);
+    final estado = _estadoSeguimiento();
+    final media = MediaQuery.of(context);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x10000000),
-            blurRadius: 10,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFFE5E7EB),
-                child: const Icon(Icons.person, color: Color(0xFF6B7280), size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      conductorNombre,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Color(0xFF1A1A2E),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (conductor != null)
-                Row(
-                  children: [
-                    const Icon(Icons.star, color: Color(0xFFF59E0B), size: 20),
-                    const SizedBox(width: 4),
-                    Text(
-                      rating,
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              if (eta != null) ...[
-                _buildInfoChip(Icons.access_time, eta),
-                const SizedBox(width: 12),
-              ],
-              _buildInfoChip(Icons.location_on, _formatDistance(distance)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              if (chatEnabled) ...[
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.chat_bubble_outline,
-                    label: 'Chat',
-                    onTap: () {
-                      _safePush(ChatScreen(trip: _trip?.toJson() ?? {}));
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.phone_outlined,
-                  label: 'Llamar',
-                  onTap: () async {
-                    if (telefono != null) {
-                      final uri = Uri.parse('tel:$telefono');
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      }
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.cancel_outlined,
-                  label: 'Cancelar',
-                  onTap: _cancelling ? null : _cancelar,
-                  color: const Color(0xFFE53935),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.pending_actions_outlined,
-                  label: 'Reportar',
-                  onTap: () {
-                    _safePush(ReportarProblemaScreen(
-                      trip: _trip?.toJson(),
-                      role: 'cliente',
-                      onSubmitted: () {
-                        _safePop();
-                      },
-                    ));
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildActionButton(
-                  icon: Icons.warning_amber_rounded,
-                  label: 'SOS',
-                  onTap: _sosSending ? null : _sendSos,
-                  color: const Color(0xFFDC2626),
-                  showSpinner: _sosSending,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: const Color(0xFF6B7280)),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    VoidCallback? onTap,
-    Color? color,
-    bool showSpinner = false,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          borderRadius: BorderRadius.circular(12),
+    return SeguimientoViajeView(
+      titulo: _getAppBarTitle(),
+      mapa: MapaViaje(
+        key: const ValueKey('mapa_seguimiento'),
+        origen: origen,
+        destino: destino,
+        vehiculo: vehiculo,
+        ruta: ruta,
+        rutaAproximada: !rutaReal,
+        encuadre: encuadre,
+        seguir: _seguirCamara,
+        padding: EdgeInsets.fromLTRB(
+          40,
+          media.padding.top + 88,
+          40,
+          media.size.height * SeguimientoViajeView.tamanoInicialHoja + 24,
         ),
-        child: Column(
-          children: [
-            if (showSpinner)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFDC2626)),
-              )
-            else
-              Icon(icon, color: color ?? const Color(0xFF2563EB), size: 22),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color ?? const Color(0xFF4B5563),
-              ),
-            ),
-          ],
-        ),
+        onGestoUsuario: () {
+          if (_seguirCamara && mounted) setState(() => _seguirCamara = false);
+        },
       ),
+      onRecentrar: _seguirCamara ? null : () => setState(() => _seguirCamara = true),
+      estado: estado.estado,
+      estadoDetalle: estado.detalle,
+      colorEstado: estado.color,
+      eta: eta,
+      etaEtiqueta: 'Llegada estimada al punto de recogida',
+      distancia: _formatDistance(distanciaKm),
+      distanciaEtiqueta: distanciaEtiqueta,
+      trip: _trip,
+      calificacion: etiquetaCalificacionConductor(conductor?.toJson()),
+      distanciaViaje: _distanciaViaje(),
+      onChat: TripStatus.chatHabilitado(_status)
+          ? () => _safePush(ChatScreen(trip: _trip?.toJson() ?? {}))
+          : null,
+      onLlamar: () async {
+        if (telefono != null) {
+          final uri = Uri.parse('tel:$telefono');
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        }
+      },
+      onReportar: () {
+        _safePush(ReportarProblemaScreen(
+          trip: _trip?.toJson(),
+          role: 'cliente',
+          onSubmitted: () {
+            _safePop();
+          },
+        ));
+      },
+      onSos: _sosSending ? null : _sendSos,
+      sosEnviando: _sosSending,
+      onCancelar: _cancelling ? null : _cancelar,
+      textoCancelar: cancelacionRequiereSolicitud(_status) ? 'Solicitar cancelación' : 'Cancelar viaje',
     );
   }
 

@@ -13,6 +13,9 @@ User _$UserFromJson(Map<String, dynamic> json) => User(
   rol: json['rol'] as String?,
   telefono: json['telefono'] as String?,
   calificacion: (json['calificacion'] as num?)?.toDouble(),
+  placa: json['placa'] as String?,
+  tipoVehiculo: json['tipoVehiculo'] as String?,
+  totalViajes: json['totalViajes'] as num?,
 );
 
 Map<String, dynamic> _$UserToJson(User instance) => <String, dynamic>{
@@ -22,4 +25,7 @@ Map<String, dynamic> _$UserToJson(User instance) => <String, dynamic>{
   'rol': instance.rol,
   'telefono': instance.telefono,
   'calificacion': instance.calificacion,
+  'placa': instance.placa,
+  'tipoVehiculo': instance.tipoVehiculo,
+  'totalViajes': instance.totalViajes,
 };
