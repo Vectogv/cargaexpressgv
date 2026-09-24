@@ -4,6 +4,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../services/map_config.dart';
+import 'capa_vehiculos.dart';
+import 'vehiculo_mapa.dart';
 
 /// Mapa real (Mapbox u OSM de respaldo) para las pantallas del viaje: marca
 /// origen, destino y el vehículo cuando se conocen, y encuadra la cámara para
@@ -15,6 +17,10 @@ import '../services/map_config.dart';
 /// con [seguir], vuelve a encuadrar [encuadre] cada vez que cambia (el
 /// vehículo en vivo). Un gesto del usuario se avisa con [onGestoUsuario] para
 /// que la pantalla deje de seguir y ofrezca "Recentrar".
+///
+/// Con [dibujarVehiculo] el vehículo se dibuja visto desde arriba según
+/// [tipoVehiculo], orientado a [rumboVehiculo] (o al rumbo de su movimiento)
+/// y deslizándose entre posiciones del GPS, con [etiquetaVehiculo] debajo.
 ///
 /// Las teselas y las opciones del mapa se crean una sola vez: en cada nueva
 /// posición sólo cambian los marcadores y la línea.
@@ -28,6 +34,10 @@ class MapaViaje extends StatefulWidget {
   final bool seguir;
   final EdgeInsets padding;
   final VoidCallback? onGestoUsuario;
+  final bool dibujarVehiculo;
+  final String? tipoVehiculo;
+  final double? rumboVehiculo;
+  final String? etiquetaVehiculo;
 
   const MapaViaje({
     super.key,
@@ -40,6 +50,10 @@ class MapaViaje extends StatefulWidget {
     this.seguir = false,
     this.padding = const EdgeInsets.all(48),
     this.onGestoUsuario,
+    this.dibujarVehiculo = false,
+    this.tipoVehiculo,
+    this.rumboVehiculo,
+    this.etiquetaVehiculo,
   });
 
   /// Lee `origen`/`destino` ({lat, lng}) del JSON del viaje.
@@ -200,7 +214,7 @@ class _MapaViajeState extends State<MapaViaje> {
               alignment: Alignment.topCenter,
               child: const Icon(Icons.location_on, color: Color(0xFFEF4444), size: 36),
             ),
-          if (widget.vehiculo != null)
+          if (widget.vehiculo != null && !widget.dibujarVehiculo)
             Marker(
               point: widget.vehiculo!,
               width: 44,
@@ -208,6 +222,20 @@ class _MapaViajeState extends State<MapaViaje> {
               child: const _Punto(color: Color(0xFF2563EB), icon: Icons.local_shipping),
             ),
         ]),
+        if (widget.dibujarVehiculo)
+          CapaVehiculos(vehiculos: [
+            if (widget.vehiculo != null)
+              VehiculoEnMapa(
+                id: 'asignado',
+                punto: widget.vehiculo!,
+                tipo: tipoVehiculoMapaDe(widget.tipoVehiculo),
+                color: colorVehiculoAsignado,
+                rumbo: widget.rumboVehiculo,
+                etiqueta: widget.etiquetaVehiculo,
+                tamano: 52,
+                halo: true,
+              ),
+          ]),
       ],
     );
   }

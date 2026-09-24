@@ -21,7 +21,9 @@ import '../../services/route_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
+import '../../widgets/capa_vehiculos.dart';
 import '../../widgets/mapa_viaje.dart';
+import '../../widgets/vehiculo_mapa.dart';
 import '../shared/action_key.dart';
 import 'busqueda_conductor_view.dart';
 import 'cancel_trip_screen.dart';
@@ -99,6 +101,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
   bool _conductorEnLaZonaShown = false;
   double _driverLat = 0;
   double _driverLng = 0;
+  // Rumbo del GPS si el payload lo trae (hoy el backend sólo reenvía lat/lng:
+  // el mapa lo calcula del movimiento).
+  double? _driverRumbo;
   // Throttle de reconstrucciones por `driver:location` (máx. 1 por segundo).
   DateTime _lastDriverRebuild = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _driverRebuildTimer;
@@ -427,6 +432,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
         if (newLat == _driverLat && newLng == _driverLng) return;
         _driverLat = newLat;
         _driverLng = newLng;
+        _driverRumbo = rumboDePayload(data);
         _scheduleDriverRebuild();
         _checkProximity();
       }
@@ -1277,15 +1283,13 @@ class _RastreoScreenState extends State<RastreoScreen> {
             height: 140,
             child: const PulsoBusqueda(size: 140),
           ),
-          // Sin rumbo en /nearby-drivers: los camiones van sin rotar.
-          for (final c in _cercanos)
-            if (c['lat'] is num && c['lng'] is num)
-              Marker(
-                point: LatLng((c['lat'] as num).toDouble(), (c['lng'] as num).toDouble()),
-                width: 34,
-                height: 34,
-                child: const MarcadorCamion(),
-              ),
+        ]),
+        CapaVehiculos(
+          vehiculos: vehiculosCercanosEnMapa(_cercanos),
+          // /nearby-drivers redondea a ~11 m: sólo un avance claro gira el vehículo.
+          umbralRumboM: 30,
+        ),
+        MarkerLayer(markers: [
           Marker(
             point: centro,
             width: 40,
@@ -1503,6 +1507,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
         origen: origen,
         destino: destino,
         vehiculo: vehiculo,
+        dibujarVehiculo: true,
+        tipoVehiculo: conductor?.tipoVehiculo,
+        rumboVehiculo: _driverRumbo,
+        etiquetaVehiculo: etiquetaVehiculoAsignado(_status),
         ruta: ruta,
         rutaAproximada: !rutaReal,
         encuadre: encuadre,
@@ -1732,6 +1740,39 @@ int? minutosEta(Map<String, dynamic> data) {
   final n = v is num ? v : num.tryParse(v?.toString() ?? '');
   if (n == null || !n.isFinite || n < 0) return null;
   return n.ceil();
+}
+
+/// Pastilla bajo el vehículo del conductor asignado según la fase del viaje.
+String? etiquetaVehiculoAsignado(String status) {
+  switch (status) {
+    case TripStatus.aceptado:
+    case TripStatus.enCamino:
+      return 'En camino';
+    case TripStatus.llegada:
+      return 'En el origen';
+    case TripStatus.enCurso:
+      return 'Con tu carga';
+    default:
+      return null;
+  }
+}
+
+/// Vehículos de `/api/trips/:id/nearby-drivers` ({lat, lng, tipoVehiculo,
+/// distanciaKm}) para el mapa de búsqueda. El backend no manda id ni rumbo;
+/// si algún día llegan (`id`/`conductorId`, `heading`...), se usan.
+List<VehiculoEnMapa> vehiculosCercanosEnMapa(List<Map<String, dynamic>> cercanos) {
+  return [
+    for (final c in cercanos)
+      if (c['lat'] is num && c['lng'] is num)
+        VehiculoEnMapa(
+          id: (c['conductorId'] ?? c['id'])?.toString(),
+          punto: LatLng((c['lat'] as num).toDouble(), (c['lng'] as num).toDouble()),
+          tipo: tipoVehiculoMapaDe(c['tipoVehiculo']?.toString()),
+          color: colorVehiculoCercano,
+          rumbo: rumboDePayload(c),
+          tamano: 40,
+        ),
+  ];
 }
 
 /// Tiempo estimado de llegada del conductor al origen, o null si no hay

@@ -47,6 +47,9 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
             child: MapaViaje(
               destino: MapaViaje.puntoDe(trip['destino']),
               vehiculo: ubicacionConductor,
+              dibujarVehiculo: true,
+              tipoVehiculo: conductor['tipoVehiculo']?.toString(),
+              etiquetaVehiculo: 'Con tu carga',
             ),
           ),
           Expanded(
