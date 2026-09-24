@@ -52,9 +52,22 @@ class _SolicitudViajeSheetState extends State<SolicitudViajeSheet> {
         return;
       }
       setState(() => _restante--);
+      // Cada 5 s se confirma que la solicitud sigue abierta: si ya la tomó
+      // alguien (incluido este conductor) o se canceló, el aviso se cierra.
+      if (_restante % 5 == 0) _cargarDetalle();
     });
+    _cargarDetalle();
+  }
+
+  void _cargarDetalle() {
     TripService.getTripDetail(widget.tripId).then((d) {
-      if (mounted) setState(() => _detalle = d);
+      if (!mounted) return;
+      if (!solicitudSigueAbierta(d['estado'])) {
+        _timer?.cancel();
+        Navigator.of(context).maybePop();
+        return;
+      }
+      setState(() => _detalle = d);
     }).catchError((_) {});
   }
 
@@ -170,9 +183,14 @@ class _SolicitudViajeSheetState extends State<SolicitudViajeSheet> {
             ),
             const SizedBox(height: 16),
             _parada(Icons.circle, _verde, 'Recogida', origen.isEmpty ? 'Cerca de ti' : origen),
-            Padding(
-              padding: const EdgeInsets.only(left: 9),
-              child: Container(width: 2, height: 18, color: Colors.grey.shade300),
+            // Align: en una columna "stretch" el conector ocupaba todo el
+            // ancho y se veía como una barra gris.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 9),
+                child: Container(width: 2, height: 18, color: Colors.grey.shade300),
+              ),
             ),
             _parada(Icons.location_on_rounded, Colors.red, 'Destino', destino.isEmpty ? 'Cargando…' : destino),
             if (carga.isNotEmpty) ...[
@@ -253,4 +271,11 @@ class _SolicitudViajeSheetState extends State<SolicitudViajeSheet> {
           ),
         ],
       );
+}
+
+/// La solicitud admite ofertas sólo mientras el backend busca conductor
+/// (`buscando_conductor` o `pendiente` con ofertas sin aceptar).
+bool solicitudSigueAbierta(dynamic estado) {
+  final e = estado?.toString();
+  return e == null || e == 'buscando_conductor' || e == 'pendiente';
 }
