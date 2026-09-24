@@ -100,8 +100,13 @@ class ResolucionScreen extends StatelessWidget {
                         color: _blue,
                       ),
                     ),
+                    // Mensaje del backend (p. ej. "Quedas bajo observación").
+                    if (_texto(disputa['mensaje']) != null) ...[
+                      const SizedBox(height: 8),
+                      Text(_texto(disputa['mensaje'])!, style: TextStyle(fontSize: 14, color: _label, height: 1.4)),
+                    ],
                     if (_texto(disputa['problema']) != null)
-                      ..._seccion('Problema reportado', _texto(disputa['problema'])!),
+                      ..._seccion('Problema reportado', etiquetaProblemaDisputa(disputa['problema'])),
                     if (_texto(disputa['comentarioAdmin']) != null)
                       ..._seccion('Comentario del administrador', _texto(disputa['comentarioAdmin'])!),
                     const SizedBox(height: 32),

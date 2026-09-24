@@ -38,9 +38,17 @@ class _DisputaIniciadaWrapperState extends State<DisputaIniciadaWrapper> {
     _resolvedSub = SocketServiceClient.instance.onDisputeResolved.listen(_onResolved);
   }
 
+  /// El backend identifica la disputa como `disputaId` (dispute:resolved) o
+  /// `id`; si esta pantalla no conoce el id (se abrió al sincronizar el
+  /// viaje), acepta el evento.
+  bool _esMiDisputa(Map<String, dynamic> data) {
+    final id = (data['disputaId'] ?? data['id'])?.toString();
+    final mia = widget.disputeId?.toString();
+    return mia == null || id == null || id == mia;
+  }
+
   void _onUpdated(Map<String, dynamic> data) {
-    final id = data['id']?.toString();
-    if (id != widget.disputeId?.toString()) return;
+    if (!_esMiDisputa(data)) return;
     final estado = data['estado'] as String?;
     if (estado == 'en_revision') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -59,14 +67,22 @@ class _DisputaIniciadaWrapperState extends State<DisputaIniciadaWrapper> {
   }
 
   void _onResolved(Map<String, dynamic> data) {
-    final id = data['id']?.toString();
-    if (id != widget.disputeId?.toString()) return;
+    if (!_esMiDisputa(data)) return;
+    final id = widget.disputeId ?? data['disputaId'] ?? data['id'];
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      Map<String, dynamic> disputa = const {};
-      try {
-        disputa = await ApiClient.instance.getDispute(widget.disputeId);
-      } catch (_) {}
+      // El evento ya trae resultado y mensaje; el detalle del backend los
+      // completa si se puede consultar.
+      final disputa = <String, dynamic>{
+        'id': id,
+        if (data['resultado'] != null) 'resultado': data['resultado'],
+        if (data['message'] != null) 'mensaje': data['message'],
+      };
+      if (id != null) {
+        try {
+          disputa.addAll(await ApiClient.instance.getDispute(id));
+        } catch (_) {}
+      }
       if (!mounted) return;
       Navigator.pushReplacement(
         context,

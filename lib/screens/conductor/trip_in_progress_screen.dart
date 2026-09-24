@@ -159,6 +159,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     } else if (_trip != null) {
       _loading = false;
       _startGpsTimer();
+      // El viaje salió de la caché local: se confirma de inmediato con el
+      // backend (podía estar ya en disputa, cancelado o finalizado).
+      WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarConServidor());
     } else {
       _fetchActiveTrip();
     }
