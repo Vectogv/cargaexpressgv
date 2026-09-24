@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
-import 'package:cargaexpress/screens/cliente/rastreo_ui.dart';
+import 'package:cargaexpress/widgets/vehiculo_mapa.dart';
 
 import '../../helpers/fake_api.dart';
 
 /// Vista "Buscando conductor" (`BusquedaConductorView`) tal como la arma
 /// `RastreoScreen._buildNearbyMap`: los vehículos que llega por
-/// `/api/trips/:id/nearby-drivers` se dibujan como camiones (`MarcadorCamion`)
+/// `/api/trips/:id/nearby-drivers` se dibujan como camiones (`VehiculoMapa`)
 /// en el mapa real y alimentan el contador de "vehículos cerca". Las ofertas
 /// que ya existían (`GET /offers`) alimentan el contador de "Ver ofertas".
 Map<String, dynamic> _viaje() => {
@@ -45,7 +45,7 @@ void main() {
       {'lat': 4.602, 'lng': -74.102, 'tipoVehiculo': 'camioneta'},
     ]);
 
-    expect(find.byType(MarcadorCamion), findsNWidgets(2));
+    expect(find.byType(VehiculoMapa), findsNWidgets(2));
     expect(find.text('2 vehículos disponibles a menos de 2 km'), findsOneWidget);
     expect(find.text('Aún no hay vehículos cerca, seguimos buscando'), findsNothing);
   });
@@ -53,7 +53,7 @@ void main() {
   testWidgets('sin vehículos cercanos no se dibuja ningún camión y se ve el aviso honesto', (tester) async {
     await _abrir(tester, cercanos: []);
 
-    expect(find.byType(MarcadorCamion), findsNothing);
+    expect(find.byType(VehiculoMapa), findsNothing);
     expect(find.text('Aún no hay vehículos cerca, seguimos buscando'), findsOneWidget);
   });
 
@@ -63,7 +63,7 @@ void main() {
       {'lat': null, 'lng': null, 'tipoVehiculo': 'camion'},
     ]);
 
-    expect(find.byType(MarcadorCamion), findsNWidgets(1));
+    expect(find.byType(VehiculoMapa), findsNWidgets(1));
     expect(tester.takeException(), isNull);
   });
 
