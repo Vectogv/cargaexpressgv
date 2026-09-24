@@ -13,12 +13,17 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
   /// Última posición conocida del conductor; sin ella sólo se marca el destino.
   final LatLng? ubicacionConductor;
 
+  /// Si [trip] aún no trae `fotoEntrega` (el viaje en memoria es anterior a
+  /// la subida de la foto), se consulta al backend con esto.
+  final Future<String?> Function()? cargarFoto;
+
   const LlegadaAlDestinoScreen({
     super.key,
     required this.conductor,
     required this.trip,
     required this.onVerDetalle,
     this.ubicacionConductor,
+    this.cargarFoto,
   });
 
   @override
@@ -80,7 +85,7 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  _EvidencePhoto(fotoUrl: trip['fotoEntrega'] as String?),
+                  _EvidencePhoto(fotoUrl: trip['fotoEntrega'] as String?, cargarFoto: cargarFoto),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -171,15 +176,44 @@ class _DriverCard extends StatelessWidget {
   }
 }
 
-class _EvidencePhoto extends StatelessWidget {
+class _EvidencePhoto extends StatefulWidget {
   final String? fotoUrl;
-  const _EvidencePhoto({this.fotoUrl});
+  final Future<String?> Function()? cargarFoto;
+  const _EvidencePhoto({this.fotoUrl, this.cargarFoto});
+
+  @override
+  State<_EvidencePhoto> createState() => _EvidencePhotoState();
+}
+
+class _EvidencePhotoState extends State<_EvidencePhoto> {
+  Future<String?>? _remota;
+
+  @override
+  void initState() {
+    super.initState();
+    final local = widget.fotoUrl;
+    if ((local == null || local.isEmpty) && widget.cargarFoto != null) {
+      _remota = widget.cargarFoto!().catchError((_) => null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (fotoUrl != null && fotoUrl!.isNotEmpty) {
+    final remota = _remota;
+    if (remota == null) return _foto(widget.fotoUrl);
+    return FutureBuilder<String?>(
+      future: remota,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return _cargando();
+        return _foto(snap.data);
+      },
+    );
+  }
+
+  Widget _foto(String? url) {
+    if (url != null && url.isNotEmpty) {
       return MediaImage(
-        path: fotoUrl,
+        path: url,
         width: double.infinity,
         height: 160,
         borderRadius: BorderRadius.circular(12),
@@ -187,6 +221,19 @@ class _EvidencePhoto extends StatelessWidget {
       );
     }
     return _buildEmptyState();
+  }
+
+  Widget _cargando() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        height: 160,
+        color: const Color(0xFFF3F4F6),
+        alignment: Alignment.center,
+        child: const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
+      ),
+    );
   }
 
   // Sin foto: mejor mostrarlo honestamente que dibujar una imagen falsa.

@@ -1,5 +1,10 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 import 'package:open_route_service/open_route_service.dart';
 import 'package:latlong2/latlong.dart';
+
+import 'map_config.dart';
 
 class RouteService {
   // ⚠️ Seguridad: la API key de OpenRouteService NO debe ir en el binario.
@@ -21,7 +26,11 @@ class RouteService {
 
     final apiKey = _apiKey;
     if (apiKey == null || apiKey.isEmpty) {
-      return [origin, destination];
+      // Sin key de ORS: ruta por calles con Mapbox Directions (el token ya lo
+      // sirve el backend en /api/config/mapbox); si tampoco hay, línea recta.
+      final mapbox = await _rutaMapbox(origin, destination);
+      if (mapbox != null) _cache[key] = mapbox;
+      return mapbox ?? [origin, destination];
     }
 
     try {
@@ -37,4 +46,47 @@ class RouteService {
       return [origin, destination];
     }
   }
-}
+
+  /// Cliente HTTP inyectable en tests.
+  static http.Client Function() clientFactory = http.Client.new;
+
+  static Future<List<LatLng>?> _rutaMapbox(LatLng origin, LatLng destination) async {
+    await MapConfig.ensureLoaded();
+    final token = MapConfig.mapboxAccessToken;
+    if (token.isEmpty) return null;
+    final uri = Uri.https(
+      'api.mapbox.com',
+      '/directions/v5/mapbox/driving/'
+          '${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}',
+      {'geometries': 'geojson', 'overview': 'full', 'access_token': token},
+    );
+    final client = clientFactory();
+    try {
+      final res = await client.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+      return parseRutaMapbox(jsonDecode(res.body));
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Puntos de la primera ruta de una respuesta de Mapbox Directions
+  /// (GeoJSON: `[lng, lat]`); null si no hay ruta utilizable.
+  static List<LatLng>? parseRutaMapbox(Object? json) {
+    if (json is! Map) return null;
+    final routes = json['routes'];
+    if (routes is! List || routes.isEmpty) return null;
+    final geometry = (routes.first as Map?)?['geometry'];
+    final coords = geometry is Map ? geometry['coordinates'] : null;
+    if (coords is! List || coords.length < 2) return null;
+    final puntos = <LatLng>[];
+    for (final c in coords) {
+      if (c is List && c.length >= 2 && c[0] is num && c[1] is num) {
+        puntos.add(LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()));
+      }
+    }
+    return puntos.length >= 2 ? puntos : null;
+  }
+}

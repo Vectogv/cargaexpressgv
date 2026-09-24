@@ -772,6 +772,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
       conductor: conductor?.toJson() ?? {},
       trip: tripParaLlegada,
       ubicacionConductor: MapaViaje.punto(_driverLat, _driverLng),
+      cargarFoto: _trip?.id == null
+          ? null
+          : () async => (await TripService.getTripDetail(_trip!.id))['fotoEntrega'] as String?,
       onVerDetalle: () {
         // Los datos de `trip:finalize_request` pueden llegar después del
         // cambio de estado: se leen al abrir la confirmación.
@@ -915,7 +918,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
   String _montoFinalLabel() {
     final monto = _trip?.precioFinal ?? _trip?.precioEstimado;
     if (monto == null) return '';
-    return 'Monto final: \$${monto.toStringAsFixed(0)}';
+    final miles = monto.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+    return 'Monto final: \$$miles';
   }
 
   String _formatDistance(double km) {
@@ -1257,7 +1261,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
             16,
             media.padding.top + 72,
             16,
-            media.size.height * 0.45,
+            media.size.height * 0.6, // la hoja de búsqueda cubre ~60 % de la pantalla
           ),
         ),
       );
