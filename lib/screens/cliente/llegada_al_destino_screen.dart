@@ -180,100 +180,33 @@ class _EvidencePhoto extends StatelessWidget {
         width: double.infinity,
         height: 160,
         borderRadius: BorderRadius.circular(12),
-        placeholder: _buildMockPhoto(),
+        placeholder: _buildEmptyState(),
       );
     }
-    return _buildMockPhoto();
+    return _buildEmptyState();
   }
 
-  Widget _buildMockPhoto() {
+  // Sin foto: mejor mostrarlo honestamente que dibujar una imagen falsa.
+  Widget _buildEmptyState() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
         width: double.infinity,
         height: 160,
-        color: const Color(0xFFD1D5DB),
-        child: CustomPaint(painter: _EvidencePainter()),
+        color: const Color(0xFFE5E7EB),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.no_photography_outlined, size: 32, color: Color(0xFF9CA3AF)),
+            const SizedBox(height: 8),
+            Text(
+              'El conductor no adjuntó foto',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280), fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
       ),
     );
   }
-}
-
-class _EvidencePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final skyPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [const Color(0xFF93C5FD), const Color(0xFFBFDBFE)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height * 0.5));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height * 0.5), skyPaint);
-
-    final groundPaint = Paint()..color = const Color(0xFF9CA3AF);
-    canvas.drawRect(
-      Rect.fromLTWH(0, size.height * 0.5, size.width, size.height * 0.5),
-      groundPaint,
-    );
-
-    final truckPaint = Paint()..color = const Color(0xFFF9FAFB);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.05, size.height * 0.25, size.width * 0.55, size.height * 0.45),
-        const Radius.circular(4),
-      ),
-      truckPaint,
-    );
-
-    final cabinPaint = Paint()..color = const Color(0xFF374151);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.6, size.height * 0.35, size.width * 0.2, size.height * 0.35),
-        const Radius.circular(4),
-      ),
-      cabinPaint,
-    );
-
-    final windowPaint = Paint()..color = const Color(0xFF93C5FD);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.62, size.height * 0.37, size.width * 0.14, size.height * 0.14),
-        const Radius.circular(2),
-      ),
-      windowPaint,
-    );
-
-    final wheelPaint = Paint()..color = const Color(0xFF111827);
-    canvas.drawCircle(Offset(size.width * 0.18, size.height * 0.73), size.height * 0.08, wheelPaint);
-    canvas.drawCircle(Offset(size.width * 0.42, size.height * 0.73), size.height * 0.08, wheelPaint);
-    canvas.drawCircle(Offset(size.width * 0.65, size.height * 0.73), size.height * 0.07, wheelPaint);
-
-    final box1 = Paint()..color = const Color(0xFFD97706);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.72, size.height * 0.28, size.width * 0.12, size.height * 0.22),
-        const Radius.circular(2),
-      ),
-      box1,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.82, size.height * 0.34, size.width * 0.14, size.height * 0.16),
-        const Radius.circular(2),
-      ),
-      box1..color = const Color(0xFFF59E0B),
-    );
-
-    final linePaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.15)
-      ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(size.width * 0.78, size.height * 0.28),
-      Offset(size.width * 0.78, size.height * 0.5),
-      linePaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

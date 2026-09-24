@@ -21,6 +21,7 @@ class Trip {
   final User? conductor;
   final String? createdAt;
   final String? updatedAt;
+  final String? fotoEntrega;
 
   Trip({
     required this.id,
@@ -37,6 +38,7 @@ class Trip {
     this.conductor,
     this.createdAt,
     this.updatedAt,
+    this.fotoEntrega,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {

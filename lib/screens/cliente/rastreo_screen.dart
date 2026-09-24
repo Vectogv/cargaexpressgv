@@ -702,10 +702,21 @@ class _RastreoScreenState extends State<RastreoScreen> {
     _volverARastreo();
     _isNavigating = true;
 
+    // La foto de evidencia puede no estar aún en `_trip` (el conductor la
+    // sube justo antes de pedir la finalización y el socket puede llegar
+    // antes de que se refresque el viaje): se completa con lo que traiga
+    // `trip:finalize_request` si `_trip` todavía no la tiene.
+    final tripParaLlegada = Map<String, dynamic>.from(_trip?.toJson() ?? {});
+    final fotoPendiente = _pendingFinalizeRequest?['foto'] as String?;
+    final fotoActual = tripParaLlegada['fotoEntrega'] as String?;
+    if ((fotoActual == null || fotoActual.isEmpty) && fotoPendiente != null && fotoPendiente.isNotEmpty) {
+      tripParaLlegada['fotoEntrega'] = fotoPendiente;
+    }
+
     // Primero mostrar LlegadaAlDestinoScreen
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => LlegadaAlDestinoScreen(
       conductor: conductor?.toJson() ?? {},
-      trip: _trip?.toJson() ?? {},
+      trip: tripParaLlegada,
       ubicacionConductor: MapaViaje.punto(_driverLat, _driverLng),
       onVerDetalle: () {
         // Los datos de `trip:finalize_request` pueden llegar después del
