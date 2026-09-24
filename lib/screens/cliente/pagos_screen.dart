@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api/payment_service.dart';
+import '../../services/socket_service_client.dart';
 
 /// Cuenta suspendida hasta que el cliente pague (p. ej. tras una disputa
 /// resuelta con acuerdo de pago, admin_controller.resolveDispute).
@@ -37,10 +40,30 @@ class _PagosScreenState extends State<PagosScreen> {
   String? _error;
   String? _proofMessage;
 
+  // El administrador aprueba o rechaza el comprobante mientras la pantalla
+  // está abierta: se recarga sola (payment:confirmed / payment:rejected).
+  final List<StreamSubscription<Map<String, dynamic>>> _subs = [];
+
   @override
   void initState() {
     super.initState();
     _load();
+    final socket = SocketServiceClient.instance;
+    for (final stream in [socket.onPaymentConfirmed, socket.onPaymentRejected, socket.onDisputeResolved]) {
+      _subs.add(stream.listen((_) {
+        if (!mounted) return;
+        setState(() => _proofMessage = null);
+        _load();
+      }));
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    super.dispose();
   }
 
   Future<void> _load() async {
