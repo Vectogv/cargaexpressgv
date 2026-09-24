@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import '../../contracts/calificacion.dart';
+import '../../widgets/mapa_viaje.dart';
 import 'confirmar_entrega_screen.dart' show AvisoConfirmacionPendiente;
 import '../../widgets/media_image.dart';
 
@@ -8,11 +10,15 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
   final Map<String, dynamic> trip;
   final VoidCallback onVerDetalle;
 
+  /// Última posición conocida del conductor; sin ella sólo se marca el destino.
+  final LatLng? ubicacionConductor;
+
   const LlegadaAlDestinoScreen({
     super.key,
     required this.conductor,
     required this.trip,
     required this.onVerDetalle,
+    this.ubicacionConductor,
   });
 
   @override
@@ -35,7 +41,14 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          _MapSection(),
+          SizedBox(
+            height: 220,
+            width: double.infinity,
+            child: MapaViaje(
+              destino: MapaViaje.puntoDe(trip['destino']),
+              vehiculo: ubicacionConductor,
+            ),
+          ),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -96,134 +109,6 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MapSection extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 220,
-      width: double.infinity,
-      color: const Color(0xFFE8EDF2),
-      child: Stack(
-        children: [
-          CustomPaint(
-            size: const Size(double.infinity, 220),
-            painter: _MapGridPainter(),
-          ),
-          Center(
-            child: Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF2563EB).withValues(alpha: 0.12),
-              ),
-            ),
-          ),
-          Center(
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.local_shipping,
-                color: Color(0xFF2563EB),
-                size: 24,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 28,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEF4444),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.location_on,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  CustomPaint(
-                    size: const Size(12, 8),
-                    painter: _PinTailPainter(color: const Color(0xFFEF4444)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFCDD5DE)
-      ..strokeWidth = 0.8;
-
-    for (final y in [45.0, 90.0, 135.0, 180.0]) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-    for (final x in [
-      size.width * 0.15,
-      size.width * 0.35,
-      size.width * 0.60,
-      size.width * 0.80,
-    ]) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-
-    final blockPaint = Paint()..color = const Color(0xFFD1E8D0);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.15, 45, size.width * 0.2, 45), blockPaint);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.60, 90, size.width * 0.2, 45), blockPaint);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.35, 135, size.width * 0.25, 45), blockPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _PinTailPainter extends CustomPainter {
-  final Color color;
-  const _PinTailPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _DriverCard extends StatelessWidget {

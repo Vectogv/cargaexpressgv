@@ -28,6 +28,7 @@ import '../../services/api/trip_service.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/route_service.dart';
 import '../../services/config_cliente_service.dart';
+import '../../widgets/mapa_viaje.dart';
 import 'esperando_confirmacion_cliente.dart';
 import 'trip_chat_screen.dart';
 import 'viaje_en_camino_screen.dart';
@@ -1315,6 +1316,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       ratingCliente: cliente?.calificacion ?? 5.0,
       tiempoEstimado: etaMin > 0 ? '~$etaMin min' : '--',
       distancia: distOrigen > 0 ? '${distOrigen.toStringAsFixed(1)} km' : '--',
+      origenPos: MapaViaje.punto(t.origen?.lat, t.origen?.lng),
+      destinoPos: MapaViaje.punto(t.destino?.lat, t.destino?.lng),
+      vehiculoPos: MapaViaje.punto(_currentLat, _currentLng),
       onChat: () => Navigator.push(context, MaterialPageRoute(
         builder: (_) => TripChatScreen(trip: t.toJson()))),
       onLlamar: () => _showClientPhone(t),
@@ -1335,6 +1339,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       ratingCliente: cliente?.calificacion ?? 5.0,
       tiempoEstimado: '--',
       distancia: '0.0 km',
+      origenPos: MapaViaje.punto(t.origen?.lat, t.origen?.lng),
+      destinoPos: MapaViaje.punto(t.destino?.lat, t.destino?.lng),
+      vehiculoPos: MapaViaje.punto(_currentLat, _currentLng),
       onChat: () => Navigator.push(context, MaterialPageRoute(
         builder: (_) => TripChatScreen(trip: t.toJson()))),
       onLlamar: () => _showClientPhone(t),
@@ -1351,6 +1358,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       nombreCliente: cliente?.nombre ?? 'Cliente',
       ratingCliente: cliente?.calificacion ?? 5.0,
       isFinalizando: _actionLoading,
+      origenPos: MapaViaje.punto(t.origen?.lat, t.origen?.lng),
+      destinoPos: MapaViaje.punto(t.destino?.lat, t.destino?.lng),
+      vehiculoPos: MapaViaje.punto(_currentLat, _currentLng),
       onChat: () => Navigator.push(context, MaterialPageRoute(
         builder: (_) => TripChatScreen(trip: t.toJson()))),
       onLlamar: () => _showClientPhone(t),

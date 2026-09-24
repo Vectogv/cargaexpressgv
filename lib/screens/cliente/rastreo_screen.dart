@@ -20,6 +20,7 @@ import '../../services/map_config.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
+import '../../widgets/mapa_viaje.dart';
 import '../shared/action_key.dart';
 import 'busqueda_conductor_view.dart';
 import 'cancel_trip_screen.dart';
@@ -617,6 +618,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
       final conductor = _trip?.conductor;
       _safePush(ConductorEnLaZonaScreen(
         conductor: conductor?.toJson() ?? {},
+        origen: MapaViaje.punto(_trip?.origen?.lat, _trip?.origen?.lng),
+        ubicacionConductor: MapaViaje.punto(_driverLat, _driverLng),
         onChat: () {
           _safePush(ChatScreen(trip: _trip?.toJson() ?? {}));
         },
@@ -703,6 +706,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => LlegadaAlDestinoScreen(
       conductor: conductor?.toJson() ?? {},
       trip: _trip?.toJson() ?? {},
+      ubicacionConductor: MapaViaje.punto(_driverLat, _driverLng),
       onVerDetalle: () {
         // Los datos de `trip:finalize_request` pueden llegar después del
         // cambio de estado: se leen al abrir la confirmación.

@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../contracts/calificacion.dart';
+import '../../widgets/mapa_viaje.dart';
 
 class ConductorEnLaZonaScreen extends StatelessWidget {
   final Map<String, dynamic> conductor;
   final VoidCallback? onChat;
   final VoidCallback? onCall;
+  final LatLng? origen;
+  final LatLng? ubicacionConductor;
 
   const ConductorEnLaZonaScreen({
     super.key,
     required this.conductor,
+    this.origen,
+    this.ubicacionConductor,
     this.onChat,
     this.onCall,
   });
@@ -33,32 +39,10 @@ class ConductorEnLaZonaScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          Container(
+          SizedBox(
             height: 240,
             width: double.infinity,
-            color: const Color(0xFFE8EDF2),
-            child: Stack(
-              children: [
-                CustomPaint(size: const Size(double.infinity, 240), painter: _MapGridPainter()),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 48, height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))],
-                        ),
-                        child: const Icon(Icons.local_shipping, color: Color(0xFF2563EB), size: 26),
-                      ),
-                      Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF2563EB), shape: BoxShape.circle)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            child: MapaViaje(origen: origen, vehiculo: ubicacionConductor),
           ),
           Expanded(
             child: Padding(
@@ -128,27 +112,6 @@ class ConductorEnLaZonaScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFFCDD5DE)..strokeWidth = 0.8;
-    const hLines = [60.0, 110.0, 160.0, 210.0];
-    for (final y in hLines) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-    final vLines = [size.width * 0.15, size.width * 0.35, size.width * 0.6, size.width * 0.8];
-    for (final x in vLines) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    final blockPaint = Paint()..color = const Color(0xFFD1E8D0);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.35, 60, size.width * 0.25, 50), blockPaint);
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.6, 110, size.width * 0.2, 50), blockPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _IconActionButton extends StatelessWidget {

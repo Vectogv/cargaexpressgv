@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/media_image.dart';
-import '../../widgets/route_painter.dart';
+import 'package:latlong2/latlong.dart';
+import '../../widgets/mapa_viaje.dart';
 
 class ViajeEnCaminoScreen extends StatelessWidget {
   final String nombreCliente;
@@ -18,6 +19,11 @@ class ViajeEnCaminoScreen extends StatelessWidget {
   final VoidCallback? onAction;
   final String? bannerMessage;
 
+  /// Coordenadas para el mapa; las que falten no se marcan.
+  final LatLng? origenPos;
+  final LatLng? destinoPos;
+  final LatLng? vehiculoPos;
+
   const ViajeEnCaminoScreen({
     super.key,
     this.nombreCliente = 'Maria González',
@@ -34,6 +40,9 @@ class ViajeEnCaminoScreen extends StatelessWidget {
     this.actionIcon,
     this.onAction,
     this.bannerMessage,
+    this.origenPos,
+    this.destinoPos,
+    this.vehiculoPos,
   });
 
   static const Color _primaryBlue = Color(0xFF1A3C6E);
@@ -77,9 +86,7 @@ class ViajeEnCaminoScreen extends StatelessWidget {
       height: 280,
       child: Stack(
         children: [
-          // RepaintBoundary: el mapa ilustrado es estático; no repintarlo cuando
-          // el panel se reconstruye con cada actualización de GPS.
-          const Positioned.fill(child: RepaintBoundary(child: CustomPaint(painter: OnTheWayPainter()))),
+          Positioned.fill(child: MapaViaje(origen: origenPos, destino: destinoPos, vehiculo: vehiculoPos)),
           if (onBack != null)
             Positioned(
               top: 0,

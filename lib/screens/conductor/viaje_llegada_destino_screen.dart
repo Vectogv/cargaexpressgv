@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/media_image.dart';
-import '../../widgets/route_painter.dart';
+import 'package:latlong2/latlong.dart';
+import '../../widgets/mapa_viaje.dart';
 
 class LlegadaDestinoScreen extends StatelessWidget {
   final String nombreCliente;
@@ -12,6 +13,11 @@ class LlegadaDestinoScreen extends StatelessWidget {
   final VoidCallback? onHeLlegado;
   final VoidCallback? onSubirFoto;
 
+  /// Coordenadas para el mapa; las que falten no se marcan.
+  final LatLng? origenPos;
+  final LatLng? destinoPos;
+  final LatLng? vehiculoPos;
+
   const LlegadaDestinoScreen({
     super.key,
     this.nombreCliente = 'Maria González',
@@ -22,6 +28,9 @@ class LlegadaDestinoScreen extends StatelessWidget {
     this.onLlamar,
     this.onHeLlegado,
     this.onSubirFoto,
+    this.origenPos,
+    this.destinoPos,
+    this.vehiculoPos,
   });
 
   static const Color _accentBlue = Color(0xFF2563EB);
@@ -99,12 +108,7 @@ class LlegadaDestinoScreen extends StatelessWidget {
   Widget _buildMap() {
     return SizedBox(
       height: 260,
-      child: const RepaintBoundary(
-        child: CustomPaint(
-          size: Size(double.infinity, 260),
-          painter: ArrivalMapPainter(),
-        ),
-      ),
+      child: MapaViaje(destino: destinoPos, vehiculo: vehiculoPos),
     );
   }
 

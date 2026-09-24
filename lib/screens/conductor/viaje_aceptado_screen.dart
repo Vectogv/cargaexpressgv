@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/media_image.dart';
-import '../../widgets/route_painter.dart';
+import 'package:latlong2/latlong.dart';
+import '../../widgets/mapa_viaje.dart';
 
 class ViajeAceptadoScreen extends StatelessWidget {
   final String nombreCliente;
@@ -16,6 +17,11 @@ class ViajeAceptadoScreen extends StatelessWidget {
   final VoidCallback? onIniciarViaje;
   final VoidCallback? onCancelarViaje;
 
+  /// Coordenadas para el mapa; las que falten no se marcan.
+  final LatLng? origenPos;
+  final LatLng? destinoPos;
+  final LatLng? vehiculoPos;
+
   const ViajeAceptadoScreen({
     super.key,
     this.nombreCliente = 'Cliente',
@@ -30,6 +36,9 @@ class ViajeAceptadoScreen extends StatelessWidget {
     this.onMensaje,
     this.onIniciarViaje,
     this.onCancelarViaje,
+    this.origenPos,
+    this.destinoPos,
+    this.vehiculoPos,
   });
 
   static const Color _accentBlue = Color(0xFF2563EB);
@@ -94,14 +103,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
   Widget _buildMapSection() {
     return SizedBox(
       height: 220,
-      child: const ClipRect(
-        child: RepaintBoundary(
-          child: CustomPaint(
-            size: Size(double.infinity, 220),
-            painter: RoutePainter(),
-          ),
-        ),
-      ),
+      child: MapaViaje(origen: origenPos, destino: destinoPos, vehiculo: vehiculoPos),
     );
   }
 

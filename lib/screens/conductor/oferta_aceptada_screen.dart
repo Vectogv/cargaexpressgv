@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
 import '../../services/api_client.dart';
+import '../../services/driver_location_service.dart';
+import '../../widgets/mapa_viaje.dart';
 import 'trip_chat_screen.dart';
 import 'viaje_aceptado_screen.dart';
 import 'trip_in_progress_screen.dart';
@@ -168,6 +170,9 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
       onMensaje: _abrirChat,
       onIniciarViaje: _iniciarViaje,
       onCancelarViaje: _cancelarViaje,
+      origenPos: MapaViaje.puntoDe(widget.trip['origen']),
+      destinoPos: MapaViaje.puntoDe(widget.trip['destino']),
+      vehiculoPos: MapaViaje.punto(DriverLocationService.instance.lastLat, DriverLocationService.instance.lastLng),
     );
   }
 }
