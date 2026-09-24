@@ -52,7 +52,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
               ),
             ),
           ),
-          _buildBottomButtons(),
+          _buildBottomButtons(context),
         ],
       ),
     );
@@ -218,9 +218,10 @@ class EntregaConfirmadaScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomButtons() {
+  Widget _buildBottomButtons(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      // Por encima de la barra de navegación del teléfono.
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _divider)),

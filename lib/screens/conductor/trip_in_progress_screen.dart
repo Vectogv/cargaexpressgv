@@ -1098,10 +1098,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     final precio = t.precioFinal ?? t.precioEstimado ?? 0;
     final pctComision = t.toJson()['porcentajeComision'] as num? ?? 10;
-    final precioStr = '\$${precio.toStringAsFixed(0)}';
+    String miles(num v) => v.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+    final precioStr = '\$${miles(precio)}';
     final comisionVal = precio * (pctComision / 100);
-    final comisionStr = '- \$${comisionVal.toStringAsFixed(0)}';
-    final totalStr = '\$${(precio - comisionVal).toStringAsFixed(0)}';
+    final comisionStr = '- \$${miles(comisionVal)}';
+    final totalStr = '\$${miles(precio - comisionVal)}';
     final cliente = t.cliente;
     final nombreCliente = cliente?.nombre ?? '';
     final rating = cliente?.calificacion ?? 4.0;
