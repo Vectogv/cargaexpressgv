@@ -1127,7 +1127,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           onVolverInicio: () => _pushCalificarCliente(nav, t.id, nombreCliente, rating),
         ),
       ),
-      (route) => false,
+      // Se conserva el inicio del conductor: al calificar, popUntil(isFirst)
+      // vuelve a él (con `(route) => false` la pantalla de entrega quedaba
+      // como raíz y el conductor volvía a ella en bucle).
+      (route) => route.isFirst,
     );
   }
 
