@@ -225,6 +225,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _restoreAfterBackground() async {
+    if (_trip?.id != null) {
+      await _sincronizarConServidor();
+      _restartTimersIfNeeded();
+      return;
+    }
     try {
       final data = await ApiClient.instance.getActiveTrip();
       if (data != null && mounted) {
@@ -488,9 +493,66 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _snack('El cliente rechaz\u00f3 el cierre. El viaje est\u00e1 en disputa.');
       setState(() => _isFinalizing = false);
+      // El backend ya cre\u00f3 la disputa (trip:close_rejected trae disputaId y
+      // motivo): se muestra al conductor en vez de dejar el viaje congelado.
+      _abrirDisputa(
+        disputeId: data['disputaId'],
+        motivo: data['motivo']?.toString() ?? 'El cliente rechaz\u00f3 el cierre del servicio',
+      );
     });
+  }
+
+  bool _disputaMostrada = false;
+
+  void _abrirDisputa({dynamic disputeId, required String motivo}) {
+    if (!mounted || _disputaMostrada) return;
+    _disputaMostrada = true;
+    _cancelCountdown();
+    final trip = _trip;
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) => DisputaIniciadaWrapper(
+        tripId: trip?.id,
+        disputeId: disputeId,
+        motivo: motivo,
+        origen: trip?.origen?.direccion ?? '',
+        destino: trip?.destino?.direccion ?? '',
+      ),
+    ));
+  }
+
+  /// Estado real del viaje seg\u00fan el backend (GET /api/trips/:id). Se usa al
+  /// volver del segundo plano y cada 20 s: si el viaje cambi\u00f3 por acciones de
+  /// otros (el cliente rechaz\u00f3 el cierre, se cancel\u00f3, se finaliz\u00f3), la
+  /// pantalla lo refleja en vez de quedarse con datos viejos.
+  Future<void> _sincronizarConServidor() async {
+    final id = _trip?.id;
+    if (id == null || !mounted) return;
+    Map<String, dynamic> data;
+    try {
+      data = await ApiClient.instance.getTripDetail(id);
+    } catch (_) {
+      return; // sin red: se reintenta en el siguiente ciclo
+    }
+    if (!mounted) return;
+    final fresh = Trip.fromJson(data);
+    final nuevo = fresh.estado;
+    if (nuevo == null || nuevo == _trip?.estado) return;
+    switch (nuevo) {
+      case TripStatus.disputa:
+        _abrirDisputa(disputeId: data['disputaId'], motivo: 'El cliente rechaz\u00f3 el cierre del servicio');
+        return;
+      case TripStatus.finalizado:
+        _trip = fresh;
+        _goToEntregaConfirmada(fresh);
+        return;
+      case TripStatus.cancelado:
+        _snack('El viaje fue cancelado.');
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        return;
+      default:
+        setState(() => _trip = fresh);
+    }
   }
 
   /// Devuelve la ruta subida, o null si el usuario canceló o falló la subida
@@ -883,28 +945,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     });
 
     _tripStateTimer?.cancel();
+    // Con socket o sin él: los eventos se pierden si la app estuvo en segundo
+    // plano o se reconectó; el estado del backend manda.
     _tripStateTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
       if (!mounted) return;
-      if (!SocketServiceClient.instance.isConnected) {
-        LoggerService.instance.info('TripInProgress: polling trip state via API');
-        try {
-          final data = await ApiClient.instance.getActiveTrip();
-          if (data != null && mounted) {
-            final fresh = Trip.fromJson(data);
-            final oldEstado = _trip?.estado;
-            final newEstado = fresh.estado;
-            if (oldEstado != null && newEstado != null && oldEstado != newEstado) {
-              LoggerService.instance.info('TripInProgress: estado changed $oldEstado -> $newEstado');
-              if (newEstado == TripStatus.finalizado) {
-                _trip = fresh;
-                _goToEntregaConfirmada(fresh);
-              } else {
-                setState(() { _trip = fresh; });
-              }
-            }
-          }
-        } catch (_) {}
-      }
+      await _sincronizarConServidor();
     });
   }
 
