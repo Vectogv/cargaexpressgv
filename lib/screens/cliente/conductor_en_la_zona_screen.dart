@@ -42,7 +42,13 @@ class ConductorEnLaZonaScreen extends StatelessWidget {
           SizedBox(
             height: 240,
             width: double.infinity,
-            child: MapaViaje(origen: origen, vehiculo: ubicacionConductor),
+            child: MapaViaje(
+              origen: origen,
+              vehiculo: ubicacionConductor,
+              dibujarVehiculo: true,
+              tipoVehiculo: conductor['tipoVehiculo']?.toString(),
+              etiquetaVehiculo: 'En la zona',
+            ),
           ),
           Expanded(
             child: Padding(

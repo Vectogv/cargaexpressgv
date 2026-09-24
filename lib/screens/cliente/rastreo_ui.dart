@@ -112,27 +112,6 @@ class BotonFlotanteRastreo extends StatelessWidget {
   }
 }
 
-/// Marcador de camión para los vehículos cercanos. El backend no envía rumbo
-/// (`/api/trips/:id/nearby-drivers` → {lat, lng, tipoVehiculo}): va sin rotar.
-class MarcadorCamion extends StatelessWidget {
-  final Color color;
-  const MarcadorCamion({super.key, this.color = RastreoColores.texto});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: color.withValues(alpha: 0.85), width: 1.5),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 5, offset: Offset(0, 2))],
-      ),
-      alignment: Alignment.center,
-      child: Icon(Icons.local_shipping_rounded, color: color, size: 18),
-    );
-  }
-}
-
 /// Asa de arrastre de las hojas inferiores.
 class AsaHojaRastreo extends StatelessWidget {
   const AsaHojaRastreo({super.key});
