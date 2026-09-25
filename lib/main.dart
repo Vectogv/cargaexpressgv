@@ -209,11 +209,13 @@ Future<void> _initServices() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-  } catch (_) {
+  } catch (e1) {
     try {
       await Firebase.initializeApp();
     } catch (e) {
       LoggerService.instance.error('Firebase init failed', e);
+      // Se informa al backend si luego no hay token FCM (diagnóstico).
+      NotificationService.instance.errorInicioFirebase = 'con opciones: $e1 | sin opciones: $e';
     }
   }
 

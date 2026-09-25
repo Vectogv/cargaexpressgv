@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'api/http_client.dart';
 import 'api/profile_service.dart';
@@ -327,7 +328,9 @@ class NotificationService {
   Future<void> _reportarFalloToken(Object error) async {
     try {
       if (!hasSession()) return;
-      final motivo = error.toString();
+      final inicio = errorInicioFirebase;
+      // El error del arranque primero: el backend guarda sólo 300 caracteres.
+      final motivo = '${inicio != null ? 'init: $inicio | ' : ''}$error';
       await HttpClient.put('/api/users/fcm-token', body: {
         'error': motivo.length > 300 ? motivo.substring(0, 300) : motivo,
       }, auth: true);
@@ -336,9 +339,17 @@ class NotificationService {
 
   bool _permisoPedido = false;
 
+  /// Error de Firebase.initializeApp en main.dart (null si inició bien).
+  String? errorInicioFirebase;
+
   /// Reemplazable en pruebas (sin Firebase).
   @visibleForTesting
-  Future<String?> Function() obtenerTokenFcm = () => FirebaseMessaging.instance.getToken();
+  Future<String?> Function() obtenerTokenFcm = () async {
+    // Si el arranque no dejó Firebase listo (visto: "[core/no-app]" en un
+    // Honor 200), se inicializa aquí antes de pedir el token.
+    if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+    return FirebaseMessaging.instance.getToken();
+  };
 
   /// Reemplazable en pruebas (sin plataforma ni temporizadores).
   @visibleForTesting
