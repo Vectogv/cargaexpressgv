@@ -270,11 +270,14 @@ class NotificationService {
     if (kIsWeb) return;
     try {
       final messaging = FirebaseMessaging.instance;
-      // El permiso se pide aparte (pedirPermisoNotificaciones, con pantalla):
-      // aquí, sin Activity, podía lanzar y abortaba todo _initFcm, así que
-      // nunca se obtenía ni registraba el token.
-      _fcmToken = await messaging.getToken();
-      if (_fcmToken != null) await _registerToken(_fcmToken!);
+      // El permiso se pide aparte (pedirPermisoNotificaciones, con pantalla)
+      // y un fallo del token no debe cortar el resto de la configuración.
+      try {
+        _fcmToken = await messaging.getToken();
+        if (_fcmToken != null) await _registerToken(_fcmToken!);
+      } catch (e) {
+        LoggerService.instance.error('NotificationService.getToken (inicio) error', e);
+      }
 
       messaging.onTokenRefresh.listen((newToken) {
         _fcmToken = newToken;
@@ -299,18 +302,43 @@ class NotificationService {
   Future<void> registrarTokenSesion() async {
     unawaited(pedirPermisoNotificaciones());
     var token = _fcmToken;
-    if ((token == null || token.isEmpty) && !kIsWeb) {
+    Object? ultimoError;
+    // SERVICE_NOT_AVAILABLE suele ser transitorio y Firebase no reintenta.
+    for (var intento = 0; (token == null || token.isEmpty) && !kIsWeb && intento < 3; intento++) {
+      if (intento > 0) await Future<void>.delayed(const Duration(seconds: 5));
       try {
-        token = _fcmToken = await FirebaseMessaging.instance.getToken();
+        token = _fcmToken = await obtenerTokenFcm();
+        ultimoError = null;
+        break; // sin error: no hay nada que reintentar
       } catch (e) {
+        ultimoError = e;
         LoggerService.instance.error('NotificationService.getToken error', e);
       }
     }
-    if (token == null || token.isEmpty) return;
+    if (token == null || token.isEmpty) {
+      if (ultimoError != null) await _reportarFalloToken(ultimoError);
+      return;
+    }
     await _registerToken(token);
   }
 
+  /// Sin token el backend no puede enviar push; se le informa el motivo
+  /// para diagnosticarlo desde sus logs (el dispositivo no está a mano).
+  Future<void> _reportarFalloToken(Object error) async {
+    try {
+      if (!hasSession()) return;
+      final motivo = error.toString();
+      await HttpClient.put('/api/users/fcm-token', body: {
+        'error': motivo.length > 300 ? motivo.substring(0, 300) : motivo,
+      }, auth: true);
+    } catch (_) {}
+  }
+
   bool _permisoPedido = false;
+
+  /// Reemplazable en pruebas (sin Firebase).
+  @visibleForTesting
+  Future<String?> Function() obtenerTokenFcm = () => FirebaseMessaging.instance.getToken();
 
   /// Reemplazable en pruebas (sin plataforma ni temporizadores).
   @visibleForTesting

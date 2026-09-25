@@ -8,7 +8,10 @@ import 'package:cargaexpress/services/session_monitor_service.dart';
 
 void main() {
   // Sin plataforma: el permiso de notificaciones no se pide en pruebas.
-  setUp(() => NotificationService.instance.pedirPermisoNotificaciones = () async {});
+  setUp(() {
+    NotificationService.instance.pedirPermisoNotificaciones = () async {};
+    NotificationService.instance.obtenerTokenFcm = () async => null;
+  });
 
   group('homeDestinoFor (login, registro y restauración de sesión)', () {
     test('admin siempre va al panel de administración', () {

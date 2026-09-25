@@ -16,6 +16,7 @@ void main() {
     SessionMonitorService.instance.stop();
     notif.fcmTokenParaTest = null;
     notif.hasSession = () => false;
+    notif.obtenerTokenFcm = () async => null;
   });
 
   testWidgets('tras login/registro arranca el monitor de sesión y se registra el token FCM', (tester) async {
@@ -43,11 +44,27 @@ void main() {
     SessionMonitorService.instance.stop(); // su Timer periódico
   });
 
-  test('sin token FCM no se llama al backend', () async {
+  test('sin token FCM (Firebase no devuelve ninguno) no se llama al backend', () async {
     notif.fcmTokenParaTest = null;
     notif.hasSession = () => true;
+    notif.obtenerTokenFcm = () async => null;
     final log = <http.Request>[];
     await conApiFalsa((_) => jsonResp({}), () => notif.registrarTokenSesion(), log: log);
     expect(log, isEmpty);
   });
+
+  test('si obtener el token falla, se reintenta y se informa el motivo al backend', () async {
+    notif.fcmTokenParaTest = null;
+    notif.hasSession = () => true;
+    var intentos = 0;
+    notif.obtenerTokenFcm = () async {
+      intentos++;
+      if (intentos < 3) throw Exception('SERVICE_NOT_AVAILABLE');
+      return 'fcm-tras-reintento';
+    };
+    final log = <http.Request>[];
+    await conApiFalsa((_) => jsonResp({}), () => notif.registrarTokenSesion(), log: log);
+    expect(intentos, 3);
+    expect(log.single.body, contains('fcm-tras-reintento'));
+  }, timeout: const Timeout(Duration(seconds: 30)));
 }
