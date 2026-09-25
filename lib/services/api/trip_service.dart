@@ -40,9 +40,15 @@ class TripService {
     return (data['conductores'] as List?)?.cast<Map<String, dynamic>>() ?? [];
   }
 
-  static Future<List<Map<String, dynamic>>> getNearbyTrips(double lat, double lng, {double radio = 5}) async {
+  /// Sin `lat`/`lng` el backend usa la última ubicación guardada del
+  /// conductor (trip_controller.nearby).
+  static Future<List<Map<String, dynamic>>> getNearbyTrips(double? lat, double? lng, {double radio = 5}) async {
+    final params = [
+      if (lat != null && lng != null) 'lat=$lat&lng=$lng',
+      'radio=$radio',
+    ].join('&');
     // Tolerar ambos contratos: array plano `[...]` (api_spec) o `{data: [...]}` (mock/backend).
-    final list = await HttpClient.getList('/api/trips/nearby?lat=$lat&lng=$lng&radio=$radio', auth: true);
+    final list = await HttpClient.getList('/api/trips/nearby?$params', auth: true);
     return list.whereType<Map<String, dynamic>>().toList();
   }
 

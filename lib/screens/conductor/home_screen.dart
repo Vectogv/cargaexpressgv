@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../contracts/solicitud.dart' show idDeViaje;
 import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
 import '../../widgets/carga_express_bottom_nav.dart';
@@ -13,6 +14,7 @@ import '../../services/cache_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/driver_location_service.dart';
+import '../../services/solicitudes_disponibles_service.dart';
 import '../../services/api/driver_service.dart';
 import '../../services/map_config.dart';
 import '../user/auth_screen.dart';
@@ -23,10 +25,11 @@ import 'trip_chat_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'documents_screen.dart';
-import 'conductor_trip_detail_screen.dart';
 import 'trip_history_screen.dart';
 import 'support_screen.dart';
 import 'settings_screen.dart';
+import 'solicitudes_disponibles_screen.dart';
+import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -47,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _uiTimer;
 
   StreamSubscription<Map<String, dynamic>>? _socketSub;
-  StreamSubscription<List<Map<String, dynamic>>>? _tripSub;
+  StreamSubscription<List<SolicitudDisponible>>? _solicitudesSub;
   StreamSubscription<Map<String, dynamic>>? _pagoSuspendidoSub;
   StreamSubscription<Map<String, dynamic>>? _pagoConfirmadoSub;
   StreamSubscription<Map<String, dynamic>>? _pagoRechazadoSub;
@@ -61,9 +64,14 @@ class _HomeScreenState extends State<HomeScreen> {
   /// conectarse y tomar otro viaje mientras tanto.
   bool get _viajeOcupa =>
       _activeTrip != null && _activeTrip!['estado'] != TripStatus.pendienteConfirmacion;
-  int _knownNearbyCount = 0;
-  final Set<String> _offeredTripIds = {};
+
+  /// Solicitudes por las que ya salió el aviso emergente (visto o ignorado):
+  /// no se repite, pero la solicitud sigue en "Solicitudes disponibles".
+  final Set<String> _avisadasTripIds = {};
   final Set<String> _activeBannerIds = {};
+
+  /// Cuántas solicitudes mostrar en el inicio; el resto en la pantalla propia.
+  static const int _maxSolicitudesInicio = 5;
 
   static const Color _primaryBlue = Color(0xFF1A3C6E);
   static const Color _accentBlue = Color(0xFF2563EB);
@@ -82,17 +90,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _socketSub = NotificationService.instance.onNotification.listen((event) async {
       final tipo = event['__event'] as String?;
       if (tipo == 'trip:nearby') {
-        if (!_viajeOcupa) {
-          final tripId = (event['_id'] ?? event['id']).toString();
-          if (!_offeredTripIds.contains(tripId)) {
-            _showNewTripBanner(event);
-          }
+        // Entra a la lista de inmediato (el sondeo completa los datos) y,
+        // si el conductor está libre, sale el aviso emergente.
+        SolicitudesDisponiblesService.instance.ingresarAvisoSocket(event);
+        final tripId = idDeViaje(event);
+        if (!_viajeOcupa && tripId != null && !_avisadasTripIds.contains(tripId)) {
+          _showNewTripBanner(event);
         }
       } else if (tipo == 'trip:accepted') {
-        final tripId = event['tripId'] ?? event['id'];
-        if (tripId != null) {
-          DriverLocationService.instance.removeTrip(tripId);
-        }
+        SolicitudesDisponiblesService.instance.quitar(event['tripId'] ?? event['id']);
         await _fetchActiveTrip();
         if (_activeTrip != null) {
           CacheService.instance.cacheActiveTrip(_activeTrip!);
@@ -108,20 +114,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    _tripSub = DriverLocationService.instance.onTripsUpdated.listen((trips) {
+    // Sondeo de respaldo (sin socket): aviso emergente sólo por la primera
+    // solicitud nueva sin oferta propia; todas quedan en la lista.
+    _solicitudesSub = SolicitudesDisponiblesService.instance.cambios.listen((lista) {
       if (_viajeOcupa) return;
-      final disponibles = trips.where((t) {
-        final id = (t['_id'] ?? t['id']).toString();
-        return !_offeredTripIds.contains(id);
-      }).toList();
-      if (disponibles.length > _knownNearbyCount) {
-        final nuevos = disponibles.where((t) => t['notified'] != true).toList();
-        if (nuevos.isNotEmpty) {
-          for (final t in nuevos) { t['notified'] = true; }
-          _showNewTripBanner(nuevos.first);
-        }
-      }
-      _knownNearbyCount = disponibles.length;
+      // Con oferta propia el conductor ya la conoce: sin aviso (tampoco si
+      // luego el cliente la rechaza; la tarjeta lo indica).
+      _avisadasTripIds.addAll(lista.where((s) => s.tieneOferta).map((s) => s.id));
+      final nuevas = lista.where((s) => !_avisadasTripIds.contains(s.id)).toList();
+      if (nuevas.isEmpty) return;
+      _avisadasTripIds.addAll(nuevas.map((s) => s.id));
+      _showNewTripBanner(nuevas.first.viaje);
     });
 
     // Suspensión por deuda de comisión: el backend ya lo desconectó.
@@ -151,12 +154,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _socketSub?.cancel();
-    _tripSub?.cancel();
+    _solicitudesSub?.cancel();
     _pagoSuspendidoSub?.cancel();
     _pagoConfirmadoSub?.cancel();
     _pagoRechazadoSub?.cancel();
     _uiTimer?.cancel();
+    // El inicio es la raíz del conductor: sin él no hay quién muestre la lista.
+    SolicitudesDisponiblesService.instance.detener();
     super.dispose();
+  }
+
+  /// Conectado, libre y sin bloqueo de pago: la lista de solicitudes se
+  /// mantiene viva aunque el GPS aún no responda (el backend usa la última
+  /// ubicación guardada). En cualquier otro caso se detiene.
+  void _actualizarSolicitudes() {
+    if (_online && !_viajeOcupa && !_estadoPago.bloqueaConexion) {
+      SolicitudesDisponiblesService.instance.iniciar();
+    } else {
+      SolicitudesDisponiblesService.instance.detener();
+    }
   }
 
   Future<void> _fetchData() async {
@@ -222,6 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ));
         return;
       }
+      _actualizarSolicitudes();
       if (!await DriverLocationService.instance.start()) {
         messenger.showSnackBar(
           const SnackBar(
@@ -254,7 +271,9 @@ class _HomeScreenState extends State<HomeScreen> {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: viaje != null ? Trip.fromJson(viaje) : null)));
     if (!mounted) return;
     await _fetchActiveTrip();
-    if (mounted && _online && !_viajeOcupa && !_estadoPago.bloqueaConexion) {
+    if (!mounted) return;
+    _actualizarSolicitudes();
+    if (_online && !_viajeOcupa && !_estadoPago.bloqueaConexion) {
       unawaited(DriverLocationService.instance.start());
     }
   }
@@ -402,6 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
           rethrow;
         }
         if (mounted) setState(() => _online = true); // Solo aquí
+        _actualizarSolicitudes();
       } else {
         // Primero el backend; si falla seguimos en línea (estado coherente).
         await ApiClient.instance.setDriverStatus(false);
@@ -435,7 +455,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (tripId == null || tripId.isEmpty) return;
     if (_activeBannerIds.contains(tripId)) return; // deduplicar
     _activeBannerIds.add(tripId);
+    _avisadasTripIds.add(tripId);
 
+    // "Ignorar" sólo cierra el aviso: la solicitud sigue en la lista mientras
+    // el backend la tenga buscando conductor.
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -446,48 +469,10 @@ class _HomeScreenState extends State<HomeScreen> {
         conductorLat: DriverLocationService.instance.lastLat,
         conductorLng: DriverLocationService.instance.lastLng,
         onVer: () {
-          _offeredTripIds.add(tripId); // antes de navegar
-          _resetNearbyNotificationState();
-          _openTripDetail(tripId);
+          if (mounted) abrirDetalleSolicitud(context, tripId);
         },
       ),
     ).whenComplete(() => _activeBannerIds.remove(tripId));
-  }
-
-  Future<void> _openTripDetail(String tripId) async {
-    if (!mounted) return;
-    try {
-      final detail = await ApiClient.instance.getTripDetail(tripId);
-      if (!mounted) return;
-      final estado = detail['estado'] as String?;
-      if (estado != null && estado != TripStatus.buscando
-          && estado != 'pendiente') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Este viaje ya no está disponible')),
-        );
-        return;
-      }
-      final tripData = Map<String, dynamic>.from(detail);
-      if (tripData['id'] == null) tripData['id'] = tripId;
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ConductorTripDetailScreen(trip: tripData),
-      ));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar el viaje: ${e.toString().replaceFirst("Exception: ", "")}')),
-        );
-      }
-    }
-  }
-
-  void _resetNearbyNotificationState() {
-    _knownNearbyCount = 0;
-    final trips = DriverLocationService.instance.nearbyTrips;
-    for (final t in trips) {
-      t.remove('notified');
-    }
-    DriverLocationService.instance.refreshTrips();
   }
 
   String? get _verificacionEstado {
@@ -524,6 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
       11: const TripHistoryScreen(),
       12: const SupportScreen(),
       13: const SettingsScreen(),
+      14: const SolicitudesDisponiblesScreen(),
     };
     final route = routes[index];
     if (route != null) {
@@ -644,6 +630,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
+                _buildDrawerItem(Icons.inbox_outlined, 'Solicitudes disponibles', 14),
+                _buildDrawerItem(Icons.local_offer_outlined, 'Mis ofertas', 2),
                 _buildDrawerItem(Icons.person_outline, 'Perfil', 9),
                 _buildDrawerItem(Icons.description_outlined, 'Documentaci\u00f3n', 10),
                 _buildDrawerItem(Icons.route_outlined, 'Historial de viajes', 11),
@@ -990,7 +978,13 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           _buildMapCard(),
           const SizedBox(height: 16),
-          _buildWaitingCard(),
+          SolicitudesDisponiblesSection(
+            online: _online,
+            cargandoConexion: _statusLoading,
+            onConectar: _toggleStatus,
+            maximo: _maxSolicitudesInicio,
+            onVerTodas: () => _navigate(14),
+          ),
           const SizedBox(height: 20),
           const Text('Accesos rápidos',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
@@ -1060,62 +1054,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMapCard() => _DriverMiniMap(online: _online);
-
-  Widget _buildWaitingCard() {
-    final online = _online;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: (online ? _accentBlue : _textGrey).withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(online ? Icons.radar_rounded : Icons.power_settings_new_rounded,
-                color: online ? _accentBlue : _textGrey, size: 28),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(online ? 'Esperando solicitudes' : 'Estás desconectado',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark)),
-                const SizedBox(height: 4),
-                Text(
-                  online
-                      ? 'Te avisaremos al instante cuando haya un envío cerca de ti.'
-                      : 'Conéctate para empezar a recibir envíos.',
-                  style: const TextStyle(fontSize: 13, color: _textSecondary, height: 1.4),
-                ),
-              ],
-            ),
-          ),
-          if (!online) ...[
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _statusLoading ? null : _toggleStatus,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accentGreen,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Conectarme'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   Widget _buildQuickActions() {
     final acciones = [

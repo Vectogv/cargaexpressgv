@@ -11,11 +11,14 @@ import 'earnings_screen.dart';
 class OfertaCreada {
   final String monto;
 
+  /// Monto numérico (para la tarjeta de "Solicitudes disponibles").
+  final num? montoValor;
+
   /// Vencimiento en hora del servidor ([ServerClock]); null si el backend no
   /// envió `expiresAt`.
   final DateTime? venceEn;
 
-  const OfertaCreada({required this.monto, this.venceEn});
+  const OfertaCreada({required this.monto, this.venceEn, this.montoValor});
 
   /// Con la respuesta de POST /api/trips/:id/offers. La duración se toma de
   /// `expiresAt - createdAt` (ambas del servidor) para no depender del reloj
@@ -120,6 +123,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
       if (mounted) {
         Navigator.of(context).pop(OfertaCreada(
           monto: _formatValue(_ofertaActual),
+          montoValor: monto,
           venceEn: OfertaCreada.vencimiento(respuesta),
         ));
       }

@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../contracts/solicitud.dart' show segundosRestantesSolicitud;
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
-import '../../services/driver_location_service.dart';
 import '../../services/socket_service_client.dart';
+import '../../services/solicitudes_disponibles_service.dart';
 import 'hacer_oferta_screen.dart';
 import 'oferta_enviada_screen.dart';
+
+export '../../contracts/solicitud.dart' show busquedaTimeoutMin, segundosRestantesSolicitud;
 
 
 class ConductorTripDetailScreen extends StatefulWidget {
@@ -136,7 +139,13 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       if (creada != null && mounted) {
         _tripStatusSub?.cancel();
         _tripAcceptedSub?.cancel();
-        DriverLocationService.instance.markAsOffered(_tripId);
+        // La solicitud sigue en "Solicitudes disponibles" con la oferta
+        // enviada (el backend la sigue devolviendo en GET /nearby).
+        SolicitudesDisponiblesService.instance.registrarOferta(
+          _tripId,
+          monto: creada.montoValor ?? ofertaInicial,
+          venceEn: creada.venceEn,
+        );
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -420,24 +429,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     if (v is num) return v;
     return num.tryParse(v.toString());
   }
-}
-
-/// Minutos que el backend deja buscar conductor (BUSQUEDA_TIMEOUT_MIN,
-/// BusquedaTimeoutService): la solicitud sigue abierta a ofertas hasta
-/// entonces, salvo que otro conductor la gane o el cliente cancele (eso lo
-/// avisan los sockets). Antes la app la cerraba a los 28 s por su cuenta.
-const int busquedaTimeoutMin = 15;
-
-/// Segundos que le quedan a la solicitud según el backend: `expiresIn` si
-/// viene; si no, desde `createdAt`/`created_at` + [busquedaTimeoutMin].
-int segundosRestantesSolicitud(Map<String, dynamic> trip, DateTime ahora) {
-  const total = busquedaTimeoutMin * 60;
-  final expiresIn = trip['expiresIn'];
-  if (expiresIn is num) return expiresIn.toInt().clamp(0, total);
-  final raw = (trip['createdAt'] ?? trip['created_at'])?.toString();
-  final creado = raw == null ? null : DateTime.tryParse(raw);
-  if (creado == null) return total;
-  return (total - ahora.difference(creado).inSeconds).clamp(0, total);
 }
 
 /// Distancia origen→destino en línea recta cuando el backend no la manda.

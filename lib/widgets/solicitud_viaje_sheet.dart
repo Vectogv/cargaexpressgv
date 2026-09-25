@@ -3,7 +3,10 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../contracts/solicitud.dart' show solicitudSigueAbierta;
 import '../services/api/trip_service.dart';
+
+export '../contracts/solicitud.dart' show solicitudSigueAbierta;
 
 /// Tarjeta tipo Uber para una nueva solicitud de viaje cercana.
 /// Muestra precio, recogida, destino, distancia hasta la recogida y una cuenta
@@ -271,11 +274,4 @@ class _SolicitudViajeSheetState extends State<SolicitudViajeSheet> {
           ),
         ],
       );
-}
-
-/// La solicitud admite ofertas sólo mientras el backend busca conductor
-/// (`buscando_conductor` o `pendiente` con ofertas sin aceptar).
-bool solicitudSigueAbierta(dynamic estado) {
-  final e = estado?.toString();
-  return e == null || e == 'buscando_conductor' || e == 'pendiente';
 }

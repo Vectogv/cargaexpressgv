@@ -10,28 +10,24 @@ import 'fraud_detection_service.dart';
 import 'logger_service.dart';
 import 'network_monitor_service.dart';
 import 'error_handler_service.dart';
+import 'solicitudes_disponibles_service.dart';
 
+/// GPS del conductor en línea: envía su posición al backend y mantiene
+/// activa la lista de solicitudes disponibles ([SolicitudesDisponiblesService],
+/// que sondea GET /api/trips/nearby con la última posición conocida).
 class DriverLocationService {
   static final DriverLocationService instance = DriverLocationService._();
   DriverLocationService._();
 
-  Timer? _tripPollTimer;
   StreamSubscription<Position>? _positionSub;
   double? _lastLat;
   double? _lastLng;
   bool _running = false;
-  bool _online = false;
   int _locationErrorCount = 0;
   int _locationRetryAttempt = 0;
   Timer? _retryPositionTimer;
   DateTime _lastLocationSent = DateTime(2000);
 
-  List<Map<String, dynamic>> _nearbyTrips = [];
-  final Set<String> _offeredTripIds = {};
-  final _tripStreamController = StreamController<List<Map<String, dynamic>>>.broadcast();
-
-  Stream<List<Map<String, dynamic>>> get onTripsUpdated => _tripStreamController.stream;
-  List<Map<String, dynamic>> get nearbyTrips => List.unmodifiable(_nearbyTrips);
   bool get isRunning => _running;
   double? get lastLat => _lastLat;
   double? get lastLng => _lastLng;
@@ -39,7 +35,6 @@ class DriverLocationService {
   Future<bool> start() async {
     if (_running) return true;
     _running = true;
-    _online = true;
 
     final granted = await _requestLocationPermission();
     if (!granted) {
@@ -50,8 +45,7 @@ class DriverLocationService {
 
     _startPositionStream();
     await _sendInitialLocation();
-    await _fetchNearbyTrips();
-    _startTripPolling();
+    _iniciarSolicitudes();
 
     if (!kIsWeb) {
       // Android 13+: sin este permiso no se ve el aviso "Enviando ubicación".
@@ -149,27 +143,14 @@ class DriverLocationService {
     }
   }
 
-  void _startTripPolling() {
-    _tripPollTimer?.cancel();
-    _tripPollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchNearbyTrips());
-  }
-
-  Future<void> _fetchNearbyTrips() async {
-    if (!_online || _lastLat == null || _lastLng == null) return;
-    if (!NetworkMonitorService.instance.isOnline) return;
-    try {
-      var trips = await ApiClient.instance.getNearbyTrips(_lastLat!, _lastLng!, radio: 20);
-      if (!_online) return;
-      trips = trips.where((t) {
-        final id = (t['_id'] ?? t['id']).toString();
-        return !_offeredTripIds.contains(id);
-      }).toList();
-      _nearbyTrips = trips;
-      if (!_tripStreamController.isClosed) {
-        _tripStreamController.add(List.from(trips));
-      }
-    } catch (e) {
-      LoggerService.instance.debug('DriverLocationService._fetchNearbyTrips error: $e');
+  /// Con la posición ya conocida, la lista de solicitudes se (re)consulta con
+  /// ella. Si el inicio ya la había activado sin GPS, sólo se sincroniza.
+  void _iniciarSolicitudes() {
+    final solicitudes = SolicitudesDisponiblesService.instance;
+    if (solicitudes.activo) {
+      unawaited(solicitudes.sincronizar());
+    } else {
+      solicitudes.iniciar();
     }
   }
 
@@ -178,24 +159,21 @@ class DriverLocationService {
   /// viaje).
   void stop() {
     _running = false;
-    _online = false;
     _positionSub?.cancel();
     _positionSub = null;
-    _tripPollTimer?.cancel();
-    _tripPollTimer = null;
     _retryPositionTimer?.cancel();
     _retryPositionTimer = null;
     _locationRetryAttempt = 0;
     _locationErrorCount = 0;
-    _nearbyTrips = [];
+    SolicitudesDisponiblesService.instance.detener();
     if (!kIsWeb) unawaited(BackgroundLocationService.instance.stop());
   }
 
+  /// Durante un viaje: el conductor está ocupado y el backend no le deja
+  /// ofertar (CONDUCTOR_OCUPADO), así que la lista de solicitudes se detiene.
   void pause() {
-    _online = false;
     _running = false;
-    _tripPollTimer?.cancel();
-    _tripPollTimer = null;
+    SolicitudesDisponiblesService.instance.detener();
     _positionSub?.cancel();
     _positionSub = null;
     _retryPositionTimer?.cancel();
@@ -208,15 +186,13 @@ class DriverLocationService {
     // pause() pone _running = false; resume() debe volver a activar el
     // servicio (antes se abortaba silenciosamente y nunca se reanudaba).
     _running = true;
-    _online = true;
     if (_lastLat != null && _lastLng != null) {
       _startPositionStream();
     } else {
       _sendInitialLocation();
       _startPositionStream();
     }
-    _startTripPolling();
-    _fetchNearbyTrips();
+    _iniciarSolicitudes();
   }
 
   Future<bool> _requestLocationPermission() async {
@@ -245,40 +221,8 @@ class DriverLocationService {
     }
   }
 
-  void markAsOffered(dynamic tripId) {
-    if (tripId == null) return;
-    final idStr = tripId.toString();
-    _offeredTripIds.add(idStr);
-    _nearbyTrips.removeWhere((t) {
-      final id = (t['_id'] ?? t['id']).toString();
-      return id == idStr;
-    });
-    if (!_tripStreamController.isClosed) {
-      _tripStreamController.add(List.from(_nearbyTrips));
-    }
-  }
-
-  void removeTrip(dynamic tripId) {
-    if (tripId == null) return;
-    final idStr = tripId.toString();
-    _nearbyTrips.removeWhere((t) {
-      final id = (t['_id'] ?? t['id']).toString();
-      return id == idStr;
-    });
-    if (!_tripStreamController.isClosed) {
-      _tripStreamController.add(List.from(_nearbyTrips));
-    }
-  }
-
-  void refreshTrips() {
-    if (!_tripStreamController.isClosed) {
-      _tripStreamController.add(List.from(_nearbyTrips));
-    }
-  }
-
   void dispose() {
     stop();
-    _tripStreamController.close();
   }
 
   /// Toma el GPS actual y lo envía al backend ya (sin el throttle de 5 s).
