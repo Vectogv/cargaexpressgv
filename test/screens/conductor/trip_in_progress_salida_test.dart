@@ -113,6 +113,30 @@ void main() {
     }, log: log);
   });
 
+  testWidgets('con el teclado abierto el botón "Cancelar viaje" no tapa la justificación', (tester) async {
+    pantalla(tester);
+    await conApiFalsa(backend, () async {
+      await abrirSobreInicio(tester, 'aceptado');
+      await tester.tap(find.text('Cancelar'));
+      await avanzar(tester, 1);
+      await tester.tap(find.text('Vehículo no disponible'));
+      await avanzar(tester, 0.5);
+      // Teclado: deja unos 480 dp libres, como en el teléfono de pruebas.
+      tester.view.viewInsets = const FakeViewPadding(bottom: 1760);
+      await tester.enterText(find.byType(TextField).last, 'Se pinchó una llanta');
+      await avanzar(tester, 0.5);
+
+      final boton = find.widgetWithText(ElevatedButton, 'Cancelar viaje');
+      await tester.ensureVisible(find.byType(TextField).last);
+      await avanzar(tester, 0.3);
+      final campo = tester.getRect(find.byType(TextField).last);
+      final rectBoton = tester.getRect(boton);
+      expect(campo.overlaps(rectBoton), isFalse);
+      expect(tester.takeException(), isNull);
+      await cerrar(tester);
+    });
+  });
+
   testWidgets('como raíz (sin inicio debajo) la cancelación deja "No hay viaje activo", no una pantalla vacía', (tester) async {
     pantalla(tester);
     await conApiFalsa(backend, () async {

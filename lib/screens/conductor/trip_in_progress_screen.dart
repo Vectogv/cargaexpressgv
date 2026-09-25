@@ -728,6 +728,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
+            // Con el teclado abierto el contenido se desplaza en vez de
+            // quedar tapado por los botones.
+            scrollable: true,
             title: const Text('Justificación de cierre'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2232,6 +2235,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          // Con el teclado abierto, "Cancelar viaje" quedaba encima del campo
+          // de justificación: el contenido ahora se desplaza.
+          scrollable: true,
           title: const Text('Cancelar viaje'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2336,6 +2342,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
+            scrollable: true,
             title: const Text('Solicitar cancelaci\u00f3n'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
