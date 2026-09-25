@@ -3,9 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cargaexpress/screens/home_by_role.dart';
 import 'package:cargaexpress/services/auth_response.dart';
+import 'package:cargaexpress/services/notification_service.dart';
 import 'package:cargaexpress/services/session_monitor_service.dart';
 
 void main() {
+  // Sin plataforma: el permiso de notificaciones no se pide en pruebas.
+  setUp(() => NotificationService.instance.pedirPermisoNotificaciones = () async {});
+
   group('homeDestinoFor (login, registro y restauración de sesión)', () {
     test('admin siempre va al panel de administración', () {
       expect(homeDestinoFor(rol: 'admin'), HomeDestino.admin);

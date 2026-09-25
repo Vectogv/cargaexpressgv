@@ -10,6 +10,8 @@ import '../helpers/fake_api.dart';
 
 void main() {
   final notif = NotificationService.instance;
+  // Sin plataforma: el permiso de notificaciones no se pide en pruebas.
+  setUp(() => notif.pedirPermisoNotificaciones = () async {});
   tearDown(() {
     SessionMonitorService.instance.stop();
     notif.fcmTokenParaTest = null;

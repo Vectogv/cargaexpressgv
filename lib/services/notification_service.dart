@@ -296,9 +296,40 @@ class NotificationService {
   /// Tras login o registro: [init] suele haber corrido al abrir la app sin
   /// sesión, así que el token FCM aún no se registró en el backend.
   Future<void> registrarTokenSesion() async {
-    final token = _fcmToken;
+    unawaited(pedirPermisoNotificaciones());
+    var token = _fcmToken;
+    if ((token == null || token.isEmpty) && !kIsWeb) {
+      try {
+        token = _fcmToken = await FirebaseMessaging.instance.getToken();
+      } catch (e) {
+        LoggerService.instance.error('NotificationService.getToken error', e);
+      }
+    }
     if (token == null || token.isEmpty) return;
     await _registerToken(token);
+  }
+
+  bool _permisoPedido = false;
+
+  /// Reemplazable en pruebas (sin plataforma ni temporizadores).
+  @visibleForTesting
+  Future<void> Function() pedirPermisoNotificaciones = () => NotificationService.instance._pedirPermisoConPantalla();
+
+  /// Android 13+ (POST_NOTIFICATIONS): las notificaciones vienen apagadas
+  /// hasta que la app pide permiso. [init] lo pedía durante el arranque, sin
+  /// pantalla, y Android no mostraba el diálogo (visto en un Honor 200): el
+  /// push llegaba pero no se mostraba. Se vuelve a pedir ya con la sesión y
+  /// la pantalla de inicio visibles, con una pausa para no coincidir con el
+  /// diálogo de ubicación.
+  Future<void> _pedirPermisoConPantalla() async {
+    if (kIsWeb || _permisoPedido) return;
+    _permisoPedido = true;
+    try {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+    } catch (e) {
+      LoggerService.instance.error('NotificationService.requestPermission error', e);
+    }
   }
 
   Future<void> _registerToken(String token) async {
