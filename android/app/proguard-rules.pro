@@ -1,11 +1,11 @@
-# R8 (build release) quitaba los constructores sin argumentos de los
+# R8 (build release, AGP 9) quitaba los constructores sin argumentos de los
 # registradores de Firebase: en el log "Could not instantiate
-# ...FirebaseMessagingKtxRegistrar / FirebaseInstallationsKtxRegistrar:
-# NoSuchMethodException <init>" y el token FCM no se obtenía (no llegaban
-# notificaciones). Firebase los crea por reflexión.
-#
-# Crashlytics queda fuera a propósito: su registrador exige el plugin de
-# Gradle de Crashlytics (build ID) que el proyecto no aplica; conservarlo
-# hace que la app se cierre al abrir ("The Crashlytics build ID is missing").
--keep class !com.google.firebase.crashlytics.**,** implements com.google.firebase.components.ComponentRegistrar { <init>(); }
+# ...FirebaseMessagingKtxRegistrar / FirebaseInstallationsKtxRegistrar /
+# CrashlyticsRegistrar: NoSuchMethodException <init>". Firebase los crea por
+# reflexión; la regla que trae firebase-components ("-keep class * implements
+# ComponentRegistrar", sin "{ <init>(); }") ya no basta porque R8 dejó de
+# conservar el constructor por defecto de forma implícita. Sin el componente
+# de Crashlytics, Firebase.initializeApp fallaba en Dart ("FirebaseCrashlytics
+# component is not present") y no había token FCM (no llegaban notificaciones).
+-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }
 -dontwarn com.google.firebase.**
