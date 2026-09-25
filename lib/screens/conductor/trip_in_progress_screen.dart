@@ -2371,7 +2371,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   child: Row(children: [
                     Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
                     const SizedBox(width: 10),
-                    Expanded(child: Text('El viaje est\u00e1 en curso. Se notificar\u00e1 al cliente y a soporte.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
+                    // El backend avisa s\u00f3lo a soporte (admin:cancellation_requested);
+                    // el cliente se entera si soporte la aprueba.
+                    Expanded(child: Text('El viaje est\u00e1 en curso: soporte revisar\u00e1 tu solicitud. Mientras tanto el viaje sigue activo.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
                   ]),
                 ),
                 const SizedBox(height: 16),
@@ -2425,7 +2427,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
       await ApiClient.instance.requestCancellation(t.id, motivo: motivo);
       if (mounted) {
-        _snack('Solicitud de cancelaci\u00f3n enviada. Se notificar\u00e1 al cliente y a soporte.');
+        _snack('Solicitud enviada a soporte. Si la aprueba, el viaje se cancela y se avisa al cliente.');
       }
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
