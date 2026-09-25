@@ -28,7 +28,28 @@ void main() {
       expect(find.text('Conductor asignado'), findsOneWidget);
       expect(find.text('5 min'), findsNothing);
       expect(find.byIcon(Icons.access_time), findsNothing);
-      expect(find.text('--'), findsOneWidget);
+      // Sin posición del conductor todavía: "Ubicando…", no "--".
+      expect(find.text('Ubicando…'), findsOneWidget);
+    });
+  });
+
+  testWidgets('con el conductor ya en el origen dice "Ya está aquí" (no "--")', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/trips/active') {
+        return jsonResp({
+          '_id': 't1',
+          'estado': 'conductor_llegada',
+          'origen': {'lat': 4.6, 'lng': -74.1, 'direccion': 'Origen'},
+          'conductor': {'nombre': 'Carlos'},
+        });
+      }
+      return jsonResp({});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      expect(find.text('Ya está aquí'), findsOneWidget);
+      expect(find.text('--'), findsNothing);
     });
   });
 

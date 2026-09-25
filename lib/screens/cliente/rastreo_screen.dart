@@ -17,7 +17,7 @@ import '../../services/api/http_client.dart';
 import '../../services/api_client.dart';
 import '../../services/config_cliente_service.dart';
 import '../../services/map_config.dart';
-import '../../services/route_service.dart';
+import '../../services/ruta_viaje_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
@@ -83,8 +83,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
   StreamSubscription<Map<String, dynamic>>? _tripStartedSub;
   StreamSubscription<Map<String, dynamic>>? _driverLocationSub;
   StreamSubscription<Map<String, dynamic>>? _etaSub;
-  // Última ETA (min) enviada por el backend en `trip:eta_update`.
+  // Última ETA (min) enviada por el backend en `trip:eta_update` y su fase
+  // ('recogida' o 'destino'); _restanteServidorM: metros por la ruta.
   int? _etaServidorMin;
+  String? _etaFase;
+  double? _restanteServidorM;
+  StreamSubscription<Map<String, dynamic>>? _rutaSub;
   StreamSubscription<Map<String, dynamic>>? _finalizeRequestSub;
   StreamSubscription<Map<String, dynamic>>? _finalizeCancelledSub;
   StreamSubscription<Map<String, dynamic>>? _tripFinalizedSub;
@@ -445,8 +449,24 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
     _etaSub = SocketServiceClient.instance.onTripEtaUpdate.listen((data) {
       final minutos = minutosEta(data);
-      if (minutos == null || minutos == _etaServidorMin || !mounted) return;
-      setState(() => _etaServidorMin = minutos);
+      // Backend anterior: sin `fase` (sólo enviaba el ETA de recogida).
+      final fase = data['fase']?.toString() ?? 'recogida';
+      final restante = data['restanteM'];
+      if (minutos == null || !mounted) return;
+      if (minutos == _etaServidorMin && fase == _etaFase) return;
+      setState(() {
+        _etaServidorMin = minutos;
+        _etaFase = fase;
+        _restanteServidorM = restante is num ? restante.toDouble() : null;
+      });
+    });
+
+    // Ruta calculada por el backend (misma que ve el conductor): llega al
+    // cambiar de fase o cuando la recalcula; ya no se pide a Mapbox desde aquí.
+    _rutaSub = SocketServiceClient.instance.onTripRouteUpdate.listen((data) {
+      final id = data['tripId']?.toString();
+      if (id != null && _trip != null && id != _trip!.id.toString()) return;
+      _aplicarRutaServidor(RutaViaje.fromJson(data));
     });
 
     _finalizeRequestSub = SocketServiceClient.instance.onFinalizeRequest.listen((data) {
@@ -942,7 +962,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 
   String _formatDistance(double km) {
-    if (km.isInfinite) return '--';
+    // Sin posición del conductor todavía (llega por socket cuando se mueve).
+    if (km.isInfinite) return 'Ubicando…';
     if (km < 1) {
       return '${(km * 1000).toStringAsFixed(0)} m';
     }
@@ -965,6 +986,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     _tripStartedSub?.cancel();
     _driverLocationSub?.cancel();
     _etaSub?.cancel();
+    _rutaSub?.cancel();
     _finalizeRequestSub?.cancel();
     _finalizeCancelledSub?.cancel();
     _tripFinalizedSub?.cancel();
@@ -1385,44 +1407,41 @@ class _RastreoScreenState extends State<RastreoScreen> {
   /// desde que llega al origen, del origen al destino.
   bool get _faseRecogida => _status == TripStatus.aceptado || _status == TripStatus.enCamino;
 
-  /// Pide la geometría de la ruta sólo cuando cambia la fase o sus extremos,
-  /// o si el conductor se desvió mucho de la ruta de recogida; nunca en cada
-  /// posición del GPS.
+  /// La ruta la calcula el backend (GET /trips/:id/route y trip:route_update),
+  /// la misma que ve el conductor. Aquí sólo se pide al entrar en cada fase
+  /// (y se reintenta cada 30 s mientras aún no haya, p. ej. sin ubicación
+  /// del conductor todavía); los recálculos llegan por socket.
   void _asegurarRuta({required LatLng? conductor, required LatLng? origen, required LatLng? destino}) {
-    final desde = _faseRecogida ? conductor : origen;
-    final hasta = _faseRecogida ? origen : destino;
-    if (desde == null || hasta == null) return;
+    final t = _trip;
+    if (t == null || (origen == null && destino == null)) return;
     final fase = _faseRecogida ? 'recogida' : 'destino';
-    final clave = _faseRecogida
-        ? '$fase|${hasta.latitude},${hasta.longitude}'
-        : '$fase|${desde.latitude},${desde.longitude}|${hasta.latitude},${hasta.longitude}';
-    if (clave == _rutaClave) {
-      if (!_faseRecogida || conductor == null || !_desviadoDeRuta(conductor)) return;
-      // Desvío: como mucho una nueva consulta cada 30 s.
+    if (fase == _rutaClave) {
+      if (_rutaDeClave == fase) return;
       final pedida = _rutaPedidaEn;
       if (pedida != null && DateTime.now().difference(pedida) < const Duration(seconds: 30)) return;
     }
-    _rutaClave = clave;
+    _rutaClave = fase;
     _rutaPedidaEn = DateTime.now();
-    RouteService.getRoute(desde, hasta).then((puntos) {
-      if (!mounted || _rutaClave != clave) return;
-      setState(() {
-        _ruta = puntos;
-        _rutaDeClave = clave;
-      });
-    }).catchError((_) {});
+    RutaViaje.obtener(t.id).then(_aplicarRutaServidor);
   }
 
-  /// Más de 500 m del punto más cercano de la ruta real.
-  bool _desviadoDeRuta(LatLng conductor) {
-    final ruta = _ruta;
-    if (ruta == null || ruta.length <= 2) return false;
-    var minimo = double.infinity;
-    for (final p in ruta) {
-      final d = _haversine(conductor.latitude, conductor.longitude, p.latitude, p.longitude);
-      if (d < minimo) minimo = d;
-    }
-    return minimo > 500;
+  void _aplicarRutaServidor(RutaViaje? r) {
+    if (r == null || !mounted) return;
+    final fase = _faseRecogida ? 'recogida' : 'destino';
+    if (r.fase != fase) return; // llegó tarde, de la fase anterior
+    setState(() {
+      final coords = r.coords;
+      if (coords != null && coords.length >= 2) {
+        _ruta = coords;
+        _rutaDeClave = fase;
+        _rutaClave = fase;
+      }
+      if (r.minutos != null) {
+        _etaServidorMin = r.minutos;
+        _etaFase = r.fase;
+        _restanteServidorM = r.restanteM;
+      }
+    });
   }
 
   String _formatKm(num km) {
@@ -1506,20 +1525,27 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final double distanciaKm;
     final String distanciaEtiqueta;
     if (_faseRecogida || _status == TripStatus.llegada) {
-      distanciaKm = _distanceToPickup();
+      // Por la ruta del backend si la hay; si no, en línea recta.
+      distanciaKm = (_etaFase == 'recogida' && _restanteServidorM != null)
+          ? _restanteServidorM! / 1000
+          : _distanceToPickup();
       distanciaEtiqueta = 'Del conductor al punto de recogida';
     } else {
-      distanciaKm = (vehiculo == null || destino == null)
-          ? double.infinity
-          : _haversine(vehiculo.latitude, vehiculo.longitude, destino.latitude, destino.longitude) / 1000;
+      distanciaKm = (_etaFase == 'destino' && _restanteServidorM != null)
+          ? _restanteServidorM! / 1000
+          : (vehiculo == null || destino == null)
+              ? double.infinity
+              : _haversine(vehiculo.latitude, vehiculo.longitude, destino.latitude, destino.longitude) / 1000;
       distanciaEtiqueta = 'Del camión al destino';
     }
-    final eta = etaRecogida(
-      status: _status,
-      distanciaKm: _distanceToPickup(),
-      tiempoEstimado: _trip?.tiempoEstimado,
-      minutosServidor: _etaServidorMin,
-    );
+    final eta = _faseRecogida
+        ? etaRecogida(
+            status: _status,
+            distanciaKm: _distanceToPickup(),
+            tiempoEstimado: _trip?.tiempoEstimado,
+            minutosServidor: _etaFase == 'recogida' ? _etaServidorMin : null,
+          )
+        : etaDestino(status: _status, minutosServidor: _etaFase == 'destino' ? _etaServidorMin : null);
     final estado = _estadoSeguimiento();
     final media = MediaQuery.of(context);
 
@@ -1553,8 +1579,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
       estadoDetalle: estado.detalle,
       colorEstado: estado.color,
       eta: eta,
-      etaEtiqueta: 'Llegada estimada al punto de recogida',
-      distancia: _formatDistance(distanciaKm),
+      etaEtiqueta: _faseRecogida ? 'Llegada estimada al punto de recogida' : 'Llegada estimada al destino',
+      // Con el conductor ya en el origen no se muestra una distancia (y sin
+      // su posición todavía, p. ej. al reabrir la app, no un "--").
+      distancia: _status == TripStatus.llegada ? 'Ya está aquí' : _formatDistance(distanciaKm),
       distanciaEtiqueta: distanciaEtiqueta,
       trip: _trip,
       calificacion: etiquetaCalificacionConductor(conductor?.toJson()),
@@ -1814,6 +1842,15 @@ String? etaRecogida({required String status, double? distanciaKm, num? tiempoEst
     minutos = tiempoEstimado.ceil();
   }
   return minutos == null ? null : '$minutos min';
+}
+
+/// ETA al destino (desde que el conductor está en el origen): sólo la del
+/// backend, calculada con la ruta real y el tráfico (trip_route_service).
+String? etaDestino({required String status, int? minutosServidor}) {
+  if (status != TripStatus.llegada && status != TripStatus.enCurso) return null;
+  if (minutosServidor == null) return null;
+  final m = max(1, minutosServidor);
+  return m >= 60 ? '${m ~/ 60} h ${m % 60} min' : '$m min';
 }
 
 /// Tiempo que la celebración "¡Oferta aceptada!" queda sobre el rastreo

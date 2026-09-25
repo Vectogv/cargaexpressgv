@@ -25,7 +25,7 @@ import '../../services/background_location_service.dart';
 import '../../services/fraud_detection_service.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/driver_location_service.dart';
-import '../../services/route_service.dart';
+import '../../services/ruta_viaje_service.dart';
 import '../../services/config_cliente_service.dart';
 import '../../widgets/capa_vehiculos.dart';
 import '../../widgets/mapa_viaje.dart';
@@ -148,6 +148,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _driverStopGpsSub = SocketServiceClient.instance.onDriverStopGps.listen((_) {
       _stopGpsTimer();
     });
+    _escucharRutaServidor();
 
     final cachedTrip = CacheService.instance.getCachedActiveTrip();
     if (cachedTrip != null) {
@@ -203,6 +204,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _finalizeResponseSub?.cancel();
     _closeRejectedSub?.cancel();
     _driverStopGpsSub?.cancel();
+    _etaSub?.cancel();
+    _rutaSub?.cancel();
     _tripStateTimer?.cancel();
     _gpsRebuildTimer?.cancel();
     _cancelCountdown();
@@ -1342,8 +1345,64 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     return '${v < 0 ? '-' : ''}\$$b';
   }
 
-  /// Tiempo estimado a la velocidad actual (o 30 km/h si va despacio/parado).
+  // ETA y metros restantes del backend (trip:eta_update / GET route) para la
+  // fase actual: la misma estimación que ve el cliente.
+  int? _etaServidorMin;
+  String? _etaFase;
+  double? _restanteServidorM;
+  StreamSubscription<Map<String, dynamic>>? _etaSub;
+  StreamSubscription<Map<String, dynamic>>? _rutaSub;
+
+  /// Fase de la ruta del backend (trip_route_service.faseDe): en el origen
+  /// ('conductor_llegada') ya se muestra el camino al destino.
+  String get _faseActual {
+    final e = _trip?.estado;
+    return (e == TripStatus.aceptado || e == TripStatus.enCamino) ? 'recogida' : 'destino';
+  }
+
+  void _aplicarEtaServidor(RutaViaje r) {
+    if (r.minutos == null) return;
+    _etaServidorMin = r.minutos;
+    _etaFase = r.fase;
+    _restanteServidorM = r.restanteM;
+  }
+
+  void _escucharRutaServidor() {
+    _etaSub = SocketServiceClient.instance.onTripEtaUpdate.listen((data) {
+      final r = RutaViaje.fromJson(data);
+      if (r == null || !mounted) return;
+      setState(() => _aplicarEtaServidor(r));
+    });
+    _rutaSub = SocketServiceClient.instance.onTripRouteUpdate.listen((data) {
+      final r = RutaViaje.fromJson(data);
+      final id = data['tripId']?.toString();
+      if (r == null || !mounted || (id != null && id != _trip?.id.toString())) return;
+      if (r.fase != _faseActual) return;
+      final points = r.coords;
+      setState(() {
+        _aplicarEtaServidor(r);
+        if (points != null && points.length >= 2) {
+          _routePoints = points;
+          _routePolylines = [
+            Polyline(points: points, color: Colors.black.withValues(alpha: 0.2), strokeWidth: 8),
+            Polyline(points: points, color: const Color(0xFF2563EB), strokeWidth: 5),
+          ];
+        }
+      });
+    });
+  }
+
+  /// Texto "~8 min": la del backend si es de esta fase; si no, estimación
+  /// local a la velocidad actual (o 30 km/h si va despacio/parado).
   String _fmtEta(double km) {
+    // En el origen ('conductor_llegada') el panel habla del origen pero la
+    // ruta del backend ya es al destino: ahí no se mezclan.
+    final mismoObjetivo = _antesDeRecoger(_trip?.estado) == (_faseActual == 'recogida');
+    final servidor = (_etaFase == _faseActual && mismoObjetivo) ? _etaServidorMin : null;
+    if (servidor != null) {
+      if (servidor >= 60) return '~${servidor ~/ 60} h ${servidor % 60} min';
+      return servidor < 1 ? 'menos de 1 min' : '~$servidor min';
+    }
     final spd = (_currentSpeed ?? 0) * 3.6;
     final v = spd > 5 ? spd : 30.0;
     final min = (km / v * 60).round();
@@ -1387,7 +1446,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _rutaDesde = desde;
     _ultimaRuta = DateTime.now();
     try {
-      final points = await RouteService.getRoute(desde, objetivo);
+      // Ruta del backend (la misma del cliente, cacheada allá: no cuesta una
+      // llamada a Mapbox por pantalla). Sin ella, recta hasta el objetivo.
+      final r = await RutaViaje.obtener(t.id);
+      final points = (r != null && r.fase == _faseActual && r.coords != null && r.coords!.length >= 2)
+          ? r.coords!
+          : <LatLng>[desde, objetivo];
+      if (r != null) _aplicarEtaServidor(r);
       if (!mounted) return;
       setState(() {
         _routePoints = points;
@@ -1818,7 +1883,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               child: Text(
                 d == null
                     ? 'Buscando señal GPS…'
-                    : '${_fmtDist(d)} ${antes ? 'al origen' : 'al destino'}  ·  ${_fmtEta(d)}',
+                    // Por la ruta del backend si es de esta fase (los avisos
+                    // de 1 km siguen en recta, como valida el backend).
+                    : '${_fmtDist(_etaFase == _faseActual && _restanteServidorM != null && (antes == (_faseActual == 'recogida')) ? _restanteServidorM! / 1000 : d)} '
+                        '${antes ? 'al origen' : 'al destino'}  ·  ${_fmtEta(d)}',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: d == null ? _textGrey : _textDark),
               ),
             ),

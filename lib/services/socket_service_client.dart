@@ -66,6 +66,7 @@ class SocketServiceClient {
   final _disputeUpdatedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _disputeResolvedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripEtaCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _tripRouteCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripDriverNearbyCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripGpsFrozenCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _paymentConfirmedCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -120,6 +121,7 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onDisputeUpdated => _disputeUpdatedCtrl.stream;
   Stream<Map<String, dynamic>> get onDisputeResolved => _disputeResolvedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripEtaUpdate => _tripEtaCtrl.stream;
+  Stream<Map<String, dynamic>> get onTripRouteUpdate => _tripRouteCtrl.stream;
   Stream<Map<String, dynamic>> get onTripDriverNearby => _tripDriverNearbyCtrl.stream;
   Stream<Map<String, dynamic>> get onTripGpsFrozen => _tripGpsFrozenCtrl.stream;
   Stream<Map<String, dynamic>> get onPaymentConfirmed => _paymentConfirmedCtrl.stream;
@@ -513,6 +515,10 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_tripEtaCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn(SocketEvents.tripRouteUpdate, (data) {
+        if (data is Map) safeAdd(_tripRouteCtrl, Map<String, dynamic>.from(data));
+      });
+
       safeOn('trip:driver_nearby', (data) {
         if (data is Map) safeAdd(_tripDriverNearbyCtrl, Map<String, dynamic>.from(data));
       });
@@ -581,6 +587,7 @@ class SocketServiceClient {
       'dispute:updated': _disputeUpdatedCtrl,
       'dispute:resolved': _disputeResolvedCtrl,
       SocketEvents.tripEtaUpdate: _tripEtaCtrl,
+      SocketEvents.tripRouteUpdate: _tripRouteCtrl,
     }[evento];
     if (ctrl == null) throw ArgumentError('Evento no soportado en pruebas: $evento');
     ctrl.add(data);
@@ -688,6 +695,7 @@ class SocketServiceClient {
     _disputeUpdatedCtrl.close();
     _disputeResolvedCtrl.close();
     _tripEtaCtrl.close();
+    _tripRouteCtrl.close();
     _tripDriverNearbyCtrl.close();
     _tripGpsFrozenCtrl.close();
     _paymentConfirmedCtrl.close();

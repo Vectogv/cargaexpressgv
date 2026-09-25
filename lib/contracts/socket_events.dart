@@ -16,7 +16,13 @@ class SocketEvents {
   /// por pago (DriverDebtSuspensionService).
   static const String accountPaymentSuspended = 'account:payment_suspended';
 
-  /// `{minutos}`: ETA del conductor al origen mientras el viaje está
-  /// aceptado (driver_controller.updateLocation, 30 km/h).
+  /// `{tripId, fase, minutos, restanteM, distanciaM, aproximada}`: ETA del
+  /// conductor al objetivo de la fase ('recogida' u origen, 'destino'),
+  /// calculado por el backend con la ruta real (trip_route_service).
   static const String tripEtaUpdate = 'trip:eta_update';
+
+  /// Igual que [tripEtaUpdate] más `coords` ([[lat, lng], ...]): la ruta que
+  /// deben dibujar cliente y conductor. Sólo llega cuando el backend la
+  /// recalcula (cambio de fase, desvío o tráfico).
+  static const String tripRouteUpdate = 'trip:route_update';
 }
