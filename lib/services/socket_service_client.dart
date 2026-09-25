@@ -593,6 +593,11 @@ class SocketServiceClient {
     ctrl.add(data);
   }
 
+  /// Pruebas: simula que el socket se conectó o se cayó (lo que ven las
+  /// pantallas por [onConnection]); no toca el socket real ni [isConnected].
+  @visibleForTesting
+  void simularConexionParaTest(bool conectada) => _connectionCtrl.add(conectada);
+
   /// Pruebas: observa los eventos que la app intenta emitir.
   @visibleForTesting
   void Function(String event, Map<String, dynamic> data)? onEmitForTest;

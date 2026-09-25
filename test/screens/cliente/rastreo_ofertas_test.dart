@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
+import 'package:cargaexpress/screens/cliente/ofertas_recibidas_screen.dart';
 
 void main() {
   test('las ofertas cargadas por GET se suman a las del socket sin duplicar', () {

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cargaexpress/screens/cliente/ofertas_recibidas_screen.dart';
 import 'package:cargaexpress/services/api/http_client.dart' show ApiException;
 
+import '../../helpers/fake_api.dart';
+
 void main() {
   testWidgets('aceptar oferta usa el _id cuando el backend envía _id',
       (tester) async {
@@ -141,5 +143,48 @@ void main() {
 
     expect(rejectedId, 'offer_xyz_789');
     expect(find.text('Ofertas recibidas (0)'), findsOneWidget);
+  });
+
+  // Con la lista abierta el socket también puede estar caído (teléfonos que
+  // lo cortan en segundo plano): la pantalla sondea GET /offers y deja la
+  // lista igual a la del backend.
+  Widget listaConBackend(List<Map<String, dynamic>> iniciales) => MaterialApp(
+        home: OfertasRecibidasScreen(
+          ofertas: iniciales,
+          tripId: '32',
+          trip: const {},
+          onAccept: (_) async {},
+          onReject: (_) async {},
+        ),
+      );
+
+  testWidgets('abierta la lista, una oferta que el socket no entregó aparece por el sondeo', (tester) async {
+    var ofertas = <Map<String, dynamic>>[];
+    await conApiFalsa((req) => jsonResp(ofertas), () async {
+      await tester.pumpWidget(listaConBackend([]));
+      await avanzar(tester);
+      expect(find.text('Ofertas recibidas (0)'), findsOneWidget);
+
+      ofertas = [oferta('o1')];
+      await avanzar(tester, intervaloSondeoOfertas.inSeconds + 1);
+
+      expect(find.text('Ofertas recibidas (1)'), findsOneWidget);
+      expect(find.text('Carlos'), findsOneWidget);
+    });
+  });
+
+  testWidgets('una oferta que el backend ya no devuelve desaparece de la lista abierta', (tester) async {
+    var ofertas = [oferta('o1')];
+    await conApiFalsa((req) => jsonResp(ofertas), () async {
+      await tester.pumpWidget(listaConBackend([oferta('o1')]));
+      await avanzar(tester);
+      expect(find.text('Ofertas recibidas (1)'), findsOneWidget);
+
+      ofertas = [];
+      await avanzar(tester, intervaloSondeoOfertas.inSeconds + 1);
+
+      expect(find.text('Ofertas recibidas (0)'), findsOneWidget);
+      expect(find.text('No hay ofertas disponibles'), findsOneWidget);
+    });
   });
 }

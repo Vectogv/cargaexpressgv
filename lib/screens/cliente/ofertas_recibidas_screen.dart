@@ -5,6 +5,29 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/offer_service.dart';
 import '../../services/socket_service_client.dart';
 
+/// Cada cuánto el cliente consulta GET /api/trips/:id/offers mientras el
+/// viaje sigue sin conductor (`buscando_conductor` / `pendiente`). Es el
+/// respaldo del socket: en teléfonos que lo cortan en segundo plano (Honor,
+/// Xiaomi…) `new:offer` se pierde y, sin esto, el cliente no veía las
+/// ofertas aunque le llegara el push. Las ofertas vencen a los ~28 s, así
+/// que el sondeo tiene que ser corto.
+const Duration intervaloSondeoOfertas = Duration(seconds: 5);
+
+/// Suma a [actuales] las ofertas de [nuevas] que aún no están (por `_id`/`id`).
+/// Las ofertas llegan por socket (`new:offer`) y por GET /offers.
+List<Map<String, dynamic>> fusionarOfertas(
+    List<Map<String, dynamic>> actuales, List<Map<String, dynamic>> nuevas) {
+  String? idDe(Map<String, dynamic> o) => (o['_id'] ?? o['id'])?.toString();
+  final ids = actuales.map(idDe).whereType<String>().toSet();
+  final r = List<Map<String, dynamic>>.from(actuales);
+  for (final o in nuevas) {
+    final id = idDe(o);
+    if (id != null && !ids.add(id)) continue;
+    r.add(Map<String, dynamic>.from(o));
+  }
+  return r;
+}
+
 /// Resultado con el que [OfertasRecibidasScreen] se cierra al aceptar una
 /// oferta: el conductor elegido (para la celebración en el rastreo).
 class OfertaAceptadaResultado {
@@ -41,6 +64,10 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
   StreamSubscription<Map<String, dynamic>>? _expirySub;
   StreamSubscription<Map<String, dynamic>>? _cancelSub;
   Timer? _ticker;
+  // Sondeo de GET /offers: el socket puede estar caído (segundo plano).
+  Timer? _sondeo;
+  bool _sincronizando = false;
+  List<Map<String, dynamic>>? _ofertasDurantePeticion;
   DateTime _now = DateTime.now();
 
   @override
@@ -50,11 +77,9 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
     if (widget.tripId != null) {
       _socketSub = SocketServiceClient.instance.onNewOffer.listen((data) {
         if (!mounted) return;
-        final id = (data['_id'] ?? data['id'])?.toString();
-        setState(() {
-          final already = _offers.any((o) => (o['_id'] ?? o['id'])?.toString() == id);
-          if (!already) _offers.add(Map<String, dynamic>.from(data));
-        });
+        final oferta = Map<String, dynamic>.from(data);
+        _ofertasDurantePeticion?.add(oferta);
+        setState(() => _offers = fusionarOfertas(_offers, [oferta]));
       });
       // `trip:offer_received` es el alias del backend con expiraAt (28s).
       // Actualiza la oferta existente para alimentar el countdown.
@@ -85,6 +110,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
         if (hasCountdown) setState(() => _now = DateTime.now());
       });
       _fetchOffers();
+      _sondeo = Timer.periodic(intervaloSondeoOfertas, (_) => _sincronizarConServidor());
     }
   }
 
@@ -94,7 +120,28 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
     _expirySub?.cancel();
     _cancelSub?.cancel();
     _ticker?.cancel();
+    _sondeo?.cancel();
     super.dispose();
+  }
+
+  /// Deja la lista igual a las ofertas pendientes del backend (él es la
+  /// regla): aparecen las que el socket no entregó y desaparecen las
+  /// vencidas, rechazadas o reemplazadas. Silencioso: sin spinner ni aviso
+  /// de error, y no corre mientras se acepta una oferta.
+  Future<void> _sincronizarConServidor() async {
+    if (!mounted || _loadingOffers || _sincronizando || _acceptingId != null) return;
+    _sincronizando = true;
+    final durante = _ofertasDurantePeticion = <Map<String, dynamic>>[];
+    try {
+      final list = await OfferService.getOffers(widget.tripId);
+      if (!mounted) return;
+      setState(() => _offers = fusionarOfertas(list, durante));
+    } catch (_) {
+      // Se conserva la lista local; el siguiente sondeo lo reintenta.
+    } finally {
+      _sincronizando = false;
+      if (identical(_ofertasDurantePeticion, durante)) _ofertasDurantePeticion = null;
+    }
   }
 
   void _removeOffer(String offerId) {
@@ -118,23 +165,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       final list = await OfferService.getOffers(widget.tripId);
       if (!mounted) return;
       setState(() {
-        if (replace) {
-          _offers = list.map((o) => Map<String, dynamic>.from(o)).toList();
-          return;
-        }
-        final ids = <String>{};
-        for (final offer in _offers) {
-          final id = (offer['_id'] ?? offer['id'])?.toString();
-          if (id != null) ids.add(id);
-        }
-        final merged = List<Map<String, dynamic>>.from(_offers);
-        for (final offer in list) {
-          final id = (offer['_id'] ?? offer['id'])?.toString();
-          if (id == null || !ids.contains(id)) {
-            merged.add(Map<String, dynamic>.from(offer));
-          }
-        }
-        _offers = merged;
+        _offers = replace ? fusionarOfertas(list, const []) : fusionarOfertas(_offers, list);
       });
     } catch (_) {
       if (!mounted) return;

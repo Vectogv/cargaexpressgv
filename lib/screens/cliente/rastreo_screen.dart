@@ -49,10 +49,16 @@ class RastreoScreen extends StatefulWidget {
   State<RastreoScreen> createState() => _RastreoScreenState();
 }
 
-class _RastreoScreenState extends State<RastreoScreen> {
+class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserver {
   static const double _zonaKm = 0.05;
   Trip? _trip;
   final List<Map<String, dynamic>> _ofertas = [];
+  // Sondeo de GET /offers mientras se busca conductor (respaldo del socket).
+  Timer? _ofertasTimer;
+  bool _sincronizandoOfertas = false;
+  // Ofertas que llegan por socket mientras hay un GET /offers en vuelo: la
+  // respuesta del servidor puede ser anterior a ellas y no deben perderse.
+  List<Map<String, dynamic>>? _ofertasDurantePeticion;
   String _status = TripStatus.buscando;
   bool _loading = false;
   bool _cancelling = false;
@@ -131,6 +137,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _route = ModalRoute.of(context);
       _load();
@@ -139,7 +146,21 @@ class _RastreoScreenState extends State<RastreoScreen> {
     _connectionSub = SocketServiceClient.instance.onConnection.listen((connected) {
       if (!connected || !mounted || _trip == null) return;
       SocketServiceClient.instance.joinTrip(_trip!.id);
+      // Lo emitido mientras el socket estuvo caído (`new:offer`) se perdió:
+      // traer las ofertas vigentes del backend.
+      if (_buscando) _sincronizarOfertas();
     });
+  }
+
+  /// Al volver del segundo plano: Honor, Xiaomi y similares cortan el socket
+  /// con la app en segundo plano y `isConnected` puede seguir en true hasta
+  /// que venza el ping; los eventos emitidos mientras tanto se perdieron.
+  /// Se consulta el estado real del viaje y sus ofertas.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted || _trip == null) return;
+    _refrescarViaje();
+    if (_buscando) _sincronizarOfertas();
   }
 
   Future<void> _load() async {
@@ -172,7 +193,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
       if (_buscando && mounted) {
         _startPolling();
-        _cargarOfertasExistentes();
+        _startOfertasPolling();
       }
 
       _startFallbackPolling();
@@ -191,30 +212,56 @@ class _RastreoScreenState extends State<RastreoScreen> {
     }
   }
 
+  /// Ofertas llegadas por socket (`new:offer`): se suman a las que ya hay.
   void _agregarOfertas(List<Map<String, dynamic>> nuevas) {
-    final merged = fusionarOfertas(_ofertas, nuevas);
+    _ofertasDurantePeticion?.addAll(nuevas.map(Map<String, dynamic>.from));
+    _reemplazarOfertas(fusionarOfertas(_ofertas, nuevas));
+  }
+
+  void _reemplazarOfertas(List<Map<String, dynamic>> ofertas) {
     setState(() {
       _ofertas
         ..clear()
-        ..addAll(merged);
+        ..addAll(ofertas);
       _hasOffers = _ofertas.isNotEmpty;
     });
   }
 
-  /// Las ofertas llegan por socket sólo mientras la pantalla está abierta: al
-  /// abrirla con la búsqueda ya en marcha, traer las que ya existen.
-  Future<void> _cargarOfertasExistentes() async {
+  /// Deja la lista igual a las ofertas pendientes que devuelve el backend
+  /// (GET /api/trips/:id/offers): él es la fuente de verdad, así las
+  /// vencidas, rechazadas o reemplazadas por el conductor dejan de contarse.
+  /// Corre al abrir, cada [intervaloSondeoOfertas] mientras se busca
+  /// conductor, al reconectar el socket y al volver del segundo plano: si
+  /// `new:offer` se perdió (socket cortado en segundo plano), sólo así el
+  /// cliente ve la oferta que el push le anunció.
+  Future<void> _sincronizarOfertas() async {
     final tripId = _trip?.id;
-    if (tripId == null || tripId.isEmpty) return;
+    if (tripId == null || tripId.isEmpty || _sincronizandoOfertas) return;
+    _sincronizandoOfertas = true;
+    final durante = _ofertasDurantePeticion = <Map<String, dynamic>>[];
     try {
-      final ofertas = await OfferService.getOffers(tripId);
-      if (!mounted || ofertas.isEmpty) return;
-      _agregarOfertas(ofertas);
+      final servidor = await OfferService.getOffers(tripId);
+      if (!mounted) return;
+      _reemplazarOfertas(fusionarOfertas(servidor, durante));
     } catch (e) {
-      // No bloquea: las nuevas ofertas siguen llegando por socket y la
-      // pantalla de ofertas vuelve a consultarlas.
+      // Se conserva la lista local; el siguiente sondeo lo reintenta.
       debugPrint('Rastreo: no se pudieron cargar las ofertas: $e');
+    } finally {
+      _sincronizandoOfertas = false;
+      if (identical(_ofertasDurantePeticion, durante)) _ofertasDurantePeticion = null;
     }
+  }
+
+  void _startOfertasPolling() {
+    _ofertasTimer?.cancel();
+    _sincronizarOfertas();
+    _ofertasTimer = Timer.periodic(intervaloSondeoOfertas, (_) {
+      if (!mounted || !_buscando) {
+        _ofertasTimer?.cancel();
+        return;
+      }
+      _sincronizarOfertas();
+    });
   }
 
   void _safePop() {
@@ -366,6 +413,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
             _trip = Trip.fromJson(base);
           });
           _alCambiarEstado(newStatus);
+          // 'pendiente' = ya hay una primera oferta: traerla por si su
+          // `new:offer` no llega.
+          if (newStatus == TripStatus.pendiente) _sincronizarOfertas();
           if (newStatus == TripStatus.finalizado) return;
           if (newStatus == TripStatus.aceptado || newStatus == TripStatus.enCamino || newStatus == TripStatus.llegada || newStatus == TripStatus.enCurso) {
             _startLocationUpdates();
@@ -688,7 +738,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
         origen: MapaViaje.punto(_trip?.origen?.lat, _trip?.origen?.lng),
         ubicacionConductor: MapaViaje.punto(_driverLat, _driverLng),
         onChat: () {
-          _safePush(ChatScreen(trip: _trip?.toJson() ?? {}));
+          // Directo (no _safePush): con esta pantalla abierta _isNavigating
+          // sigue en true y _safePush ignoraba el toque (chat "muerto").
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ChatScreen(trip: _trip?.toJson() ?? {})),
+          );
         },
         onCall: () async {
           final tel = conductor?.telefono;
@@ -972,8 +1026,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _celebracionTimer?.cancel();
     _pollingTimer?.cancel();
+    _ofertasTimer?.cancel();
     _cercanosTimer?.cancel();
     _fallbackPollingTimer?.cancel();
     _proximityTimer?.cancel();
@@ -1856,22 +1912,6 @@ String? etaDestino({required String status, int? minutosServidor}) {
 /// Tiempo que la celebración "¡Oferta aceptada!" queda sobre el rastreo
 /// antes de cerrarse sola.
 const Duration duracionCelebracionOferta = Duration(seconds: 4);
-
-/// Suma a [actuales] las ofertas de [nuevas] que aún no están (por `_id`/`id`).
-/// Las ofertas llegan por socket (`new:offer`) y por GET al abrir la pantalla.
-@visibleForTesting
-List<Map<String, dynamic>> fusionarOfertas(
-    List<Map<String, dynamic>> actuales, List<Map<String, dynamic>> nuevas) {
-  String? idDe(Map<String, dynamic> o) => (o['_id'] ?? o['id'])?.toString();
-  final ids = actuales.map(idDe).whereType<String>().toSet();
-  final r = List<Map<String, dynamic>>.from(actuales);
-  for (final o in nuevas) {
-    final id = idDe(o);
-    if (id != null && !ids.add(id)) continue;
-    r.add(Map<String, dynamic>.from(o));
-  }
-  return r;
-}
 
 @visibleForTesting
 RastreoVista rastreoVistaPara(String status) {
