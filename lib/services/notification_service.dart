@@ -113,6 +113,12 @@ class NotificationService {
     if (!_controller.isClosed) _controller.add(data);
   }
 
+  /// Pruebas: entrega [data] (con `__event`) a las pantallas suscritas a
+  /// [onNotification] como si hubiera llegado por el socket.
+  @visibleForTesting
+  void simularEventoParaTest(String evento, Map<String, dynamic> data) =>
+      _addNotification({...data, '__event': evento});
+
   static DateTime _fecha(Map<String, dynamic> n) =>
       DateTime.tryParse(n['createdAt']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
 

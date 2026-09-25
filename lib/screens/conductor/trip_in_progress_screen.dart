@@ -259,7 +259,27 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         return;
       }
     }
-    if (mounted) Navigator.pop(context);
+    if (mounted) _salirDelViaje();
+  }
+
+  bool _saliendo = false;
+
+  /// Sale de la pantalla del viaje UNA sola vez, de vuelta al inicio.
+  /// Al cancelar llegan dos órdenes de salir casi a la vez: la respuesta del
+  /// POST /cancel y el socket `trip:cancelled`, que entra durante la animación
+  /// de salida con este State todavía montado. El segundo `Navigator.pop`
+  /// quitaba el inicio del conductor y dejaba la app en negro (viaje 28).
+  /// Si no hay ruta debajo, se limpia el viaje y se muestra "No hay viaje activo".
+  void _salirDelViaje() {
+    if (!mounted || _saliendo) return;
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      _saliendo = true;
+      nav.popUntil((r) => r.isFirst);
+    } else {
+      CacheService.instance.clearActiveTrip();
+      setState(() => _trip = null);
+    }
   }
 
   int _calcularElapsed(Trip trip) {
@@ -280,6 +300,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Timer? _countdownTimer;
+  // Diálogo "Esperando confirmación" (30 s) en pantalla.
+  bool _dialogoEsperaAbierto = false;
 
   void _cancelCountdown() {
     _countdownTimer?.cancel();
@@ -438,9 +460,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           final msg = mensajeViajeCancelado(event, miRol: ApiClient.instance.rol);
           if (msg != null) _snack(msg);
           _stopGpsTimer();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) Navigator.pop(context);
-          });
+          WidgetsBinding.instance.addPostFrameCallback((_) => _salirDelViaje());
         }
       }
     } catch (e) {
@@ -455,7 +475,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (!mounted) return;
-          Navigator.pop(context);
+          // Sólo se cierra el diálogo de espera si sigue abierto: si ya se
+          // cerró (tiempo agotado o cancelado), este `pop` sacaría la
+          // pantalla del viaje.
+          if (_dialogoEsperaAbierto) Navigator.pop(context);
           if (accepted) {
             _finalizeTrip();
           } else {
@@ -556,7 +579,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         return;
       case TripStatus.cancelado:
         _snack('El viaje fue cancelado.');
-        Navigator.of(context).popUntil((r) => r.isFirst);
+        _salirDelViaje();
         return;
       default:
         setState(() => _trip = fresh);
@@ -856,6 +879,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     // contador del diálogo escucha este ValueNotifier.
     final countdown = ValueNotifier<int>(30);
     _cancelCountdown();
+    _dialogoEsperaAbierto = true;
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -910,6 +934,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             );
       },
     );
+    _dialogoEsperaAbierto = false;
     _cancelCountdown();
     countdown.dispose();
     if (mounted) setState(() => _actionLoading = false);
@@ -1535,7 +1560,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   if (_isTripActive) {
                     _snack('Acción no permitida hasta finalizar el viaje.');
                   } else {
-                    Navigator.pop(context);
+                    _salirDelViaje();
                   }
                 },
                 child: const Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
@@ -2284,7 +2309,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.cancelTrip(t.id, motivo: motivo, justificacion: justificacion));
       if (mounted) {
         _snack('Viaje cancelado. Se ha notificado al cliente.');
-        Navigator.pop(context);
+        _salirDelViaje();
       }
     } on ApiException catch (e) {
       if (e.code == 'CONDUCTOR_CERCA') {
