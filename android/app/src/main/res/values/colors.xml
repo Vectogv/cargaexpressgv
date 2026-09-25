@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo del ícono adaptable: el mismo blanco del logo. -->
+    <color name="ic_launcher_background">#FEFEFE</color>
+    <!-- Naranja de la marca para el ícono de las notificaciones. -->
+    <color name="notificacion">#F97316</color>
+</resources>

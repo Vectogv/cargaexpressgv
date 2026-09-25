@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <application
-        android:label="cargaexpress"
+        android:label="CargaExpress"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -61,6 +61,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Notificaciones push: camión blanco con el naranja de la marca
+             (antes salía el ícono de Flutter). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notificacion" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
