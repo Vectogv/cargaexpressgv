@@ -39,6 +39,10 @@ class _DisputeScreenState extends State<DisputeScreen> {
     {'id': 'otro', 'label': 'Otro', 'icon': Icons.more_horiz},
   ];
 
+  /// El conductor abre esta pantalla con `Trip.toJson()`, que trae el id como
+  /// `_id`: leer sólo `id` enviaba la disputa sin viaje.
+  dynamic get _tripId => widget.trip['_id'] ?? widget.trip['id'];
+
   @override
   void dispose() {
     _descCtrl.dispose();
@@ -58,7 +62,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
       setState(() => _uploading = true);
       final bytes = await file.readAsBytes();
       final path = await TripService.disputePhoto(
-        widget.trip['id'],
+        _tripId,
         bytes,
         'dispute_${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
@@ -91,7 +95,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
       // POST /api/disputes acepta `fotos: string[]` (rutas de /dispute/support);
       // antes las rutas se pegaban en la descripción.
       await ApiClient.instance.createDispute(
-        tripId: widget.trip['id'],
+        tripId: _tripId,
         problema: typeLabel,
         descripcion: _descCtrl.text.trim(),
         fotos: _photos.map((p) => p.path).toList(),
@@ -166,7 +170,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ID: ${t['id']}', style: TextStyle(fontSize: 12, color: _textGrey)),
+                  Text('Viaje #$_tripId', style: TextStyle(fontSize: 12, color: _textGrey)),
                   const SizedBox(height: 4),
                   Text(nombre.toString(), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   if (origen != null) Text('Origen: ${origen['direccion'] ?? ''}', style: TextStyle(fontSize: 12, color: _textGrey)),
@@ -187,7 +191,9 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       title: Row(children: [
                         Icon(type['icon'] as IconData, size: 20, color: _primaryDark),
                         const SizedBox(width: 10),
-                        Text(type['label'] as String, style: const TextStyle(fontSize: 14)),
+                        // Expanded: en pantallas angostas el texto largo se
+                        // salía de la fila.
+                        Expanded(child: Text(type['label'] as String, style: const TextStyle(fontSize: 14))),
                       ]),
                       value: type['id'] as String,
                       dense: true,
