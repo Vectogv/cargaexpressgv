@@ -282,15 +282,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
+  /// Segundos desde el inicio real (`enCursoAt` del backend). Antes leía un
+  /// campo `inicio` que no existe y contaba desde que se abrió la pantalla.
   int _calcularElapsed(Trip trip) {
-    final inicio = trip.toJson()['inicio'] as String?;
+    final inicio = DateTime.tryParse(trip.enCursoAt ?? '');
     if (inicio == null) return _elapsedSeconds;
-    try {
-      final inicioDt = DateTime.parse(inicio);
-      return DateTime.now().difference(inicioDt).inSeconds;
-    } catch (_) {
-      return _elapsedSeconds;
-    }
+    final s = DateTime.now().difference(inicio).inSeconds;
+    return s < 0 ? 0 : s;
   }
 
   void _restartTimersIfNeeded() {
@@ -962,6 +960,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   }
 
   Future<void> _startGpsTimer() async {
+    // Cronómetro y sincronización no dependen del GPS: antes se iniciaban
+    // sólo con permiso de ubicación y sin él el viaje no se sincronizaba.
+    _startTripTimers();
     // Evitar timers duplicados si se llama dos veces mientras se pide permiso.
     if (_locationTimer != null || _gpsStarting) return;
     _gpsStarting = true;
@@ -977,15 +978,23 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     _locationTimer = Timer.periodic(const Duration(seconds: 10), (_) => _sendLocation());
     _sendLocation();
-    _elapsedTimer?.cancel();
-    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) _elapsed.value++;
-    });
+  }
 
-    _tripStateTimer?.cancel();
+  void _startTripTimers() {
+    if (_elapsedTimer == null) {
+      // Con enCursoAt el cronómetro se recalcula desde el inicio real (sigue
+      // bien tras reabrir la app o volver de segundo plano); sin él, cuenta.
+      final t0 = _trip;
+      if (t0?.enCursoAt != null) _elapsedSeconds = _calcularElapsed(t0!);
+      _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        final t = _trip;
+        _elapsedSeconds = t?.enCursoAt != null ? _calcularElapsed(t!) : _elapsedSeconds + 1;
+      });
+    }
     // Con socket o sin él: los eventos se pierden si la app estuvo en segundo
     // plano o se reconectó; el estado del backend manda.
-    _tripStateTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+    _tripStateTimer ??= Timer.periodic(const Duration(seconds: 20), (_) async {
       if (!mounted) return;
       await _sincronizarConServidor();
     });

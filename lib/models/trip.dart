@@ -22,6 +22,9 @@ class Trip {
   final String? createdAt;
   final String? updatedAt;
   final String? fotoEntrega;
+  /// Inicio real del viaje (start-trip) según el backend: el cronómetro del
+  /// conductor cuenta desde aquí y no desde que se abrió la pantalla.
+  final String? enCursoAt;
 
   Trip({
     required this.id,
@@ -39,6 +42,7 @@ class Trip {
     this.createdAt,
     this.updatedAt,
     this.fotoEntrega,
+    this.enCursoAt,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {

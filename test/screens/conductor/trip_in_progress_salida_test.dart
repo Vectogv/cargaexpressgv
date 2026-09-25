@@ -178,6 +178,18 @@ void main() {
     expect(sos.body, contains('"viajeId":"5"'));
   });
 
+  testWidgets('el cronómetro cuenta desde el inicio real del viaje (enCursoAt), no desde que se abrió', (tester) async {
+    pantalla(tester);
+    await conApiFalsa(backend, () async {
+      final json = viaje('en_curso').toJson()
+        ..['enCursoAt'] = DateTime.now().toUtc().subtract(const Duration(minutes: 35)).toIso8601String();
+      await tester.pumpWidget(MaterialApp(home: TripInProgressScreen(trip: Trip.fromJson(json))));
+      await avanzar(tester, 2);
+      expect(find.textContaining(RegExp(r'^3[5-6]m \d+s$')), findsOneWidget);
+      await cerrar(tester);
+    });
+  });
+
   testWidgets('como raíz (sin inicio debajo) la cancelación deja "No hay viaje activo", no una pantalla vacía', (tester) async {
     pantalla(tester);
     await conApiFalsa(backend, () async {
