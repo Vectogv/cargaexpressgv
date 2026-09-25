@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart' show FlutterMap;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -59,6 +60,20 @@ void main() {
     }, log: log);
 
     expect(log.where((r) => r.url.path == '/api/drivers/status' && r.body.contains('true')), isEmpty);
+  });
+
+  testWidgets('sin posición GPS el mini mapa no muestra otra ciudad, sólo "Buscando tu ubicación..."', (tester) async {
+    pantallaAlta(tester);
+    deuda = {'estadoCuenta': 'activa', 'montoDeuda': 0};
+    await conApiFalsa(backend, () async {
+      await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
+      await avanzar(tester, 2);
+      await tester.scrollUntilVisible(find.byKey(const Key('mini_mapa_sin_posicion')), 200);
+      expect(find.text('Buscando tu ubicación...'), findsOneWidget);
+      expect(find.byType(FlutterMap), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await avanzar(tester, 1);
+    });
   });
 
   testWidgets('payment:confirmed con saldo restante: avisa cuánto queda y mantiene el aviso de deuda', (tester) async {

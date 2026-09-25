@@ -1178,7 +1178,6 @@ class _DriverMiniMap extends StatefulWidget {
 class _DriverMiniMapState extends State<_DriverMiniMap> {
   static const Color _accentBlue = Color(0xFF2563EB);
   static const Color _textDark = Color(0xFF1A1A2E);
-  static const LatLng _cali = LatLng(3.4516, -76.5320);
   static const _interaction = InteractionOptions(flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag);
 
   final MapController _mapController = MapController();
@@ -1186,8 +1185,10 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
   LatLng? _pos;
   bool _mapReady = false;
 
+  // Se crea con la primera posición: el mapa no se dibuja hasta tenerla (antes
+  // mostraba Cali mientras buscaba el GPS, lejos de donde está el conductor).
   late final MapOptions _options = MapOptions(
-    initialCenter: _pos ?? _cali,
+    initialCenter: _pos!,
     initialZoom: 15,
     interactionOptions: _interaction,
     onMapReady: () => _mapReady = true,
@@ -1232,12 +1233,21 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
         height: 220,
         child: Stack(
           children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: _options,
-              children: [
-                _tiles,
-                if (tienePosicion)
+            if (pos == null)
+              Positioned.fill(
+                key: const Key('mini_mapa_sin_posicion'),
+                child: Container(
+                  color: const Color(0xFFE5E7EB),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.map_outlined, size: 48, color: Colors.grey.shade400),
+                ),
+              )
+            else
+              FlutterMap(
+                mapController: _mapController,
+                options: _options,
+                children: [
+                  _tiles,
                   MarkerLayer(markers: [
                     Marker(
                       point: pos,
@@ -1254,8 +1264,8 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
                       ),
                     ),
                   ]),
-              ],
-            ),
+                ],
+              ),
             if (!widget.online)
               Positioned.fill(
                 child: Container(
