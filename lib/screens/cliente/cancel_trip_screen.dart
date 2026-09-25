@@ -150,7 +150,8 @@ class _CancelTripScreenState extends State<CancelTripScreen> {
             const Spacer(),
 
             Padding(
-              padding: const EdgeInsets.only(bottom: 32),
+              // Sobre la barra de navegación del teléfono (antes quedaba tapado).
+              padding: EdgeInsets.only(bottom: 16 + MediaQuery.of(context).padding.bottom),
               child: Row(
                 children: [
                   Expanded(
@@ -179,9 +180,11 @@ class _CancelTripScreenState extends State<CancelTripScreen> {
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
+                      // Corto y en una l\u00ednea: "Confirmar cancelaci\u00f3n" se part\u00eda.
                       child: const Text(
-                        'Confirmar cancelaci\u00f3n',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                        'S\u00ed, cancelar',
+                        maxLines: 1,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                     ),
                   ),

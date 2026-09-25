@@ -319,8 +319,18 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 36),
-              SizedBox(
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+      // Fijo abajo y sobre la barra de navegación (antes al final del
+      // formulario, tapado o fuera de vista).
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+          child: SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
@@ -340,9 +350,6 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
-              ),
-              const SizedBox(height: 24),
-            ],
           ),
         ),
       ),

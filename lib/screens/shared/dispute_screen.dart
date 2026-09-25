@@ -272,23 +272,31 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity, height: 48,
-              child: ElevatedButton(
-                onPressed: _submitting ? null : _submitDispute,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade600,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                ),
-                child: _submitting
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Enviar disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              ),
-            ),
+            const SizedBox(height: 16),
           ],
+        ),
+      ),
+      // Fijo abajo y sobre la barra de navegación: antes estaba al final del
+      // formulario y quedaba tapado o había que desplazarse para verlo.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton(
+              onPressed: _submitting ? null : _submitDispute,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: _submitting
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Enviar disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            ),
+          ),
         ),
       ),
     );

@@ -58,7 +58,7 @@ void main() {
       await avanzar(tester);
       await tester.tap(find.text('Cambié de opinión'));
       await tester.pump();
-      await tester.tap(find.text('Confirmar cancelación'));
+      await tester.tap(find.text('Sí, cancelar'));
       await avanzar(tester);
 
       expect(find.textContaining('0.40 km del origen (mín. 1.5 km)'), findsOneWidget);
