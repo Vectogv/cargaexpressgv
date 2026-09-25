@@ -62,7 +62,7 @@ class ResumenViajeScreen extends StatelessWidget {
               child: _buildResumenList(),
             ),
           ),
-          _buildBottomButton(),
+          _buildBottomButton(context),
         ],
       ),
     );
@@ -154,30 +154,32 @@ class ResumenViajeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomButton() {
+  Widget _buildBottomButton(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _divider)),
       ),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton(
-          onPressed: onVolverInicio,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: _accentBlue,
-            disabledForegroundColor: const Color(0xFFD1D5DB),
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            side: const BorderSide(color: _divider, width: 1.5),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-          child: const Text(
-            'Volver al inicio',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
+      // SafeArea: el botón quedaba bajo la barra de navegación.
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
+              // Sin callback quedaba deshabilitado (gris) y no hacía nada:
+              // por defecto vuelve al inicio (primera ruta).
+              onPressed: onVolverInicio ?? () => Navigator.of(context).popUntil((r) => r.isFirst),
+              style: FilledButton.styleFrom(
+                backgroundColor: _accentBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text(
+                'Volver al inicio',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ),

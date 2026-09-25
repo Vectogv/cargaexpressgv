@@ -72,7 +72,7 @@ void main() {
       expect(find.byType(OfertaAceptadaScreen), findsNothing);
       expect(find.byType(LlegadaAlDestinoScreen), findsOneWidget);
 
-      await tester.tap(find.text('Ver detalle'));
+      await tester.tap(find.text('Revisar y confirmar entrega'));
       await avanzar(tester);
       expect(find.byType(ConfirmarEntregaScreen), findsOneWidget);
     });

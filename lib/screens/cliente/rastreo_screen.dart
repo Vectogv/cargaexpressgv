@@ -1582,7 +1582,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
       etaEtiqueta: _faseRecogida ? 'Llegada estimada al punto de recogida' : 'Llegada estimada al destino',
       // Con el conductor ya en el origen no se muestra una distancia (y sin
       // su posición todavía, p. ej. al reabrir la app, no un "--").
-      distancia: _status == TripStatus.llegada ? 'Ya está aquí' : _formatDistance(distanciaKm),
+      distancia: _status == TripStatus.llegada ? 'Ya llegó' : _formatDistance(distanciaKm),
       distanciaEtiqueta: distanciaEtiqueta,
       trip: _trip,
       calificacion: etiquetaCalificacionConductor(conductor?.toJson()),

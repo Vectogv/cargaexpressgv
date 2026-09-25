@@ -33,7 +33,7 @@ void main() {
     });
   });
 
-  testWidgets('con el conductor ya en el origen dice "Ya está aquí" (no "--")', (tester) async {
+  testWidgets('con el conductor ya en el origen dice "Ya llegó" (no "--")', (tester) async {
     pantallaAlta(tester);
     await conApiFalsa((req) {
       if (req.url.path == '/api/trips/active') {
@@ -48,7 +48,7 @@ void main() {
     }, () async {
       await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
       await avanzar(tester);
-      expect(find.text('Ya está aquí'), findsOneWidget);
+      expect(find.text('Ya llegó'), findsOneWidget);
       expect(find.text('--'), findsNothing);
     });
   });

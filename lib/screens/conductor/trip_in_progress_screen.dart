@@ -1070,7 +1070,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.startTrip(_trip!.id));
       final json = _trip!.toJson();
       json['estado'] = TripStatus.enCurso;
+      // El cronómetro cuenta desde el inicio: sin esto seguía desde que se
+      // abrió la pantalla (start-trip no devuelve el viaje; el backend fija
+      // enCursoAt en este momento).
+      json['enCursoAt'] ??= DateTime.now().toUtc().toIso8601String();
       _trip = Trip.fromJson(json);
+      _elapsedSeconds = 0;
       if (mounted) setState(() {});
       _snack('Viaje iniciado');
       _startGpsTimer();

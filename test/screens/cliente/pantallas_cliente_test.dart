@@ -202,7 +202,7 @@ void main() {
     ));
     await avanzar(tester);
     expect(tester.takeException(), isNull);
-    expect(find.text('Ver detalle'), findsOneWidget);
+    expect(find.text('Revisar y confirmar entrega'), findsOneWidget);
     expect(find.textContaining('un moderador revisará'), findsOneWidget);
   });
 }

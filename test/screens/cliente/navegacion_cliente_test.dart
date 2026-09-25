@@ -141,7 +141,7 @@ void main() {
       await avanzar(tester);
       expect(find.byType(LlegadaAlDestinoScreen), findsOneWidget);
 
-      await tester.tap(find.text('Ver detalle'));
+      await tester.tap(find.text('Revisar y confirmar entrega'));
       await avanzar(tester);
       expect(find.byType(ConfirmarEntregaScreen), findsOneWidget);
 
@@ -171,7 +171,7 @@ void main() {
       await avanzar(tester);
       await tester.tap(find.text('Ir a confirmación'));
       await avanzar(tester);
-      await tester.tap(find.text('Ver detalle'));
+      await tester.tap(find.text('Revisar y confirmar entrega'));
       await avanzar(tester);
 
       await tester.tap(find.text('Rechazar entrega'));
@@ -205,7 +205,7 @@ void main() {
       await avanzar(tester);
       await tester.tap(find.text('Ir a confirmación'));
       await avanzar(tester);
-      await tester.tap(find.text('Ver detalle'));
+      await tester.tap(find.text('Revisar y confirmar entrega'));
       await avanzar(tester);
 
       await tester.tap(find.text('Sí, confirmar entrega'));

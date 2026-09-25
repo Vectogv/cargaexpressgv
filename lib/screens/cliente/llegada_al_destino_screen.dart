@@ -26,95 +26,231 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
     this.cargarFoto,
   });
 
+  static const _verde = Color(0xFF16A34A);
+  static const _azul = Color(0xFF2563EB);
+  static const _fondo = Color(0xFFF5F7FA);
+
+  static String? _direccion(dynamic p) {
+    final d = p is Map ? p['direccion']?.toString() : null;
+    return (d == null || d.trim().isEmpty) ? null : d;
+  }
+
+  static String? _precio(dynamic v) {
+    final n = v is num ? v : num.tryParse(v?.toString() ?? '');
+    if (n == null || n <= 0) return null;
+    final miles = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+    return '\$$miles';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final origen = _direccion(trip['origen']);
+    final destino = _direccion(trip['destino']);
+    final precio = _precio(trip['precioFinal'] ?? trip['precioEstimado']);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _fondo,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _fondo,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
         centerTitle: true,
         title: const Text(
           'Llegada al destino',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.black, fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
       body: Column(
         children: [
-          SizedBox(
-            height: 220,
-            width: double.infinity,
-            child: MapaViaje(
-              destino: MapaViaje.puntoDe(trip['destino']),
-              vehiculo: ubicacionConductor,
-              dibujarVehiculo: true,
-              tipoVehiculo: conductor['tipoVehiculo']?.toString(),
-              etiquetaVehiculo: 'Con tu carga',
-            ),
-          ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DriverCard(conductor: conductor),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'El conductor ha llegado al destino.\nPor favor verifica tu carga.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF4B5563),
-                      height: 1.6,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _Encabezado(),
+                const SizedBox(height: 14),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: SizedBox(
+                    height: 190,
+                    child: MapaViaje(
+                      destino: MapaViaje.puntoDe(trip['destino']),
+                      vehiculo: ubicacionConductor,
+                      dibujarVehiculo: true,
+                      tipoVehiculo: conductor['tipoVehiculo']?.toString(),
+                      etiquetaVehiculo: 'Con tu carga',
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const AvisoConfirmacionPendiente(),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Foto de evidencia',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6B7280),
-                      fontWeight: FontWeight.w500,
-                    ),
+                ),
+                const SizedBox(height: 14),
+                _Tarjeta(child: _DriverCard(conductor: conductor)),
+                const SizedBox(height: 12),
+                _Tarjeta(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (origen != null) _Parada(icono: Icons.trip_origin, color: _verde, titulo: 'Origen', texto: origen),
+                      if (origen != null && destino != null) const SizedBox(height: 12),
+                      if (destino != null) _Parada(icono: Icons.location_on, color: Colors.red, titulo: 'Destino', texto: destino),
+                      if (precio != null) ...[
+                        const Divider(height: 26),
+                        Row(children: [
+                          const Expanded(
+                            child: Text('Precio acordado', style: TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
+                          ),
+                          Text(precio, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                        ]),
+                      ],
+                      if (origen == null && destino == null && precio == null)
+                        const Text('Revisa que la carga esté completa y en buen estado.',
+                            style: TextStyle(fontSize: 14, color: Color(0xFF4B5563))),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  _EvidencePhoto(fotoUrl: trip['fotoEntrega'] as String?, cargarFoto: cargarFoto),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: onVerDetalle,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                ),
+                const SizedBox(height: 12),
+                _Tarjeta(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(children: [
+                        Icon(Icons.photo_camera_outlined, size: 18, color: Color(0xFF6B7280)),
+                        SizedBox(width: 6),
+                        Text('Foto de evidencia',
+                            style: TextStyle(fontSize: 14, color: Color(0xFF374151), fontWeight: FontWeight.w600)),
+                      ]),
+                      const SizedBox(height: 10),
+                      _EvidencePhoto(fotoUrl: trip['fotoEntrega'] as String?, cargarFoto: cargarFoto),
+                    ],
+                  ),
+                ),
+              ],
+              ),
+            ),
+          ),
+          // Acción principal siempre visible (y sobre la barra de navegación).
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -2))],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AvisoConfirmacionPendiente(textAlign: TextAlign.center),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton.icon(
+                        onPressed: onVerDetalle,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _azul,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
-                      ),
-                      child: const Text(
-                        'Ver detalle',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF2563EB),
-                        ),
+                        icon: const Icon(Icons.fact_check_outlined),
+                        label: const Text('Revisar y confirmar entrega',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _Encabezado extends StatelessWidget {
+  const _Encabezado();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF16A34A), Color(0xFF22C55E)]),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: Colors.white24,
+            child: Icon(Icons.inventory_2_rounded, color: Colors.white, size: 26),
+          ),
+          SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('¡Tu carga llegó!',
+                    style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
+                SizedBox(height: 3),
+                Text('Revisa que esté completa y en buen estado, y confirma la entrega.',
+                    style: TextStyle(color: Colors.white, fontSize: 13, height: 1.35)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Tarjeta extends StatelessWidget {
+  final Widget child;
+  const _Tarjeta({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _Parada extends StatelessWidget {
+  final IconData icono;
+  final Color color;
+  final String titulo;
+  final String texto;
+  const _Parada({required this.icono, required this.color, required this.titulo, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icono, size: 20, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titulo, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+              const SizedBox(height: 2),
+              Text(texto,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -127,6 +263,8 @@ class _DriverCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final nombre = conductor['nombre'] as String? ?? 'Conductor';
     final rating = etiquetaCalificacionConductor(conductor);
+    final placa = conductor['placa']?.toString();
+    final vehiculo = conductor['tipoVehiculo']?.toString();
 
     return Row(
       children: [
@@ -143,7 +281,8 @@ class _DriverCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Column(
+        Expanded(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -167,10 +306,32 @@ class _DriverCard extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (vehiculo != null && vehiculo.isNotEmpty) ...[
+                  const Text('  ·  ', style: TextStyle(color: Color(0xFF9CA3AF))),
+                  Flexible(
+                    child: Text(
+                      vehiculo[0].toUpperCase() + vehiculo.substring(1),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
+          ),
         ),
+        if (placa != null && placa.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF9C3),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFACC15)),
+            ),
+            child: Text(placa,
+                style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.2, fontSize: 13)),
+          ),
       ],
     );
   }
