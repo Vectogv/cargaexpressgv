@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import 'aviso_cuenta_pago.dart' show formatoDinero, numeroDe;
 
@@ -145,6 +146,14 @@ class _EarningsScreenState extends State<EarningsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al subir comprobante: ${e.toString().replaceFirst("Exception: ", "")}')),
         );
+        // 422: ya hay un comprobante en revisión o la deuda quedó en cero:
+        // se trae el estado real para que el botón no siga ahí.
+        if (e is ApiException && e.statusCode == 422) {
+          try {
+            final debt = await ApiClient.instance.getDebt();
+            if (mounted) setState(() => _debt = debt);
+          } catch (_) {}
+        }
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -588,7 +597,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
               style: const TextStyle(fontSize: 12, color: Color(0xFF1A1A2E)),
             ),
           ],
-          if (estado == 'suspension_por_pago') ...[
+          if (puedeSubirComprobante(_debt)) ...[
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,

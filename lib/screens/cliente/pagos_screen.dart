@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import '../../services/socket_service_client.dart';
 
@@ -105,8 +106,19 @@ class _PagosScreenState extends State<PagosScreen> {
           _uploading = false;
           _proofMessage = 'Error al subir el comprobante: ${e.toString().replaceFirst("Exception: ", "")}';
         });
+        // 422: ya hay un comprobante en revisión o la deuda quedó en cero
+        // (p. ej. aprobado desde otro dispositivo): se trae el estado real.
+        if (e is ApiException && e.statusCode == 422) _recargarEstado();
       }
     }
+  }
+
+  /// Recarga la deuda sin tapar la pantalla con el indicador de carga.
+  Future<void> _recargarEstado() async {
+    try {
+      final deuda = await PaymentService.getDebtInfo();
+      if (mounted) setState(() => _deuda = deuda);
+    } catch (_) {}
   }
 
   String _estadoLabel(String? estado) {
@@ -117,6 +129,8 @@ class _PagosScreenState extends State<PagosScreen> {
         return 'Comprobante en revisi\u00f3n';
       case 'al_dia':
         return 'Al d\u00eda';
+      case 'activa':
+        return 'Cuenta activa';
       default:
         return estado ?? 'Al d\u00eda';
     }
@@ -185,9 +199,9 @@ class _PagosScreenState extends State<PagosScreen> {
         _buildNequiCard(deuda),
         const SizedBox(height: 16),
         if (_proofMessage != null) _buildProofMessage(),
-        if (estado == 'suspension_por_pago') ...[
+        if (puedeSubirComprobante(deuda)) ...[
           const SizedBox(height: 16),
-          _buildUploadCard(),
+          _buildUploadCard(suspendido: estado == 'suspension_por_pago'),
         ],
         // La deuda es con la plataforma y se paga por Nequi (tarjeta de
         // arriba): la lista "Efectivo \u00b7 Pago al conductor" confund\u00eda.
@@ -303,19 +317,22 @@ class _PagosScreenState extends State<PagosScreen> {
     );
   }
 
-  Widget _buildUploadCard() {
+  Widget _buildUploadCard({required bool suspendido}) {
     final uploading = _uploading;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFDC2626).withValues(alpha: 0.25)),
+        border: Border.all(
+            color: (suspendido ? const Color(0xFFDC2626) : const Color(0xFF16A34A)).withValues(alpha: 0.25)),
       ),
       child: Column(
         children: [
-          const Text(
-            'Tienes una suspensi\u00f3n por pago. Para reactivar tu cuenta sube el comprobante de la transferencia (imagen JPG/PNG).',
+          Text(
+            suspendido
+                ? 'Tienes una suspensi\u00f3n por pago. Para reactivar tu cuenta sube el comprobante de la transferencia (imagen JPG/PNG).'
+                : 'Puedes pagar cuando quieras antes de la fecha l\u00edmite. Cuando hagas la transferencia, sube aqu\u00ed el comprobante (imagen JPG/PNG).',
             style: TextStyle(fontSize: 13, color: Colors.black87),
             textAlign: TextAlign.center,
           ),

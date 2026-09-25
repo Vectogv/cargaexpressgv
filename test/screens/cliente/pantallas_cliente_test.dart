@@ -80,6 +80,35 @@ void main() {
           falla: () => false, body: () async {
         expect(find.text('Pagos'), findsOneWidget);
         expect(find.text('Al día'), findsWidgets);
+        expect(find.text('Subir comprobante de pago'), findsNothing);
+      });
+    });
+
+    testWidgets('con deuda y cuenta activa ya puede subir el comprobante (no espera la suspensión)', (tester) async {
+      await abrir(tester, const PagosScreen(),
+          ok: (_) => jsonResp({'estadoCuenta': 'activa', 'diasRestantes': 8, 'montoDeuda': '15000.00'}),
+          falla: () => false, body: () async {
+        expect(find.text('Cuenta activa'), findsOneWidget);
+        expect(find.text('Subir comprobante de pago'), findsOneWidget);
+        expect(find.textContaining('Puedes pagar cuando quieras'), findsOneWidget);
+      });
+    });
+
+    testWidgets('suspendido: botón con el aviso de reactivar la cuenta', (tester) async {
+      await abrir(tester, const PagosScreen(),
+          ok: (_) => jsonResp({'estadoCuenta': 'suspension_por_pago', 'diasRestantes': 0, 'montoDeuda': 15000}),
+          falla: () => false, body: () async {
+        expect(find.text('Subir comprobante de pago'), findsOneWidget);
+        expect(find.textContaining('Para reactivar tu cuenta'), findsOneWidget);
+      });
+    });
+
+    testWidgets('comprobante en revisión: sin botón para subir otro', (tester) async {
+      await abrir(tester, const PagosScreen(),
+          ok: (_) => jsonResp({'estadoCuenta': 'esperando_confirmacion', 'diasRestantes': 3, 'montoDeuda': 15000}),
+          falla: () => false, body: () async {
+        expect(find.text('Comprobante en revisión'), findsOneWidget);
+        expect(find.text('Subir comprobante de pago'), findsNothing);
       });
     });
 
