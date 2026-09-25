@@ -61,7 +61,10 @@ void main() {
       _recoverSession();
       unawaited(_loadConfig());
       if (ApiClient.instance.token != null) {
-        SessionMonitorService.instance.start();
+        // Monitor de sesión + permiso y token FCM (antes sólo se registraba
+        // al iniciar sesión: con la sesión guardada el backend nunca recibía
+        // el token y no llegaban notificaciones).
+        iniciarServiciosDeSesion();
       }
 
       // 5. App.

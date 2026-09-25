@@ -270,8 +270,9 @@ class NotificationService {
     if (kIsWeb) return;
     try {
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission(alert: true, badge: true, sound: true);
-
+      // El permiso se pide aparte (pedirPermisoNotificaciones, con pantalla):
+      // aquí, sin Activity, podía lanzar y abortaba todo _initFcm, así que
+      // nunca se obtenía ni registraba el token.
       _fcmToken = await messaging.getToken();
       if (_fcmToken != null) await _registerToken(_fcmToken!);
 
