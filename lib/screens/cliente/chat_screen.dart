@@ -445,8 +445,11 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildInputBar() {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+    // El Scaffold ya se encoge con el teclado: sumar aquí viewInsets.bottom
+    // lo contaba dos veces y la barra quedaba flotando, aplastando los
+    // mensajes. SafeArea: sin teclado respeta la barra de navegación.
+    return SafeArea(
+      top: false,
       child: Container(
         color: _white,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -465,6 +468,12 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                   border: InputBorder.none,
                 ),
                 style: const TextStyle(fontSize: 14),
+                minLines: 1,
+                maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
+                // Al abrir el teclado se baja al último mensaje.
+                onTap: () => Future.delayed(const Duration(milliseconds: 350), _scrollDown),
                 onChanged: (_) => _onTyping(),
                 onSubmitted: (_) => _sendMessage(),
               ),

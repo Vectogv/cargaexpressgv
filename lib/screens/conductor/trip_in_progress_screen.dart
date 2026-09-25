@@ -360,6 +360,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             _currentSpeed = pos.speed;
             _currentHeading = (pos.speed > 1.5 && pos.heading.isFinite && pos.heading > 0) ? pos.heading : null;
             _scheduleGpsRebuild();
+            _emitirUbicacionAlCliente();
           } catch (e) {
             LoggerService.instance.error('trip_in_progress: GPS data handler error', e);
           }
@@ -994,6 +995,29 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       await openAppSettings();
     }
     return false;
+  }
+
+  DateTime? _lastSocketLocation;
+
+  /// Posición al cliente por socket en cada lectura del GPS (máx. cada 2 s):
+  /// antes sólo salía cada 10 s con _sendLocation y el camión del cliente iba
+  /// atrasado respecto al mapa del conductor. El HTTP (persistencia y reglas
+  /// antifraude del backend) sigue cada 10 s.
+  void _emitirUbicacionAlCliente() {
+    final t = _trip;
+    final lat = _currentLat, lng = _currentLng;
+    if (t == null || lat == null || lng == null || !_isTripActive) return;
+    final ahora = DateTime.now();
+    if (_lastSocketLocation != null && ahora.difference(_lastSocketLocation!).inMilliseconds < 2000) return;
+    if (!SocketServiceClient.instance.isConnected) return;
+    _lastSocketLocation = ahora;
+    SocketServiceClient.instance.emit('driver:location', {
+      'tripId': t.id,
+      'latitude': lat,
+      'longitude': lng,
+      'speed': _currentSpeed ?? 0,
+      if (_currentHeading != null) 'heading': _currentHeading,
+    });
   }
 
   Future<void> _sendLocation() async {

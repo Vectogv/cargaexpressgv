@@ -531,6 +531,12 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                   border: InputBorder.none,
                 ),
                 style: const TextStyle(fontSize: 14),
+                minLines: 1,
+                maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
+                // Al abrir el teclado se baja al último mensaje.
+                onTap: () => Future.delayed(const Duration(milliseconds: 350), _scrollDown),
                 onChanged: (_) => _onTyping(),
                 onSubmitted: (_) => _sendMessage(),
               ),
