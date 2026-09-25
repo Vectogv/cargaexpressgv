@@ -215,7 +215,9 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
 
   Widget _buildBotonEnviar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      // Espacio de la barra de navegación del teléfono: con un margen fijo el
+      // botón quedaba debajo de ella.
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: _divider)),

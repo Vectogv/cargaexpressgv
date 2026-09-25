@@ -12,6 +12,10 @@ class EntregaConfirmadaScreen extends StatelessWidget {
   final VoidCallback? onVerResumen;
   final VoidCallback? onVolverInicio;
 
+  /// Abre la calificación del cliente (antes sólo se llegaba a ella con
+  /// "Volver al inicio", que no lo decía).
+  final VoidCallback? onCalificarCliente;
+
   const EntregaConfirmadaScreen({
     super.key,
     this.nombreCliente = 'Cliente',
@@ -23,6 +27,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
     this.gananciaTotal = '—',
     this.onVerResumen,
     this.onVolverInicio,
+    this.onCalificarCliente,
   });
 
   static const Color _green = Color(0xFF16A34A);
@@ -228,46 +233,45 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onVerResumen,
-              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
-                backgroundColor: _green,
-                disabledBackgroundColor: _divider,
-                disabledForegroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Ver resumen del viaje',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700),
+          if (onCalificarCliente != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onCalificarCliente,
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: _green,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.star_rounded, color: Colors.white),
+                label: const Text('Calificar al cliente',
+                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
+          ],
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: onVolverInicio,
+              onPressed: onVerResumen,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 15),
-                side: const BorderSide(color: _divider, width: 1.5),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                side: const BorderSide(color: _green, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text(
-                'Volver al inicio',
-                style: TextStyle(
-                    color: _accentBlue,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600),
-              ),
+              child: const Text('Ver resumen del viaje',
+                  style: TextStyle(color: _greenDark, fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: onVolverInicio ?? () => Navigator.of(context).popUntil((r) => r.isFirst),
+              child: const Text('Volver al inicio',
+                  style: TextStyle(color: _accentBlue, fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ),
         ],

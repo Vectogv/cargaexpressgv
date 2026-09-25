@@ -1215,7 +1215,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           onVerResumen: () => _pushResumenViaje(
             nav, t, precioStr, comisionStr, '${pctComision.toInt()}%', totalStr, origenText, destinoText, duracion,
           ),
-          onVolverInicio: () => _pushCalificarCliente(nav, t.id, nombreCliente, rating),
+          onCalificarCliente: () => _pushCalificarCliente(nav, t.id, nombreCliente, rating),
+          onVolverInicio: () => nav.popUntil((route) => route.isFirst),
         ),
       ),
       // Se conserva el inicio del conductor: al calificar, popUntil(isFirst)
