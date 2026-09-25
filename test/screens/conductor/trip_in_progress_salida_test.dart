@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/models/trip.dart';
 import 'package:cargaexpress/screens/conductor/trip_in_progress_screen.dart';
+import 'package:cargaexpress/services/location_permission.dart';
 import 'package:cargaexpress/services/notification_service.dart';
 
 import '../../helpers/fake_api.dart';
+
+/// Sin GPS: el SOS se envía sin coordenadas y sin esperas.
+class _SinGps extends LocationSource {
+  const _SinGps();
+  @override
+  Future<bool> isServiceEnabled() async => false;
+  @override
+  Future<Position?> lastKnown() async => null;
+}
 
 /// Salida de la pantalla del viaje del conductor. Al cancelar llegan dos
 /// órdenes de salir casi a la vez (respuesta del POST /cancel y socket
@@ -135,6 +146,36 @@ void main() {
       expect(tester.takeException(), isNull);
       await cerrar(tester);
     });
+  });
+
+  testWidgets('SOS desde el viaje: la alerta lleva el viaje y la pantalla muestra la emergencia', (tester) async {
+    pantalla(tester);
+    LocationPermissionHelper.source = const _SinGps();
+    addTearDown(() => LocationPermissionHelper.source = const LocationSource());
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/emergency') return jsonResp({'id': 7, 'viajeId': 5, 'estado': 'pendiente'});
+      return backend(req);
+    }, () async {
+      await abrirSobreInicio(tester, 'en_curso');
+      await tester.tap(find.text('SOS'));
+      await avanzar(tester, 1);
+      expect(find.textContaining('equipo de soporte'), findsOneWidget);
+      await tester.tap(find.text('Activar alerta SOS'));
+      await avanzar(tester, 15);
+      expect(find.text('Cerrar'), findsOneWidget);
+      await tester.tap(find.text('Cerrar'));
+      await avanzar(tester, 1);
+
+      // El backend pasa el viaje a 'sos' (trip:status_changed).
+      NotificationService.instance.simularEventoParaTest('trip:status_changed', {'id': '5', 'estado': 'sos'});
+      await avanzar(tester, 1);
+      expect(find.text('Emergencia activa'), findsOneWidget);
+      await cerrar(tester);
+    }, log: log);
+
+    final sos = log.singleWhere((r) => r.method == 'POST' && r.url.path == '/api/emergency');
+    expect(sos.body, contains('"viajeId":"5"'));
   });
 
   testWidgets('como raíz (sin inicio debajo) la cancelación deja "No hay viaje activo", no una pantalla vacía', (tester) async {

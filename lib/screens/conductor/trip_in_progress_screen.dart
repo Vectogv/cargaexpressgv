@@ -427,6 +427,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     TripStatus.entregado,
     TripStatus.esperaConfirmacion,
     TripStatus.pendienteConfirmacion,
+    // Emergencia: el viaje sigue activo hasta que soporte la resuelva.
+    TripStatus.sos,
   };
 
   /// `trip:status_changed` del backend: fuente de verdad del estado del viaje.
@@ -1771,6 +1773,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       case TripStatus.esperaConfirmacion:
       case TripStatus.pendienteConfirmacion:
         return (titulo: 'Esperando al cliente', detalle: 'El cliente debe confirmar la entrega para cerrar el viaje.', icono: Icons.hourglass_top_rounded, color: const Color(0xFFEF6C00));
+      case TripStatus.sos:
+        // Soporte (admin/moderador) resuelve la emergencia y devuelve el viaje
+        // a su estado (o lo cierra/cancela): trip_state_machine 'sos'.
+        return (titulo: 'Emergencia activa', detalle: 'Soporte fue notificado y te contactará. El viaje sigue cuando soporte cierre la emergencia.', icono: Icons.emergency_rounded, color: Colors.red.shade700);
       default:
         return (titulo: TripStatus.label(estado), detalle: '', icono: Icons.info_outline, color: _textGrey);
     }
@@ -2111,7 +2117,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
             }),
             _navItem(Icons.emergency_outlined, 'SOS', () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SOSAlertScreen()));
+              // Con el viaje: el backend lo pasa a 'sos', avisa al cliente y
+              // los moderadores ven el caso con su viaje y zona.
+              Navigator.push(context, MaterialPageRoute(builder: (_) => SOSAlertScreen(tripId: t.id)));
             }),
             if (estado == TripStatus.aceptado || estado == TripStatus.enCamino)
               _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),

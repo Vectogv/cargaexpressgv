@@ -78,7 +78,9 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
                   child: Text(
                     _sent
                         ? 'Alerta enviada.\nSoporte está siendo notificado.'
-                        : 'Se enviará tu ubicación\na contactos y soporte.',
+                        // El backend avisa a administradores y moderadores
+                        // (no a contactos personales).
+                        : 'Se enviará tu ubicación\nal equipo de soporte de CargaExpress.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16,
@@ -91,8 +93,11 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
               ],
             ),
           ),
-          _buildActivateButton(),
-          const SizedBox(height: 32),
+          // SafeArea: la barra de navegación del teléfono tapaba el botón.
+          SafeArea(
+            top: false,
+            child: Padding(padding: const EdgeInsets.only(bottom: 24), child: _buildActivateButton()),
+          ),
         ],
       ),
     );
