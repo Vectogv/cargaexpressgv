@@ -80,7 +80,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
       _canChat = TripStatus.chatHabilitado(estado);
       if (_canChat) {
         _setupSocket();
-        final tripId = _activeTrip!['id']?.toString();
+        final tripId = _tripId?.toString();
         if (tripId != null) {
           final cached = CacheService.instance.getCachedMessages(tripId);
           if (cached != null && mounted) {
@@ -102,7 +102,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
   }
 
   void _setupSocket() {
-    final tripId = _activeTrip?['id']?.toString();
+    final tripId = _tripId?.toString();
     if (tripId == null) return;
 
     _messageSub = SocketServiceClient.instance.onMessage.listen((data) {
@@ -171,11 +171,16 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
 
   String? _msgId(Map<String, dynamic> m) => (m['_id'] ?? m['id'])?.toString();
 
+  /// Id del viaje: `Trip.toJson()` lo serializa como `_id` (el inicio pasa el
+  /// JSON del backend con `id`). Leer sólo `id` dejaba el chat en "ID: null"
+  /// y los mensajes iban a /trips/null/chat.
+  String? get _tripId => (_activeTrip?['_id'] ?? _activeTrip?['id'])?.toString();
+
   Future<void> _fetchMessages() async {
     if (_activeTrip == null) return;
     try {
-      final msgs = await ApiClient.instance.getTripMessages(_activeTrip!['id']);
-      final tripId = _activeTrip!['id']?.toString();
+      final msgs = await ApiClient.instance.getTripMessages(_tripId);
+      final tripId = _tripId?.toString();
       final nowIds = msgs.map(_msgId).whereType<String>().toSet();
       final serverTexts = msgs
           .map((m) => (m['text'] ?? m['mensaje'])?.toString() ?? '')
@@ -218,12 +223,12 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     _scrollDown();
 
     SocketServiceClient.instance.emit('message:send', {
-      'tripId': _activeTrip!['id'],
+      'tripId': _tripId,
       'text': text,
     });
 
     try {
-      await ApiClient.instance.sendTripMessage(_activeTrip!['id'], text);
+      await ApiClient.instance.sendTripMessage(_tripId, text);
       setState(() {
         for (final m in _messages) {
           if (m['id'] == msgId) m['status'] = 'sent';
@@ -240,7 +245,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
   }
 
   void _saveCache() {
-    final tripId = _activeTrip?['id']?.toString();
+    final tripId = _tripId?.toString();
     if (tripId != null) {
       CacheService.instance.cacheMessages(tripId, _messages);
     }
@@ -249,7 +254,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
   void _sendReadReceipt(dynamic msgId) {
     if (_activeTrip == null || msgId == null) return;
     SocketServiceClient.instance.emit('message:read', {
-      'tripId': _activeTrip!['id'],
+      'tripId': _tripId,
       'messageId': msgId,
     });
   }
@@ -258,7 +263,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     if (_activeTrip == null) return;
     if (!_isTyping) {
       _isTyping = true;
-      SocketServiceClient.instance.emit('typing:start', {'tripId': _activeTrip!['id']});
+      SocketServiceClient.instance.emit('typing:start', {'tripId': _tripId});
     }
     _typingTimer?.cancel();
     _typingTimer = Timer(const Duration(seconds: 2), _stopTyping);
@@ -268,7 +273,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     if (!_isTyping) return;
     _isTyping = false;
     _typingTimer?.cancel();
-    SocketServiceClient.instance.emit('typing:stop', {'tripId': _activeTrip!['id']});
+    SocketServiceClient.instance.emit('typing:stop', {'tripId': _tripId});
   }
 
   void _retryMessage(Map<String, dynamic> msg) {
@@ -276,7 +281,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     final text = msg['text'] as String? ?? msg['mensaje'] as String?;
     if (text == null || text.isEmpty) return;
     setState(() => msg['status'] = 'sending');
-    ApiClient.instance.sendTripMessage(_activeTrip!['id'], text).then((_) {
+    ApiClient.instance.sendTripMessage(_tripId, text).then((_) {
       if (mounted) setState(() => msg['status'] = 'sent');
     }).catchError((_) {
       if (mounted) setState(() => msg['status'] = 'failed');
@@ -326,7 +331,8 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                             },
                           ),
           ),
-          if (_canChat) _buildInputBar(),
+          // SafeArea: la barra de navegación del teléfono tapaba el campo.
+          if (_canChat) SafeArea(top: false, child: _buildInputBar()),
         ],
       ),
     );
@@ -379,7 +385,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
               children: [
                 const Text('Chat del viaje', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                 if (_activeTrip != null)
-                  Text('ID: ${_activeTrip!['id']}', style: TextStyle(fontSize: 12, color: _textGrey)),
+                  Text('Viaje #$_tripId', style: TextStyle(fontSize: 12, color: _textGrey)),
               ],
             ),
           ),
@@ -442,7 +448,8 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(msg['time'] as String? ?? '', style: TextStyle(fontSize: 10, color: _textGrey)),
+                  // Los del backend traen `createdAt`; los locales, `time`.
+                  Text(msg['time'] as String? ?? _formatTime(msg['createdAt']), style: TextStyle(fontSize: 10, color: _textGrey)),
                   const SizedBox(width: 4),
                   if (isSent)
                     Icon(
