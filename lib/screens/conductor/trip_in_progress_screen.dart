@@ -660,46 +660,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
-  /// Pide el monto final. Si el viaje no tiene precio conocido el monto es
-  /// obligatorio: devuelve null si el conductor cancela.
+  /// Precio acordado al aceptar la oferta: es el monto final y el conductor
+  /// no lo cambia al cerrar (el backend lo ignora y usa el acordado).
   Future<num?> _promptMontoFinal() async {
     final t = _trip;
     if (t == null) return null;
-    final current = t.precioFinal ?? t.precioEstimado;
-    final ctrl = TextEditingController(text: current?.toStringAsFixed(0) ?? '');
-    final value = await showDialog<num>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Monto final'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: current == null,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: 'Monto final (\$)',
-            hintText: 'Monto a cobrar al cliente',
-            helperText: current == null ? 'Obligatorio para cerrar el viaje' : null,
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          if (current != null)
-            TextButton(onPressed: () => Navigator.pop(ctx, current), child: const Text('Mantener actual'))
-          else
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () {
-              final v = num.tryParse(ctrl.text.trim().replaceAll(',', ''));
-              if (v == null || v < 0) return;
-              Navigator.pop(ctx, v);
-            },
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
-    );
-    ctrl.dispose();
-    return value ?? current;
+    return t.precioFinal ?? t.precioEstimado ?? 0;
   }
 
   /// Toma el GPS actual antes de decidir si el cierre necesita justificación.
