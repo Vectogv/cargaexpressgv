@@ -78,18 +78,17 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       }
     }
     await _fetchMessages();
+    // Siempre, no sólo sin socket: en segundo plano el sistema (p. ej. Honor)
+    // corta el socket y isConnected sigue en true un rato; los mensajes nuevos
+    // no llegaban hasta salir y volver a entrar al chat.
+    _startPolling();
   }
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _fetchMessages();
     });
-  }
-
-  void _stopPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
   }
 
   void _setupSocket() {
@@ -147,12 +146,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
     _connectionSub = SocketServiceClient.instance.onConnection.listen((connected) {
       if (!mounted) return;
-      if (connected) {
-        _stopPolling();
-        _fetchMessages();
-      } else {
-        _startPolling();
-      }
+      // El sondeo sigue siempre activo; al reconectar se trae lo pendiente ya.
+      if (connected) _fetchMessages();
     });
   }
 
