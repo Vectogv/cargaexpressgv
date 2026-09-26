@@ -18,11 +18,13 @@ import 'services/app_lifecycle_service.dart';
 import 'services/error_handler_service.dart';
 import 'services/session_monitor_service.dart';
 import 'services/session_events.dart';
+import 'core/navegador_global.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/shared/cuenta_no_activa_dialog.dart' show mostrarCuentaSuspendidaDialog;
+import 'screens/shared/tickets/tickets_navegacion.dart' show abrirTicketSoporteGlobal;
 import 'screens/home_by_role.dart';
 
-final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> _navigatorKey = navegadorGlobal;
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -54,6 +56,10 @@ void main() {
 
       // 2. Handlers de error globales.
       _setupErrorHandlers();
+
+      // Tocar un push de ticket de soporte abre su detalle (también cuando
+      // la app estaba cerrada: getInitialMessage corre en init()).
+      NotificationService.instance.abrirTicket = abrirTicketSoporteGlobal;
 
       // 3. Servicios críticos (await — bloqueantes antes del runApp).
       await _initServices();

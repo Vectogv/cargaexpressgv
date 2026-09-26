@@ -5,6 +5,7 @@ import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
+import '../shared/tickets/mis_tickets_screen.dart';
 import '../user/auth_screen.dart';
 
 /// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre,
@@ -221,6 +222,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
       child: Column(
         children: [
           _buildMenuItem(Icons.person_outline, 'Informaci\u00f3n personal', _editInfo),
+          _buildMenuItem(
+            Icons.confirmation_number_outlined,
+            'Mis tickets de soporte',
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisTicketsScreen())),
+          ),
           _buildMenuItem(Icons.logout, 'Cerrar sesi\u00f3n', _saliendo ? null : _logout),
         ],
       ),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../shared/tickets/nuevo_ticket_screen.dart';
+import 'soporte_screen.dart';
 
 class AjustesScreen extends StatefulWidget {
   const AjustesScreen({super.key});
@@ -44,9 +46,23 @@ class _AjustesScreenState extends State<AjustesScreen> {
           ]),
           const SizedBox(height: 16),
           _buildSection('Soporte', [
-            _buildLinkItem(Icons.help_outline, 'Centro de ayuda', () {}),
-            _buildLinkItem(Icons.report_problem_outlined, 'Reportar un problema', () {}),
-            _buildLinkItem(Icons.info_outline, 'Acerca de', () {}),
+            _buildLinkItem(Icons.help_outline, 'Centro de ayuda', () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SoporteScreen()));
+            }),
+            _buildLinkItem(Icons.report_problem_outlined, 'Reportar un problema', () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NuevoTicketScreen(categoriaInicial: 'app')),
+              );
+            }),
+            _buildLinkItem(Icons.info_outline, 'Acerca de', () {
+              showAboutDialog(
+                context: context,
+                applicationName: 'CargaExpress',
+                applicationVersion: '1.0.0',
+                children: const [Text('Envíos de carga con conductores verificados.')],
+              );
+            }),
           ]),
         ],
       ),

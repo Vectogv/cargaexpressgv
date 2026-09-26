@@ -158,6 +158,38 @@ void main() {
     expect(service.notifications, isEmpty);
   });
 
+  test('tocar un push de ticket (ticket_mensaje / ticket_estado) abre el detalle del ticket', () {
+    final abiertos = <String>[];
+    service.abrirTicket = abiertos.add;
+    addTearDown(() => service.abrirTicket = null);
+
+    // Los valores de `data` del FCM son strings.
+    service.manejarToqueDePush(
+      {'tipo': 'ticket_mensaje', 'ticketId': '12', 'mensajeId': '90', 'estado': 'en_proceso'},
+      titulo: 'Respuesta a tu ticket #12',
+      cuerpo: 'Hola, ya estamos revisando el cobro.',
+    );
+    service.manejarToqueDePush({'tipo': 'ticket_estado', 'ticketId': '13', 'estado': 'resuelto'});
+    expect(abiertos, ['12', '13']);
+    // El aviso queda en la lista con su ticketId para abrirlo desde ahí.
+    final n = service.notifications.firstWhere((n) => n['titulo'] == 'Respuesta a tu ticket #12');
+    expect(n['tipo'], 'ticket_mensaje');
+    expect(n['ticketId'], '12');
+
+    // Otros push no abren nada; sin sesión tampoco.
+    service.manejarToqueDePush({'type': 'new_trip', 'tripId': '5'});
+    sesion = false;
+    service.manejarToqueDePush({'tipo': 'ticket_mensaje', 'ticketId': '14'});
+    expect(abiertos, ['12', '13']);
+  });
+
+  test('normalizar saca el ticketId de la raíz o de data/datos (notification:new)', () {
+    expect(NotificationService.normalizar({'id': 'n1', 'tipo': 'ticket_estado', 'ticketId': 12})['ticketId'], '12');
+    expect(NotificationService.normalizar({'id': 'n2', 'tipo': 'ticket_mensaje', 'data': {'ticketId': '15'}})['ticketId'], '15');
+    expect(NotificationService.normalizar({'id': 'n3', 'tipo': 'ticket_mensaje', 'datos': {'ticketId': 16}})['ticketId'], '16');
+    expect(NotificationService.normalizar({'id': 'n4', 'tipo': 'mensaje'}).containsKey('ticketId'), isFalse);
+  });
+
   testWidgets('la pantalla muestra lo mismo que cuenta la campana', (tester) async {
     backend = [remota('1', fecha: DateTime.now().toIso8601String())];
     service.ingest({'__event': 'trip:cancelled', 'id': 't1', 'canceladoPor': 'admin'});

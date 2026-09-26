@@ -31,6 +31,7 @@ import 'settings_screen.dart';
 import 'solicitudes_disponibles_screen.dart';
 import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
+import '../shared/tickets/nuevo_ticket_screen.dart';
 import '../shared/ui_compartida.dart' show FondoDegradado, TarjetaBlanca;
 import '../shared/cuenta_no_activa_dialog.dart' show CuentaNoActivaDialog;
 
@@ -967,7 +968,20 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget? _avisoPrincipal() {
     final pago = _estadoPago;
     if (pago.bloqueaConexion) {
-      return AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos, onSoporte: () => _navigate(12));
+      // "¿Ya pagaste? Escríbele a soporte": ticket de pagos con el asunto listo.
+      return AvisoCuentaPago(
+        deuda: _deuda,
+        onAbrirPagos: _abrirPagos,
+        onSoporte: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const NuevoTicketScreen(
+              categoriaInicial: 'pago',
+              asuntoInicial: 'Ya pagué y mi cuenta sigue suspendida',
+            ),
+          ),
+        ),
+      );
     }
     final perfilCargado = _profile != null;
     if (perfilCargado && _profile!['conductor'] == null) {

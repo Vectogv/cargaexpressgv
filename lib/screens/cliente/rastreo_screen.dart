@@ -41,7 +41,7 @@ import 'conductor_en_la_zona_screen.dart';
 import 'llegada_al_destino_screen.dart';
 import 'chat_screen.dart';
 import 'emergencia_chat_screen.dart';
-import 'soporte_screen.dart';
+import '../shared/tickets/nuevo_ticket_screen.dart';
 
 /// Cada cuánto el seguimiento consulta GET /api/trips/:id/route como respaldo
 /// del socket (posición del conductor, ETA y ruta). Honor, Xiaomi y similares
@@ -1343,7 +1343,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
           titulo: 'Viaje en disputa',
           mensaje: 'Un moderador está revisando el caso. Te notificaremos '
               'la resolución; mientras tanto no necesitas hacer nada más.',
-          onSoporte: () => _safePush(const SoporteScreen()),
+          onSoporte: _abrirTicketDelViaje,
           onInicio: _volverAlInicio,
         );
       case RastreoVista.cerrado:
@@ -1367,7 +1367,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
           titulo: rechazado ? 'Viaje rechazado' : 'Viaje cancelado',
           mensaje: 'Este viaje ya no está activo. Puedes solicitar uno nuevo '
               'desde el inicio.',
-          onSoporte: () => _safePush(const SoporteScreen()),
+          onSoporte: _abrirTicketDelViaje,
           onInicio: _volverAlInicio,
         );
       case RastreoVista.reserva:
@@ -1382,6 +1382,11 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
           onCancelar: _cancelling ? null : _cancelar,
         );
     }
+  }
+
+  /// "Contactar a soporte": ticket de soporte con este viaje preseleccionado.
+  void _abrirTicketDelViaje() {
+    _safePush(NuevoTicketScreen(viaje: _trip?.toJson(), categoriaInicial: 'viaje'));
   }
 
   void _volverAlInicio() {

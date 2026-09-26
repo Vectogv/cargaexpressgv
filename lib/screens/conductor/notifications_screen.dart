@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/notification_service.dart';
+import '../shared/tickets/ticket_detalle_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -70,6 +71,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       // Búsqueda de conductor vencida sin ofertas aceptadas
       // (BusquedaTimeoutService, BUSQUEDA_TIMEOUT_MIN): al cliente.
       case 'busqueda_sin_conductor': return Icons.search_off_rounded;
+      // Tickets de soporte: respuesta del staff o cambio de estado.
+      case 'ticket_mensaje': return Icons.support_agent;
+      case 'ticket_estado': return Icons.confirmation_number_outlined;
       default: return Icons.notifications_outlined;
     }
   }
@@ -86,6 +90,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'disputa_cierre': return const Color(0xFFD97706);
       case 'suspension_por_pago': return const Color(0xFFC62828);
       case 'busqueda_sin_conductor': return const Color(0xFFDC2626);
+      case 'ticket_mensaje':
+      case 'ticket_estado':
+        return const Color(0xFF2563EB);
       default: return const Color(0xFF757575);
     }
   }
@@ -102,6 +109,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'disputa_cierre': return const Color(0xFFFEF3C7);
       case 'suspension_por_pago': return const Color(0xFFFFEBEE);
       case 'busqueda_sin_conductor': return const Color(0xFFFFEBEE);
+      case 'ticket_mensaje':
+      case 'ticket_estado':
+        return const Color(0xFFEFF6FF);
       default: return const Color(0xFFF5F5F5);
     }
   }
@@ -258,6 +268,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   void _onNotifTap(Map<String, dynamic> notif) {
     if (notif['leido'] != true) _service.markRead(notif);
+    // Aviso de un ticket de soporte: abrir su detalle.
+    final ticketId = notif['ticketId']?.toString();
+    if (NotificationService.esTipoTicket(notif['tipo']?.toString()) && ticketId != null && ticketId.isNotEmpty) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => TicketDetalleScreen(ticketId: ticketId)));
+      return;
+    }
     final texto = notif['mensaje'] as String? ?? notif['titulo'] as String? ?? '';
     if (texto.isEmpty) return;
     ScaffoldMessenger.of(context).showSnackBar(

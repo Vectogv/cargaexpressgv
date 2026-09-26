@@ -40,6 +40,7 @@ import 'sos_alert_screen.dart';
 import '../shared/action_key.dart';
 import '../shared/ui_compartida.dart' show BarraInferiorFija;
 import '../shared/dispute_screen.dart';
+import '../shared/tickets/nuevo_ticket_screen.dart';
 import 'disputa_iniciada_wrapper.dart';
 
 class TripInProgressScreen extends StatefulWidget {
@@ -2244,6 +2245,19 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
+              },
+            ),
+            ListTile(
+              key: const Key('accion_soporte'),
+              leading: const Icon(Icons.headset_mic_outlined, color: _primaryBlue),
+              title: const Text('Escribir a soporte'),
+              subtitle: const Text('Abre un ticket con este viaje.'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => NuevoTicketScreen(viaje: t.toJson(), categoriaInicial: 'viaje')),
+                );
               },
             ),
             if (puedeCancelar)

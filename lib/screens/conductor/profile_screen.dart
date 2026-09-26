@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
+import '../shared/tickets/mis_tickets_screen.dart';
 import 'documents_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -273,6 +274,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
           _buildMenuItem(Icons.directions_car_outlined, 'Vehículos', _showVehicleInfo),
           _buildMenuItem(Icons.description_outlined, 'Documentos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()))),
+          _buildMenuItem(
+            Icons.confirmation_number_outlined,
+            'Mis tickets de soporte',
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisTicketsScreen())),
+          ),
         ],
       ),
     );

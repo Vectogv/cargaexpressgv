@@ -5,6 +5,7 @@ import 'disputa_creada_screen.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/trip_service.dart';
+import '../shared/tickets/nuevo_ticket_screen.dart';
 
 class ReportarProblemaScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -319,7 +320,25 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              // Una disputa es sobre la entrega; para lo demás (cobros,
+              // cuenta, la app) va un ticket de soporte con el viaje ya
+              // asociado.
+              Center(
+                child: TextButton.icon(
+                  key: const Key('btn_ticket_soporte_viaje'),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NuevoTicketScreen(viaje: widget.trip, categoriaInicial: 'viaje'),
+                    ),
+                  ),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF374151)),
+                  icon: const Icon(Icons.headset_mic_outlined, size: 18),
+                  label: const Text('¿Es otro tipo de problema? Escríbele a soporte', style: TextStyle(fontSize: 13)),
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),

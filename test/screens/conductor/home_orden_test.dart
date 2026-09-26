@@ -8,8 +8,8 @@ import 'package:cargaexpress/contracts/socket_events.dart';
 import 'package:cargaexpress/contracts/solicitud.dart';
 import 'package:cargaexpress/screens/conductor/earnings_screen.dart';
 import 'package:cargaexpress/screens/conductor/home_screen.dart';
-import 'package:cargaexpress/screens/conductor/support_screen.dart';
 import 'package:cargaexpress/screens/shared/cuenta_no_activa_dialog.dart';
+import 'package:cargaexpress/screens/shared/tickets/nuevo_ticket_screen.dart';
 import 'package:cargaexpress/screens/conductor/solicitudes_disponibles_section.dart';
 import 'package:cargaexpress/services/socket_service_client.dart';
 import 'package:cargaexpress/services/solicitudes_disponibles_service.dart';
@@ -179,7 +179,9 @@ void main() {
       expect(find.byKey(const Key('aviso_cuenta_pago')), findsOneWidget);
       await tester.tap(find.byKey(const Key('aviso_pago_soporte')));
       await avanzar(tester, 1);
-      expect(find.byType(SupportScreen), findsOneWidget);
+      // Abre un ticket de pagos con el asunto ya escrito.
+      expect(find.byType(NuevoTicketScreen), findsOneWidget);
+      expect(find.text('Ya pagué y mi cuenta sigue suspendida'), findsOneWidget);
       await cerrar(tester);
     });
   });

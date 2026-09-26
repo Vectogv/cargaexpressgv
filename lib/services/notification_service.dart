@@ -40,6 +40,14 @@ class NotificationService {
   @visibleForTesting
   String? Function() currentRol = () => ApiClient.instance.rol;
 
+  /// Qué hacer al tocar un push de ticket de soporte (`tipo` =
+  /// `ticket_mensaje` / `ticket_estado`): abrir el detalle del ticket. Lo
+  /// conecta `main.dart` (los servicios no importan pantallas).
+  void Function(String ticketId)? abrirTicket;
+
+  /// Tipos de push/notificación que llevan al detalle de un ticket.
+  static bool esTipoTicket(String? tipo) => tipo == 'ticket_mensaje' || tipo == 'ticket_estado';
+
   final _controller = StreamController<Map<String, dynamic>>.broadcast();
   bool _initialized = false;
   String? _fcmToken;
@@ -131,6 +139,7 @@ class NotificationService {
       return (s == null || s.isEmpty) ? null : s;
     }
 
+    final ticketId = ticketIdDe(raw);
     return {
       'id': (raw['_id'] ?? raw['id'])?.toString(),
       'titulo': txt(raw['titulo']) ?? txt(raw['title']),
@@ -138,7 +147,28 @@ class NotificationService {
       'tipo': txt(raw['tipo']) ?? txt(raw['type']),
       'leido': raw['leido'] == true || raw['read'] == true,
       'createdAt': txt(raw['createdAt']) ?? DateTime.now().toIso8601String(),
+      if (ticketId != null) 'ticketId': ticketId,
     };
+  }
+
+  /// Id del ticket de una notificación/push de soporte: en la raíz
+  /// (`data` del push FCM) o dentro de `data`/`datos` (notificación guardada).
+  static String? ticketIdDe(Map<String, dynamic> raw) {
+    String? txt(dynamic v) {
+      final s = v?.toString().trim();
+      return (s == null || s.isEmpty) ? null : s;
+    }
+
+    final directo = txt(raw['ticketId']);
+    if (directo != null) return directo;
+    for (final clave in const ['data', 'datos', 'metadata']) {
+      final anidado = raw[clave];
+      if (anidado is Map) {
+        final id = txt(anidado['ticketId']);
+        if (id != null) return id;
+      }
+    }
+    return null;
   }
 
   /// Los avisos en memoria son de la sesión actual: otro usuario no los ve.
@@ -399,16 +429,40 @@ class NotificationService {
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    final data = message.data;
+    manejarToqueDePush(
+      message.data,
+      titulo: message.notification?.title,
+      cuerpo: message.notification?.body,
+    );
+  }
+
+  /// El usuario tocó un push (app en segundo plano o cerrada). [data] son los
+  /// datos del FCM (todos strings). Un push de ticket de soporte
+  /// (`tipo: ticket_mensaje | ticket_estado`, `ticketId`) abre el detalle
+  /// del ticket con [abrirTicket].
+  @visibleForTesting
+  void manejarToqueDePush(Map<String, dynamic> data, {String? titulo, String? cuerpo}) {
     final entry = <String, dynamic>{
-      if (message.notification?.title != null) 'title': message.notification!.title,
-      if (message.notification?.body != null) 'body': message.notification!.body,
+      if (titulo != null) 'title': titulo,
+      if (cuerpo != null) 'body': cuerpo,
       if (data.isNotEmpty) ...data,
       '__source': 'fcm',
       '__tap': true,
     };
     if (data['type'] == 'new_trip' || data['event'] == 'trip:nearby') {
       entry['__navigate'] = 'offers';
+    }
+    final ticketId = ticketIdDe(data);
+    if (esTipoTicket(data['tipo']?.toString()) && ticketId != null) {
+      entry['__navigate'] = 'ticket';
+      final abrir = abrirTicket;
+      if (abrir != null && hasSession()) {
+        try {
+          abrir(ticketId);
+        } catch (e) {
+          LoggerService.instance.error('NotificationService.abrirTicket error', e);
+        }
+      }
     }
     _addNotification(entry);
   }
