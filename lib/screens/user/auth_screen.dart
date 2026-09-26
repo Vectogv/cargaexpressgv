@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../shared/ui_compartida.dart' show FondoDegradado;
 import 'auth_estilos.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
@@ -97,15 +98,12 @@ class _Cabecera extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AuthColores.primario, AuthColores.primarioOscuro],
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
-      ),
+    // Color sólido debajo del degradado: en algunos emuladores el degradado
+    // no se pintaba y la cabecera salía blanca con texto blanco encima.
+    return FondoDegradado(
+      key: const Key('cabecera_bienvenida'),
+      colores: const [AuthColores.primario, AuthColores.primarioOscuro],
+      radio: const BorderRadius.vertical(bottom: Radius.circular(32)),
       child: SafeArea(
         bottom: false,
         child: Padding(
