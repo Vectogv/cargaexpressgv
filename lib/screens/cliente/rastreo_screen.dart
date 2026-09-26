@@ -770,6 +770,10 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       _status == TripStatus.llegada ||
       _status == TripStatus.enCurso;
 
+  /// El SOS solo sirve desde que el conductor llega al punto de recogida
+  /// (antes, si algo pasa, se cancela el viaje en vez de activar la alerta).
+  bool get _sosDisponible => _status != TripStatus.aceptado && _status != TripStatus.enCamino;
+
   /// Consulta GET /route ahora y cada [intervaloSondeoPosicion] mientras el
   /// viaje esté en seguimiento; el temporizador se crea una sola vez.
   void _startRutaPolling() {
@@ -1834,7 +1838,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
           },
         ));
       },
-      onSos: _sosSending ? null : _sendSos,
+      onSos: (_sosSending || !_sosDisponible) ? null : _sendSos,
       sosEnviando: _sosSending,
       onCancelar: _cancelling ? null : _cancelar,
       textoCancelar: cancelacionRequiereSolicitud(_status) ? 'Solicitar cancelación' : 'Cancelar viaje',

@@ -203,8 +203,10 @@ class _BotonSos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sin conductor en el punto de recogida todavía, gris: el SOS aún no aplica.
+    final disponible = enviando || onPressed != null;
     return Material(
-      color: RastreoColores.rojo,
+      color: disponible ? RastreoColores.rojo : const Color(0xFFBDBDBD),
       shape: const StadiumBorder(),
       elevation: 3,
       shadowColor: const Color(0x33000000),

@@ -67,4 +67,27 @@ void main() {
     final body = await _enviarSos(tester, texto: 'x' * 150);
     expect((body['motivo'] as String).length, 100);
   });
+
+  testWidgets('antes de que el conductor llegue, el botón SOS no hace nada', (tester) async {
+    pantallaAlta(tester);
+    LocationPermissionHelper.source = const _SinGps();
+    addTearDown(() => LocationPermissionHelper.source = const LocationSource());
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/trips/active') {
+        return jsonResp({
+          '_id': 't1',
+          'estado': 'aceptado',
+          'origen': {'lat': 4.6, 'lng': -74.1, 'direccion': 'Calle 1'},
+          'conductor': {'nombre': 'Carlos'},
+        });
+      }
+      return jsonResp([]);
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      await tester.tap(find.text('SOS'));
+      await avanzar(tester);
+      expect(find.text('Enviar SOS'), findsNothing);
+    });
+  });
 }

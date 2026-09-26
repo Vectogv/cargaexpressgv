@@ -2193,6 +2193,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   /// Barra fija: Chat, Llamar, SOS y "Más" (detalle del cliente, reportar y
   /// cancelar según el estado). Antes eran seis botones apretados.
   Widget _buildBottomNav(Trip t, String estado) {
+    // El SOS solo sirve desde que se llega al punto de recogida (antes, si
+    // algo pasa, se cancela el viaje en vez de activar la alerta).
+    final puedeSos = estado != TripStatus.aceptado && estado != TripStatus.enCamino;
     return BarraInferiorFija(
       padding: const EdgeInsets.only(top: 8, bottom: 6),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
@@ -2200,17 +2203,24 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
         }),
         _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
-        _navItem(Icons.emergency_outlined, 'SOS', () {
-          // Con el viaje: el backend lo pasa a 'sos', avisa al cliente y
-          // los moderadores ven el caso con su viaje y zona.
-          Navigator.push(context, MaterialPageRoute(builder: (_) => SOSAlertScreen(tripId: t.id)));
-        }, color: const Color(0xFFDC2626)),
+        _navItem(
+          Icons.emergency_outlined,
+          'SOS',
+          puedeSos
+              ? () {
+                  // Con el viaje: el backend lo pasa a 'sos', avisa al cliente y
+                  // los moderadores ven el caso con su viaje y zona.
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => SOSAlertScreen(tripId: t.id)));
+                }
+              : null,
+          color: puedeSos ? const Color(0xFFDC2626) : _textGrey,
+        ),
         _navItem(Icons.more_horiz_rounded, 'Más', () => _mostrarMasAcciones(t, estado), key: const Key('btn_mas_acciones')),
       ]),
     );
   }
 
-  Widget _navItem(IconData icon, String label, VoidCallback onTap, {Color color = _textGrey, Key? key}) {
+  Widget _navItem(IconData icon, String label, VoidCallback? onTap, {Color color = _textGrey, Key? key}) {
     return InkWell(
       key: key,
       onTap: onTap,

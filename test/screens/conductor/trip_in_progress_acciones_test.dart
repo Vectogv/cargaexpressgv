@@ -162,9 +162,12 @@ void main() {
       expect(find.text('Detalle'), findsNothing);
       expect(find.text('Reportar'), findsNothing);
       expect(find.text('Cancelar'), findsNothing);
-      // SOS en rojo.
+      // Antes de llegar al origen, SOS en gris: todavía no sirve.
       final sos = tester.widget<Icon>(find.byIcon(Icons.emergency_outlined));
-      expect(sos.color, const Color(0xFFDC2626));
+      expect(sos.color, isNot(const Color(0xFFDC2626)));
+      await tester.tap(find.text('SOS'));
+      await avanzar(tester, 1);
+      expect(find.byType(AlertDialog), findsNothing);
 
       await tester.tap(find.byKey(const Key('btn_mas_acciones')));
       await avanzar(tester, 1);
@@ -177,6 +180,16 @@ void main() {
       await avanzar(tester, 1);
       expect(find.text('Información del cliente'), findsOneWidget); // título del diálogo
       expect(find.text('3001110001'), findsOneWidget);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('ya en el origen, SOS está en rojo y funciona', (tester) async {
+    pantalla(tester);
+    await conApiFalsa(backend, () async {
+      await abrir(tester, 'conductor_llegada');
+      final sos = tester.widget<Icon>(find.byIcon(Icons.emergency_outlined));
+      expect(sos.color, const Color(0xFFDC2626));
       await cerrar(tester);
     });
   });
