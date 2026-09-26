@@ -42,6 +42,12 @@ import 'chat_screen.dart';
 import 'emergencia_chat_screen.dart';
 import 'soporte_screen.dart';
 
+/// Cada cuánto el seguimiento consulta GET /api/trips/:id/route como respaldo
+/// del socket (posición del conductor, ETA y ruta). Honor, Xiaomi y similares
+/// cortan el socket en segundo plano y `isConnected` sigue en true un rato:
+/// sin esto el mapa se congela y "Conductor en la zona" nunca salta.
+const Duration intervaloSondeoPosicion = Duration(seconds: 8);
+
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
 
@@ -105,6 +111,14 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   Timer? _pollingTimer;
   Timer? _fallbackPollingTimer;
   Timer? _proximityTimer;
+  // Sondeo de GET /route durante el seguimiento (respaldo de driver:location).
+  Timer? _rutaTimer;
+  bool _sincronizandoRuta = false;
+  // El socket entregó `driver:location` desde el último sondeo: está vivo y
+  // su posición es más reciente que la del servidor; el sondeo no la pisa.
+  bool _socketEntregoPosicion = false;
+  // `ubicacionActualizadaEn` de la última posición aplicada desde /route.
+  DateTime? _posicionServidorEn;
   Timer? _cercanosTimer;
   List<Map<String, dynamic>> _cercanos = [];
   // El conductor ya está dentro del radio de aviso: cancelar desde ahora
@@ -146,21 +160,25 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     _connectionSub = SocketServiceClient.instance.onConnection.listen((connected) {
       if (!connected || !mounted || _trip == null) return;
       SocketServiceClient.instance.joinTrip(_trip!.id);
-      // Lo emitido mientras el socket estuvo caído (`new:offer`) se perdió:
-      // traer las ofertas vigentes del backend.
+      // Lo emitido mientras el socket estuvo caído (`new:offer`,
+      // `driver:location`) se perdió: traer del backend las ofertas vigentes
+      // o la posición actual del conductor.
       if (_buscando) _sincronizarOfertas();
+      if (_enSeguimiento) _sincronizarRuta(forzarPosicion: true);
     });
   }
 
   /// Al volver del segundo plano: Honor, Xiaomi y similares cortan el socket
   /// con la app en segundo plano y `isConnected` puede seguir en true hasta
   /// que venza el ping; los eventos emitidos mientras tanto se perdieron.
-  /// Se consulta el estado real del viaje y sus ofertas.
+  /// Se consulta el estado real del viaje, sus ofertas y, en seguimiento, la
+  /// posición del conductor.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || !mounted || _trip == null) return;
     _refrescarViaje();
     if (_buscando) _sincronizarOfertas();
+    if (_enSeguimiento) _sincronizarRuta(forzarPosicion: true);
   }
 
   Future<void> _load() async {
@@ -377,6 +395,13 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       _cerrarCelebracion();
     }
     if (estado == TripStatus.enCurso || estado == TripStatus.sos) _cerrarConductorEnLaZona();
+    // El conductor marcó su llegada (llegue por socket o por el sondeo de
+    // estado): si el aviso de zona no saltó por proximidad, sale ahora.
+    if (estado == TripStatus.llegada && !_conductorEnLaZonaShown) {
+      _conductorEnLaZonaShown = true;
+      _showConductorEnLaZona();
+    }
+    if (_enSeguimiento) _startRutaPolling();
   }
 
   void _safePopUntilFirst() {
@@ -488,6 +513,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       if (lat != null && lng != null) {
         final newLat = lat.toDouble();
         final newLng = lng.toDouble();
+        _socketEntregoPosicion = true;
         if (newLat == _driverLat && newLng == _driverLng) return;
         _driverLat = newLat;
         _driverLng = newLng;
@@ -686,9 +712,81 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   Future<void> _startLocationUpdates() async {
     // El cliente NO debe publicar su posición en el endpoint de conductores
     // (PUT /api/drivers/location). La posición del conductor llega por socket
-    // (driver:location). Esta función queda como no-op para mantener las
-    // llamadas existentes.
+    // (driver:location) y, de respaldo, por el sondeo de GET /route.
     _positionSub?.cancel();
+    _startRutaPolling();
+  }
+
+  /// El conductor va hacia la carga o hacia el destino: hay posición y ruta
+  /// que seguir (las fases con ruta del backend, trip_route_service.faseDe).
+  bool get _enSeguimiento =>
+      _status == TripStatus.aceptado ||
+      _status == TripStatus.enCamino ||
+      _status == TripStatus.llegada ||
+      _status == TripStatus.enCurso;
+
+  /// Consulta GET /route ahora y cada [intervaloSondeoPosicion] mientras el
+  /// viaje esté en seguimiento; el temporizador se crea una sola vez.
+  void _startRutaPolling() {
+    if (!mounted || !_enSeguimiento) return;
+    _sincronizarRuta();
+    if (_rutaTimer?.isActive ?? false) return;
+    _rutaTimer = Timer.periodic(intervaloSondeoPosicion, (_) {
+      if (!mounted || !_enSeguimiento) {
+        _rutaTimer?.cancel();
+        _rutaTimer = null;
+        return;
+      }
+      _sincronizarRuta();
+    });
+  }
+
+  /// Trae del backend la ruta, el ETA y la posición del conductor
+  /// (GET /api/trips/:id/route). Corre al entrar en seguimiento, cada
+  /// [intervaloSondeoPosicion], al reconectar el socket y al volver del
+  /// segundo plano. Con [forzarPosicion] la posición del servidor se aplica
+  /// aunque el socket haya entregado algo desde el último sondeo (tras el
+  /// segundo plano el socket es sospechoso y el servidor es la regla).
+  Future<void> _sincronizarRuta({bool forzarPosicion = false}) async {
+    final tripId = _trip?.id;
+    if (tripId == null || tripId.isEmpty || _sincronizandoRuta) return;
+    _sincronizandoRuta = true;
+    // Que _asegurarRuta (desde build) no repita la misma petición.
+    _rutaClave = _faseRecogida ? 'recogida' : 'destino';
+    _rutaPedidaEn = DateTime.now();
+    try {
+      final r = await RutaViaje.obtener(tripId);
+      if (!mounted) return;
+      _aplicarRutaServidor(r);
+      _aplicarPosicionConductor(r, forzar: forzarPosicion);
+    } finally {
+      _sincronizandoRuta = false;
+    }
+  }
+
+  /// Posición del conductor traída por GET /route. Sólo manda cuando el
+  /// socket no está entregando `driver:location` (aún no hay posición, o no
+  /// llegó ninguna desde el último sondeo): así el marcador no salta hacia
+  /// atrás con el socket vivo, y con el socket cortado sigue avanzando y
+  /// "Conductor en la zona" salta solo.
+  void _aplicarPosicionConductor(RutaViaje? r, {bool forzar = false}) {
+    final p = r?.conductor;
+    if (p == null || !mounted) return;
+    final sinPosicion = _driverLat == 0 && _driverLng == 0;
+    final socketVivo = _socketEntregoPosicion;
+    _socketEntregoPosicion = false;
+    if (!sinPosicion && socketVivo && !forzar) return;
+    final ts = r!.ubicacionActualizadaEn;
+    final previa = _posicionServidorEn;
+    // Misma posición que la ya aplicada (el conductor no se movió).
+    if (ts != null && previa != null && !ts.isAfter(previa)) return;
+    if (ts != null) _posicionServidorEn = ts;
+    if (p.latitude == _driverLat && p.longitude == _driverLng) return;
+    _driverLat = p.latitude;
+    _driverLng = p.longitude;
+    _driverRumbo = null;
+    _scheduleDriverRebuild();
+    _checkProximity();
   }
 
   /// Distancia del conductor al origen; infinita mientras no llegue su
@@ -722,13 +820,20 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     // Radio del backend (GET /api/config/cliente); 1 km si no está.
     final proximidadKm = ConfigClienteService.instance.actual.radioAvisoConductorCercaKm;
     if (dist < proximidadKm && cancelarPenaliza) _conductorCerca = true;
-    if (dist < _zonaKm && !_conductorEnLaZonaShown) {
+    // Sólo antes de recoger la carga: en curso el camión sale del origen y
+    // también está "dentro del radio".
+    final zonaAplica = cancelarPenaliza || _status == TripStatus.llegada;
+    if (dist < _zonaKm && zonaAplica && !_conductorEnLaZonaShown) {
       _conductorEnLaZonaShown = true;
       _showConductorEnLaZona();
     }
   }
 
   void _showConductorEnLaZona() {
+    // La celebración, el chat u otra pantalla del viaje no deben taparla
+    // (mismo criterio que la solicitud de confirmación).
+    _cerrarCelebracion();
+    _volverARastreo();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _isNavigating) return;
       final conductor = _trip?.conductor;
@@ -1033,6 +1138,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     _cercanosTimer?.cancel();
     _fallbackPollingTimer?.cancel();
     _proximityTimer?.cancel();
+    _rutaTimer?.cancel();
     _positionSub?.cancel();
     _tripStatusSub?.cancel();
     _tripCancelledSub?.cancel();
@@ -1464,9 +1570,10 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   bool get _faseRecogida => _status == TripStatus.aceptado || _status == TripStatus.enCamino;
 
   /// La ruta la calcula el backend (GET /trips/:id/route y trip:route_update),
-  /// la misma que ve el conductor. Aquí sólo se pide al entrar en cada fase
-  /// (y se reintenta cada 30 s mientras aún no haya, p. ej. sin ubicación
-  /// del conductor todavía); los recálculos llegan por socket.
+  /// la misma que ve el conductor. Aquí se pide al entrar en cada fase (y se
+  /// reintenta cada 30 s mientras aún no haya, p. ej. sin ubicación del
+  /// conductor todavía); los recálculos llegan por socket y por el sondeo de
+  /// [_sincronizarRuta].
   void _asegurarRuta({required LatLng? conductor, required LatLng? origen, required LatLng? destino}) {
     final t = _trip;
     if (t == null || (origen == null && destino == null)) return;
@@ -1478,7 +1585,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     }
     _rutaClave = fase;
     _rutaPedidaEn = DateTime.now();
-    RutaViaje.obtener(t.id).then(_aplicarRutaServidor);
+    _sincronizarRuta();
   }
 
   void _aplicarRutaServidor(RutaViaje? r) {

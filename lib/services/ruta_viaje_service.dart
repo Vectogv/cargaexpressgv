@@ -15,12 +15,23 @@ class RutaViaje {
   /// Puntos de la ruta; null en `trip:eta_update` (sólo trae el ETA).
   final List<LatLng>? coords;
 
+  /// Posición del conductor con la que el backend calculó la ruta (la última
+  /// que recibió por PUT /drivers/location). Sirve de respaldo cuando
+  /// `driver:location` no llega (socket cortado en segundo plano).
+  final LatLng? conductor;
+
+  /// Cuándo mandó el conductor esa posición (reloj del servidor); null si el
+  /// backend no lo informa.
+  final DateTime? ubicacionActualizadaEn;
+
   const RutaViaje({
     required this.fase,
     this.minutos,
     this.restanteM,
     this.aproximada = false,
     this.coords,
+    this.conductor,
+    this.ubicacionActualizadaEn,
   });
 
   /// Payload de GET /trips/:id/route, `trip:route_update` o `trip:eta_update`.
@@ -39,12 +50,24 @@ class RutaViaje {
             LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble()),
       ];
     }
+    LatLng? conductor;
+    final pos = json['conductor'];
+    if (pos is Map) {
+      final lat = pos['lat'] ?? pos['latitude'];
+      final lng = pos['lng'] ?? pos['longitude'];
+      if (lat is num && lng is num && !(lat == 0 && lng == 0)) {
+        conductor = LatLng(lat.toDouble(), lng.toDouble());
+      }
+    }
+    final actualizada = json['ubicacionActualizadaEn'];
     return RutaViaje(
       fase: fase!,
       minutos: min is num ? min.ceil() : int.tryParse(min?.toString() ?? ''),
       restanteM: restante is num ? restante.toDouble() : null,
       aproximada: json['aproximada'] == true,
       coords: coords,
+      conductor: conductor,
+      ubicacionActualizadaEn: actualizada is String ? DateTime.tryParse(actualizada)?.toUtc() : null,
     );
   }
 

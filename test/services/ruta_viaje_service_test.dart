@@ -37,6 +37,25 @@ void main() {
     expect(RutaViaje.fromJson({'fase': 'x', 'minutos': 4}), isNull);
   });
 
+  test('trae la posición del conductor y cuándo la mandó (respaldo sin socket)', () {
+    final r = RutaViaje.fromJson({
+      'fase': 'recogida',
+      'minutos': 2,
+      'restanteM': 400,
+      'conductor': {'lat': 2.4419, 'lng': -76.6063},
+      'ubicacionActualizadaEn': '2026-09-25T10:00:00.000Z',
+    })!;
+    expect(r.conductor?.latitude, 2.4419);
+    expect(r.conductor?.longitude, -76.6063);
+    expect(r.ubicacionActualizadaEn, DateTime.utc(2026, 9, 25, 10));
+
+    // Backend anterior (sin posición) o posición vacía: no se inventa nada.
+    expect(RutaViaje.fromJson({'fase': 'recogida', 'minutos': 2})!.conductor, isNull);
+    final vacia = RutaViaje.fromJson({'fase': 'recogida', 'conductor': {'lat': 0, 'lng': 0}, 'ubicacionActualizadaEn': null})!;
+    expect(vacia.conductor, isNull);
+    expect(vacia.ubicacionActualizadaEn, isNull);
+  });
+
   test('horas en el texto del ETA', () {
     expect(const RutaViaje(fase: 'destino', minutos: 75).minutosTexto, '1 h 15 min');
     expect(const RutaViaje(fase: 'destino').minutosTexto, isNull);
