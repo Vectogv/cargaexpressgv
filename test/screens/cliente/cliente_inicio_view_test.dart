@@ -102,6 +102,23 @@ void main() {
     expect(l.historial, 1);
   });
 
+  testWidgets('envíos recientes muestran el precio (final o, si no hay, estimado)', (tester) async {
+    await _pump(tester, recientes: [
+      {..._viaje('r1', 'finalizado'), 'precioEstimado': 30000, 'precioFinal': 32000},
+      {..._viaje('r2', 'buscando_conductor'), 'precioEstimado': '25000.00'},
+    ]);
+    await tester.scrollUntilVisible(find.text('Origen r2'), 200);
+    // precioFinal es el monto real: "$32.000", no el estimado "$30.000".
+    expect(find.text('\$32.000'), findsOneWidget);
+    expect(find.text('\$30.000'), findsNothing);
+    expect(find.text('\$25.000'), findsOneWidget);
+  });
+
+  testWidgets('sin precio no muestra nada extra junto a la fecha', (tester) async {
+    await _pump(tester, recientes: [_viaje('r1', 'finalizado')]);
+    expect(find.textContaining('\$'), findsNothing);
+  });
+
   testWidgets('errores de carga ofrecen reintentar', (tester) async {
     final l = await _pump(tester, errorActivo: true, errorRecientes: true);
     expect(find.textContaining('No pudimos verificar'), findsOneWidget);

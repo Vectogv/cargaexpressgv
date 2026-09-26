@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../contracts/trip_status.dart';
+import '../../core/formato_dinero.dart';
 
 const Color _kPrimary = Color(0xFF2563EB);
 const Color _kTexto = Color(0xFF1A1A2E);
@@ -405,11 +406,16 @@ class _ViajeRecienteTile extends StatelessWidget {
     return '${dt.day} ${_meses[dt.month - 1]} · ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
+  // precioFinal es el monto real (el aceptado con la oferta); mientras no
+  // haya, se muestra el estimado.
+  static num? _precio(dynamic x) => x is num ? x : num.tryParse(x?.toString() ?? '');
+
   @override
   Widget build(BuildContext context) {
     final estado = viaje['estado'] as String?;
     final origen = viaje['origen'];
     final destino = viaje['destino'];
+    final monto = _precio(viaje['precioFinal']) ?? _precio(viaje['precioEstimado']);
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
@@ -430,7 +436,16 @@ class _ViajeRecienteTile extends StatelessWidget {
                   Flexible(child: _ChipEstado(estado: estado)),
                   const SizedBox(width: 8),
                   const Spacer(),
-                  Text(_fecha(viaje['createdAt']?.toString()), style: const TextStyle(fontSize: 12, color: _kGris)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(_fecha(viaje['createdAt']?.toString()), style: const TextStyle(fontSize: 12, color: _kGris)),
+                      if (monto != null) ...[
+                        const SizedBox(height: 2),
+                        Text(formatearPesos(monto), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _kTexto)),
+                      ],
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
