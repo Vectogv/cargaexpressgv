@@ -25,4 +25,10 @@ class SocketEvents {
   /// deben dibujar cliente y conductor. Sólo llega cuando el backend la
   /// recalcula (cambio de fase, desvío o tráfico).
   static const String tripRouteUpdate = 'trip:route_update';
+
+  /// Tickets de soporte (sala del usuario): el staff respondió
+  /// (`{ticketId, estado, mensaje: {...}}`) o cambió el estado / tomó el
+  /// ticket (`{id, estado, moderador, ...}`).
+  static const String ticketMensaje = 'ticket:mensaje';
+  static const String ticketEstado = 'ticket:estado';
 }

@@ -72,6 +72,8 @@ class SocketServiceClient {
   final _paymentConfirmedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _paymentRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _accountPaymentSuspendedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _ticketMensajeCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _ticketEstadoCtrl = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onTripStatus => _tripStatusCtrl.stream;
   Stream<Map<String, dynamic>> get onDriverOnWay => _driverOnWayCtrl.stream;
@@ -131,6 +133,14 @@ class SocketServiceClient {
   /// deudaFechaLimite, online: false, message}` (conductor): su deuda de
   /// comisión venció; el backend ya lo desconectó.
   Stream<Map<String, dynamic>> get onAccountPaymentSuspended => _accountPaymentSuspendedCtrl.stream;
+
+  /// `ticket:mensaje {ticketId, estado, mensaje: {...}}`: el staff respondió
+  /// en un ticket de soporte del usuario.
+  Stream<Map<String, dynamic>> get onTicketMensaje => _ticketMensajeCtrl.stream;
+
+  /// `ticket:estado {id, estado, moderador, ...}`: cambio de estado, toma o
+  /// asignación de un ticket de soporte del usuario.
+  Stream<Map<String, dynamic>> get onTicketEstado => _ticketEstadoCtrl.stream;
 
   Stream<bool> get onConnection => _connectionCtrl.stream;
 
@@ -538,6 +548,14 @@ class SocketServiceClient {
       safeOn(SocketEvents.accountPaymentSuspended, (data) {
         if (data is Map) safeAdd(_accountPaymentSuspendedCtrl, Map<String, dynamic>.from(data));
       });
+
+      safeOn(SocketEvents.ticketMensaje, (data) {
+        if (data is Map) safeAdd(_ticketMensajeCtrl, Map<String, dynamic>.from(data));
+      });
+
+      safeOn(SocketEvents.ticketEstado, (data) {
+        if (data is Map) safeAdd(_ticketEstadoCtrl, Map<String, dynamic>.from(data));
+      });
     } catch (e) {
       LoggerService.instance.error('SocketServiceClient._connect error', e);
       _scheduleReconnect();
@@ -588,6 +606,8 @@ class SocketServiceClient {
       'dispute:resolved': _disputeResolvedCtrl,
       SocketEvents.tripEtaUpdate: _tripEtaCtrl,
       SocketEvents.tripRouteUpdate: _tripRouteCtrl,
+      SocketEvents.ticketMensaje: _ticketMensajeCtrl,
+      SocketEvents.ticketEstado: _ticketEstadoCtrl,
     }[evento];
     if (ctrl == null) throw ArgumentError('Evento no soportado en pruebas: $evento');
     ctrl.add(data);
@@ -706,6 +726,8 @@ class SocketServiceClient {
     _paymentConfirmedCtrl.close();
     _paymentRejectedCtrl.close();
     _accountPaymentSuspendedCtrl.close();
+    _ticketMensajeCtrl.close();
+    _ticketEstadoCtrl.close();
     _connectionCtrl.close();
   }
 }
