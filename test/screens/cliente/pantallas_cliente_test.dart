@@ -145,6 +145,24 @@ void main() {
         expect(find.text('No tienes conversaciones de soporte'), findsOneWidget);
       });
     });
+
+    testWidgets('muestra el teléfono y correo de contacto (GET /api/support/help)', (tester) async {
+      pantallaAlta(tester);
+      await conApiFalsa((req) {
+        if (req.url.path == '/api/support/help') {
+          return jsonResp({
+            'contacto': {'email': 'soporte@cargaexpress.co', 'telefono': '+57 300 000 0000'},
+            'faq': [],
+          });
+        }
+        return jsonResp([]);
+      }, () async {
+        await tester.pumpWidget(const MaterialApp(home: SoporteScreen()));
+        await avanzar(tester);
+        expect(find.text('soporte@cargaexpress.co'), findsOneWidget);
+        expect(find.text('+57 300 000 0000'), findsOneWidget);
+      });
+    });
   });
 
   group('Disputas', () {

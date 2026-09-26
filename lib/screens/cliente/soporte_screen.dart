@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api/chat_service.dart';
 import '../../services/socket_service_client.dart';
+import '../shared/soporte_contacto.dart';
 import '../shared/tickets/acceso_tickets_soporte.dart';
 import 'chat_thread_screen.dart';
 
@@ -87,6 +88,8 @@ class _SoporteScreenState extends State<SoporteScreen> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     final cabecera = <Widget>[
       const AccesoTicketsSoporte(),
+      const SizedBox(height: 16),
+      const ContactoSoporteSection(),
       const SizedBox(height: 20),
       const Padding(
         padding: EdgeInsets.only(left: 4, bottom: 8),
