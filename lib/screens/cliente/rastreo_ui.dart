@@ -19,6 +19,19 @@ const List<BoxShadow> sombraTarjetaRastreo = [
   BoxShadow(color: Color(0x1F000000), blurRadius: 16, offset: Offset(0, 4)),
 ];
 
+const _mesesCortos = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/// "26 sep, 6:03 p. m." a partir de fechaProgramada ('YYYY-MM-DD') y
+/// horaProgramada ('HH:mm') del backend, o null si falta alguno.
+String? formatoFechaHoraReserva(String? fecha, String? hora) {
+  if (fecha == null || hora == null) return null;
+  final dt = DateTime.tryParse('${fecha}T$hora:00');
+  if (dt == null) return null;
+  final h12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+  final ampm = dt.hour < 12 ? 'a. m.' : 'p. m.';
+  return '${dt.day} ${_mesesCortos[dt.month - 1]}, $h12:${dt.minute.toString().padLeft(2, '0')} $ampm';
+}
+
 /// Barra superior flotante sobre el mapa: atrás (si hay a dónde volver),
 /// título y acciones.
 class BarraRastreo extends StatelessWidget {

@@ -1389,11 +1389,56 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
           onInicio: _volverAlInicio,
         );
       case RastreoVista.reserva:
+        final reservaTexto = formatoFechaHoraReserva(_trip?.fechaProgramada, _trip?.horaProgramada);
         return RastreoEstadoInfo(
           icon: Icons.event_available,
           color: const Color(0xFF2563EB),
           titulo: 'Reserva programada',
           mensaje: 'La búsqueda de conductor comenzará a la hora programada.',
+          extra: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: RastreoColores.borde),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LineaDatoRastreo(
+                  icon: Icons.event_available,
+                  color: RastreoColores.primario,
+                  label: 'Para',
+                  valor: reservaTexto ?? '--',
+                ),
+                const SizedBox(height: 10),
+                LineaDatoRastreo(
+                  icon: Icons.trip_origin,
+                  color: RastreoColores.verde,
+                  label: 'Origen',
+                  valor: _trip?.origen?.direccion,
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 10),
+                LineaDatoRastreo(
+                  icon: Icons.location_on,
+                  color: RastreoColores.rojo,
+                  label: 'Destino',
+                  valor: _trip?.destino?.direccion,
+                  maxLines: 1,
+                ),
+                if (_trip?.precioEstimado != null) ...[
+                  const SizedBox(height: 10),
+                  LineaDatoRastreo(
+                    icon: Icons.payments_outlined,
+                    color: RastreoColores.gris,
+                    label: 'Precio',
+                    valor: '${formatearPesos(_trip!.precioEstimado)} COP',
+                  ),
+                ],
+              ],
+            ),
+          ),
           onInicio: _volverAlInicio,
           // reservado -> cancelado está permitido (trip_state_machine.ts).
           textoCancelar: 'Cancelar reserva',
@@ -2139,6 +2184,8 @@ class RastreoEstadoInfo extends StatelessWidget {
   final String? accionPrimariaTexto;
   final IconData? accionPrimariaIcon;
   final VoidCallback? onAccionPrimaria;
+  /// Contenido extra bajo el mensaje (p. ej. el resumen de una reserva).
+  final Widget? extra;
 
   const RastreoEstadoInfo({
     super.key,
@@ -2153,6 +2200,7 @@ class RastreoEstadoInfo extends StatelessWidget {
     this.accionPrimariaTexto,
     this.accionPrimariaIcon,
     this.onAccionPrimaria,
+    this.extra,
   });
 
   @override
@@ -2176,6 +2224,7 @@ class RastreoEstadoInfo extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
               textAlign: TextAlign.center,
             ),
+            if (extra != null) ...[const SizedBox(height: 20), extra!],
             const SizedBox(height: 24),
             if (onAccionPrimaria != null) ...[
               SizedBox(

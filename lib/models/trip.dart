@@ -25,6 +25,11 @@ class Trip {
   /// Inicio real del viaje (start-trip) según el backend: el cronómetro del
   /// conductor cuenta desde aquí y no desde que se abrió la pantalla.
   final String? enCursoAt;
+  /// 'inmediata' o 'programada' (reserva). null en respuestas viejas = inmediata.
+  final String? tipoProgramacion;
+  /// Fecha y hora programadas de una reserva ('YYYY-MM-DD' / 'HH:mm'), null si es inmediata.
+  final String? fechaProgramada;
+  final String? horaProgramada;
 
   Trip({
     required this.id,
@@ -43,6 +48,9 @@ class Trip {
     this.updatedAt,
     this.fotoEntrega,
     this.enCursoAt,
+    this.tipoProgramacion,
+    this.fechaProgramada,
+    this.horaProgramada,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {

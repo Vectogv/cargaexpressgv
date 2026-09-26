@@ -58,6 +58,40 @@ void main() {
     expect(find.text('3 cajas medianas'), findsOneWidget);
     expect(find.text('\$150.000 COP'), findsOneWidget);
     expect(find.byKey(const Key('card_ofertas')), findsNothing);
+    expect(find.text('Servicio para ya'), findsOneWidget);
+  });
+
+  testWidgets('una reserva muestra la fecha y hora programadas, no "para ya"', (tester) async {
+    tester.view.physicalSize = const Size(360, 640) * 3;
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(bottom: 48 * 3.0);
+    addTearDown(tester.view.reset);
+    final reserva = Trip.fromJson({
+      '_id': 't2',
+      'estado': 'buscando',
+      'origen': {'direccion': 'Calle 10 # 43-20, Medellín', 'lat': 6.2, 'lng': -75.5},
+      'destino': {'direccion': 'Carrera 70, Envigado', 'lat': 6.17, 'lng': -75.59},
+      'precioEstimado': 150000,
+      'tipoProgramacion': 'programada',
+      'fechaProgramada': '2026-09-26',
+      'horaProgramada': '18:03',
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: BusquedaConductorView(
+          trip: reserva,
+          mapa: const ColoredBox(color: Colors.grey, key: Key('mapa')),
+          vehiculosCercanos: 0,
+          ofertas: 0,
+          cancelando: false,
+          inicioBusqueda: DateTime.now(),
+          onVerOfertas: () {},
+          onCancelar: () {},
+        ),
+      ),
+    ));
+    expect(find.text('Servicio para ya'), findsNothing);
+    expect(find.text('Reserva: 26 sep, 6:03 p. m.'), findsOneWidget);
   });
 
   testWidgets('el botón cancelar queda por encima de la barra de navegación', (tester) async {

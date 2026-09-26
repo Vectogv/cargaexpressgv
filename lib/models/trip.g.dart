@@ -31,6 +31,9 @@ Trip _$TripFromJson(Map<String, dynamic> json) => Trip(
   updatedAt: json['updatedAt'] as String?,
   fotoEntrega: json['fotoEntrega'] as String?,
   enCursoAt: json['enCursoAt'] as String?,
+  tipoProgramacion: json['tipoProgramacion'] as String?,
+  fechaProgramada: json['fechaProgramada'] as String?,
+  horaProgramada: json['horaProgramada'] as String?,
 );
 
 Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
@@ -50,4 +53,7 @@ Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
   'updatedAt': instance.updatedAt,
   'fotoEntrega': instance.fotoEntrega,
   'enCursoAt': instance.enCursoAt,
+  'tipoProgramacion': instance.tipoProgramacion,
+  'fechaProgramada': instance.fechaProgramada,
+  'horaProgramada': instance.horaProgramada,
 };

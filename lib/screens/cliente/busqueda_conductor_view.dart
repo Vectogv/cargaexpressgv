@@ -584,6 +584,7 @@ class _ResumenViaje extends StatelessWidget {
         .map((s) => s.trim())
         .firstWhere((s) => s.isNotEmpty, orElse: () => '');
     final precio = t?.precioEstimado;
+    final reservaTexto = formatoFechaHoraReserva(t?.fechaProgramada, t?.horaProgramada);
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
@@ -595,6 +596,13 @@ class _ResumenViaje extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const TituloSeccionRastreo('Tu solicitud'),
+          const SizedBox(height: 10),
+          LineaDatoRastreo(
+            icon: reservaTexto != null ? Icons.event_available : Icons.bolt,
+            color: RastreoColores.primario,
+            label: 'Modo',
+            valor: reservaTexto != null ? 'Reserva: $reservaTexto' : 'Servicio para ya',
+          ),
           const SizedBox(height: 10),
           LineaDatoRastreo(
             icon: Icons.trip_origin,

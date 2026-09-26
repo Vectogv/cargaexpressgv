@@ -3,8 +3,52 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cargaexpress/contracts/trip_status.dart';
 import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
+import 'package:cargaexpress/screens/cliente/rastreo_ui.dart';
+
+import '../../helpers/fake_api.dart';
 
 void main() {
+  group('formatoFechaHoraReserva', () {
+    test('formatea fecha y hora del backend', () {
+      expect(formatoFechaHoraReserva('2026-09-26', '18:03'), '26 sep, 6:03 p. m.');
+      expect(formatoFechaHoraReserva('2026-01-05', '08:00'), '5 ene, 8:00 a. m.');
+      expect(formatoFechaHoraReserva('2026-01-05', '00:15'), '5 ene, 12:15 a. m.');
+    });
+
+    test('null si falta fecha u hora', () {
+      expect(formatoFechaHoraReserva(null, '18:03'), isNull);
+      expect(formatoFechaHoraReserva('2026-09-26', null), isNull);
+    });
+  });
+
+  testWidgets('reserva sin activar: la pantalla muestra la hora, el origen y el destino que se ingresaron', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/trips/active') {
+        return jsonResp({
+          '_id': 't1',
+          'estado': 'reservado',
+          'tipoProgramacion': 'programada',
+          'fechaProgramada': '2026-09-26',
+          'horaProgramada': '18:03',
+          'origen': {'lat': 4.6, 'lng': -74.1, 'direccion': 'Parque Caldas'},
+          'destino': {'lat': 4.7, 'lng': -74.2, 'direccion': 'Campanario'},
+          'precioEstimado': 90000,
+        });
+      }
+      return jsonResp([]);
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      // Aparece en la barra superior y en el título de la pantalla.
+      expect(find.text('Reserva programada'), findsNWidgets(2));
+      expect(find.text('26 sep, 6:03 p. m.'), findsOneWidget);
+      expect(find.text('Parque Caldas'), findsOneWidget);
+      expect(find.text('Campanario'), findsOneWidget);
+      expect(find.text('\$90.000 COP'), findsOneWidget);
+    });
+  });
+
   test('chat del viaje disponible en los mismos estados que chat_controller.ts', () {
     for (final e in [
       TripStatus.aceptado,
