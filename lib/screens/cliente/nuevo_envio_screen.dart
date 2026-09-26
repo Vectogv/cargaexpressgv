@@ -15,6 +15,7 @@ import '../../services/map_config.dart';
 import '../../services/location_permission.dart';
 import '../../services/logger_service.dart';
 import '../shared/action_key.dart';
+import '../shared/cuenta_no_activa_dialog.dart';
 import 'rastreo_screen.dart';
 
 const Color _kPrimary = Color(0xFF2563EB);
@@ -694,6 +695,10 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
           ],
         ),
       );
+      return;
+    }
+    if (e is ApiException && esCuentaNoActiva(e)) {
+      mostrarCuentaNoActivaDialog(context, e);
       return;
     }
     _snack(e is ApiException ? e.message : e.toString().replaceFirst('Exception: ', ''));

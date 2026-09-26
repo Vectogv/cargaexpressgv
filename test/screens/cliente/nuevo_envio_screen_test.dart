@@ -9,7 +9,10 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cargaexpress/screens/cliente/nuevo_envio_screen.dart';
+import 'package:cargaexpress/screens/cliente/pagos_screen.dart';
 import 'package:cargaexpress/services/location_permission.dart';
+
+import '../../helpers/fake_api.dart';
 
 class _FakeSource extends LocationSource {
   _FakeSource({
@@ -240,6 +243,146 @@ void main() {
     expect(find.textContaining('Ingresa el valor que ofreces'), findsOneWidget);
 
     await _dispose(tester);
+  });
+
+  group('cuenta no activa (403 al solicitar)', () {
+    /// Deja el formulario listo para solicitar: origen por última posición
+    /// conocida, destino buscado a mano y precio válido (mismo camino que el
+    /// test de habilitación del botón, arriba).
+    Future<void> llenarFormularioValido(WidgetTester tester) async {
+      LocationPermissionHelper.source = _FakeSource(
+        onCurrent: () => Future<Position>.error(TimeoutException('sin fix')),
+        last: _pos(6.2, -75.5),
+      );
+      await _pumpScreen(tester);
+      await tester.pump(const Duration(seconds: 2));
+
+      await tester.tap(find.byKey(const Key('fila_destino')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.text('Buscar dirección'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.enterText(find.byType(TextField).last, 'Calle 10');
+      await tester.tap(find.text('Buscar'));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.text('Calle 10, Medellín'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      await tester.enterText(find.byKey(const Key('campo_precio')), '150000');
+      await tester.pump();
+    }
+
+    /// Backend falso: cobertura vacía (no restringe), la respuesta de
+    /// POST /api/trips/request la decide cada test, y GET /api/payments (al
+    /// entrar a Pagos) responde con [deudaPagos].
+    FakeHandler backend({
+      required http.Response Function(http.Request) onRequestTrip,
+      Map<String, dynamic> deudaPagos = const {'estadoCuenta': 'al_dia', 'montoDeuda': 0, 'diasRestantes': 0},
+    }) {
+      return (req) async {
+        if (req.url.path.contains('/api/config/coverage')) {
+          return jsonResp({'zonas': []});
+        }
+        if (req.method == 'POST' && req.url.path.contains('/api/trips/request')) {
+          return onRequestTrip(req);
+        }
+        if (req.url.path.contains('/api/payments')) {
+          return jsonResp(deudaPagos);
+        }
+        return jsonResp({});
+      };
+    }
+
+    testWidgets('403 con code CUENTA_NO_ACTIVA muestra el diálogo y "Ir a Pagos" navega',
+        (tester) async {
+      await http.runWithClient(() async {
+        await llenarFormularioValido(tester);
+        await tester.tap(find.byKey(const Key('btn_solicitar')));
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Tienes un saldo pendiente'), findsOneWidget);
+        expect(find.textContaining('Paga y sube el comprobante'), findsOneWidget);
+        expect(find.text('\$45.000'), findsOneWidget); // tarjeta de monto pendiente
+
+        await tester.tap(find.byKey(const Key('btn_ir_a_pagos')));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(PagosScreen), findsOneWidget);
+      }, () => MockClient((req) async => backend(
+            onRequestTrip: (_) => jsonResp({
+              'error': 'Tienes un saldo pendiente de \$45.000. Paga y sube el comprobante en Pagos para volver a pedir viajes.',
+              'code': 'CUENTA_NO_ACTIVA',
+              'estadoCuenta': 'suspension_por_pago',
+              'montoDeuda': 45000,
+            }, 403),
+            deudaPagos: const {
+              'estadoCuenta': 'suspension_por_pago',
+              'montoDeuda': 45000,
+              'diasRestantes': 0,
+            },
+          )(req)));
+      await _dispose(tester);
+    });
+
+    testWidgets('403 con el mensaje viejo (sin code) muestra el mismo diálogo',
+        (tester) async {
+      await http.runWithClient(() async {
+        await llenarFormularioValido(tester);
+        await tester.tap(find.byKey(const Key('btn_solicitar')));
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Tienes un saldo pendiente'), findsOneWidget);
+        expect(find.byKey(const Key('btn_ir_a_pagos')), findsOneWidget);
+      }, () => MockClient((req) async => backend(
+            onRequestTrip: (_) => jsonResp({
+              'error': 'Tu cuenta no está activa. No puedes solicitar viajes.',
+            }, 403),
+          )(req)));
+      await _dispose(tester);
+    });
+
+    testWidgets('esperando_confirmacion muestra "Pago en revisión" con botón "Ver estado del pago"',
+        (tester) async {
+      await http.runWithClient(() async {
+        await llenarFormularioValido(tester);
+        await tester.tap(find.byKey(const Key('btn_solicitar')));
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Pago en revisión'), findsOneWidget);
+        expect(find.text('Ver estado del pago'), findsOneWidget);
+      }, () => MockClient((req) async => backend(
+            onRequestTrip: (_) => jsonResp({
+              'error': 'Tu comprobante de pago está en revisión. Podrás pedir viajes cuando sea aprobado.',
+              'code': 'CUENTA_NO_ACTIVA',
+              'estadoCuenta': 'esperando_confirmacion',
+            }, 403),
+          )(req)));
+      await _dispose(tester);
+    });
+
+    testWidgets('otros errores mantienen el comportamiento anterior (snack, sin diálogo)',
+        (tester) async {
+      await http.runWithClient(() async {
+        await llenarFormularioValido(tester);
+        await tester.tap(find.byKey(const Key('btn_solicitar')));
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Tienes un saldo pendiente'), findsNothing);
+        expect(find.text('Pago en revisión'), findsNothing);
+        expect(find.textContaining('El servidor no está disponible'), findsOneWidget);
+      }, () => MockClient((req) async => backend(
+            onRequestTrip: (_) => http.Response('', 500),
+          )(req)));
+      await _dispose(tester);
+    });
   });
 
   test('formatearMiles usa separador de miles', () {
