@@ -3,6 +3,7 @@ import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
+import '../../services/report_service.dart';
 import '../../widgets/error_carga.dart';
 import 'reportar_conductor_screen.dart';
 
@@ -19,7 +20,9 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   bool _loading = true;
   bool _rated = false;
   int _rating = 0;
-  /// El cliente ya reportó al conductor de este viaje (en esta sesión).
+  /// El cliente ya reportó al conductor de este viaje. Se recuerda en el
+  /// teléfono ([ReportService.yaReportado]) porque el detalle del backend no
+  /// lo informa; antes el botón reaparecía al volver a entrar al viaje.
   bool _conductorReportado = false;
 
   @override
@@ -35,7 +38,15 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     if (mounted && !_loading) setState(() { _loading = true; _error = null; });
     try {
       final data = await ApiClient.instance.getTripDetail(widget.tripId);
-      if (mounted) setState(() { _trip = data; _loading = false; _error = null; });
+      final reportado = await ReportService.yaReportado(widget.tripId);
+      if (mounted) {
+        setState(() {
+          _trip = data;
+          _conductorReportado = _conductorReportado || reportado;
+          _loading = false;
+          _error = null;
+        });
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -71,9 +82,12 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       context,
       MaterialPageRoute(builder: (_) => ReportarConductorScreen(trip: trip)),
     );
-    if (!mounted || enviado != true) return;
+    // Aunque el usuario vuelva sin enviar, pudo recibir un 409 ("ya
+    // reportaste"): ReportService lo deja marcado y aquí se refleja.
+    final reportado = enviado == true || await ReportService.yaReportado(widget.tripId);
+    if (!mounted || !reportado) return;
     setState(() => _conductorReportado = true);
-    _snack('Reporte enviado. Un administrador lo revisará.');
+    if (enviado == true) _snack('Reporte enviado. Un administrador lo revisará.');
   }
 
   String _estadoLabel(String estado) {

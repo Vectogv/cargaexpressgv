@@ -75,6 +75,59 @@ void main() {
     expect(post.url.path, '/api/trips/t1/report');
   });
 
+  testWidgets('al volver a entrar al viaje sigue "Ya reportaste" (se recuerda en el teléfono)', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa(
+      (req) => req.method == 'POST'
+          ? jsonResp({'id': '9', 'estado': 'pendiente', 'motivo': 'otro', 'reportadoPor': 'cliente'}, 201)
+          : jsonResp(viaje),
+      () async {
+        await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
+        await avanzar(tester);
+        await tester.tap(find.text('Reportar conductor'));
+        await avanzar(tester);
+        await tester.tap(find.text('Enviar reporte'));
+        await avanzar(tester);
+        expect(find.text('Ya reportaste a este conductor'), findsOneWidget);
+
+        // Se cierra y se vuelve a abrir el detalle (pantalla nueva).
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
+        await avanzar(tester);
+        expect(find.text('Calle 1'), findsOneWidget);
+        expect(find.text('Ya reportaste a este conductor'), findsOneWidget);
+        expect(find.text('Reportar conductor'), findsNothing);
+      },
+    );
+  });
+
+  testWidgets('si el backend responde 409 (ya reportado) el viaje también queda marcado', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa(
+      (req) => req.method == 'POST' ? errorResp(409, 'Ya reportaste al conductor de este viaje') : jsonResp(viaje),
+      () async {
+        await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
+        await avanzar(tester);
+        await tester.tap(find.text('Reportar conductor'));
+        await avanzar(tester);
+        await tester.tap(find.text('Enviar reporte'));
+        await avanzar(tester);
+        // La pantalla de reporte avisa y no se cierra sola.
+        expect(find.byType(ReportarConductorScreen), findsOneWidget);
+        expect(find.text('Ya reportaste al conductor de este viaje.'), findsOneWidget);
+
+        await tester.pageBack();
+        await avanzar(tester);
+        expect(find.byType(ReportarConductorScreen), findsNothing);
+        expect(find.text('Ya reportaste a este conductor'), findsOneWidget);
+        expect(find.text('Reportar conductor'), findsNothing);
+        // No hay snack de "Reporte enviado": no se envió nada nuevo.
+        expect(find.text('Reporte enviado. Un administrador lo revisará.'), findsNothing);
+      },
+    );
+  });
+
   testWidgets('sin conductor no aparece "Reportar conductor"', (tester) async {
     pantallaAlta(tester);
     final sinConductor = Map<String, dynamic>.from(viaje)
