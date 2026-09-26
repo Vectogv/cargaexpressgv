@@ -4,6 +4,7 @@ import '../../contracts/calificacion.dart';
 import '../../widgets/mapa_viaje.dart';
 import 'confirmar_entrega_screen.dart' show AvisoConfirmacionPendiente;
 import '../../widgets/media_image.dart';
+import '../shared/ui_compartida.dart';
 
 class LlegadaAlDestinoScreen extends StatelessWidget {
   final Map<String, dynamic> conductor;
@@ -67,7 +68,12 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
               child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _Encabezado(),
+                const EncabezadoEstado(
+                  titulo: '¡Tu carga llegó!',
+                  detalle: 'Revisa que esté completa y en buen estado, y confirma la entrega.',
+                  icono: Icons.inventory_2_rounded,
+                  colores: [Color(0xFF16A34A), Color(0xFF22C55E)],
+                ),
                 const SizedBox(height: 14),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(18),
@@ -83,9 +89,9 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                _Tarjeta(child: _DriverCard(conductor: conductor)),
+                TarjetaBlanca(child: _DriverCard(conductor: conductor)),
                 const SizedBox(height: 12),
-                _Tarjeta(
+                TarjetaBlanca(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -108,7 +114,7 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _Tarjeta(
+                TarjetaBlanca(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -128,73 +134,18 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
             ),
           ),
           // Acción principal siempre visible (y sobre la barra de navegación).
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -2))],
-            ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const AvisoConfirmacionPendiente(textAlign: TextAlign.center),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton.icon(
-                        onPressed: onVerDetalle,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _azul,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        icon: const Icon(Icons.fact_check_outlined),
-                        label: const Text('Revisar y confirmar entrega',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Encabezado extends StatelessWidget {
-  const _Encabezado();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF16A34A), Color(0xFF22C55E)]),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: const Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: Colors.white24,
-            child: Icon(Icons.inventory_2_rounded, color: Colors.white, size: 26),
-          ),
-          SizedBox(width: 14),
-          Expanded(
+          BarraInferiorFija(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('¡Tu carga llegó!',
-                    style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
-                SizedBox(height: 3),
-                Text('Revisa que esté completa y en buen estado, y confirma la entrega.',
-                    style: TextStyle(color: Colors.white, fontSize: 13, height: 1.35)),
+                const AvisoConfirmacionPendiente(textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                BotonPrincipal(
+                  texto: 'Revisar y confirmar entrega',
+                  icono: Icons.fact_check_outlined,
+                  color: _azul,
+                  onPressed: onVerDetalle,
+                ),
               ],
             ),
           ),
@@ -204,24 +155,6 @@ class _Encabezado extends StatelessWidget {
   }
 }
 
-class _Tarjeta extends StatelessWidget {
-  final Widget child;
-  const _Tarjeta({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: child,
-    );
-  }
-}
 
 class _Parada extends StatelessWidget {
   final IconData icono;
