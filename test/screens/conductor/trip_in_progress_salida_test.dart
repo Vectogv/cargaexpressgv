@@ -104,7 +104,10 @@ void main() {
     await conApiFalsa(backend, () async {
       await abrirSobreInicio(tester, 'aceptado');
 
-      await tester.tap(find.text('Cancelar'));
+      // "Cancelar viaje" vive en la hoja "Más" de la barra inferior.
+      await tester.tap(find.byKey(const Key('btn_mas_acciones')));
+      await avanzar(tester, 1);
+      await tester.tap(find.byKey(const Key('accion_cancelar')));
       await avanzar(tester, 1);
       expect(find.text('Motivo de cancelación:'), findsOneWidget);
       await tester.tap(find.text('Problema con el cliente'));
@@ -128,7 +131,10 @@ void main() {
     pantalla(tester);
     await conApiFalsa(backend, () async {
       await abrirSobreInicio(tester, 'aceptado');
-      await tester.tap(find.text('Cancelar'));
+      // "Cancelar viaje" vive en la hoja "Más" de la barra inferior.
+      await tester.tap(find.byKey(const Key('btn_mas_acciones')));
+      await avanzar(tester, 1);
+      await tester.tap(find.byKey(const Key('accion_cancelar')));
       await avanzar(tester, 1);
       await tester.tap(find.text('Vehículo no disponible'));
       await avanzar(tester, 0.5);

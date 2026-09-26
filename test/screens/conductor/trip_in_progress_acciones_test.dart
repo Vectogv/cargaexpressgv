@@ -152,6 +152,47 @@ void main() {
     });
   });
 
+  testWidgets('la barra inferior tiene Chat, Llamar, SOS y "Más"; el resto de acciones va en la hoja', (tester) async {
+    pantalla(tester);
+    await conApiFalsa(backend, () async {
+      await abrir(tester, 'aceptado');
+      for (final etiqueta in ['Chat', 'Llamar', 'SOS', 'Más']) {
+        expect(find.text(etiqueta), findsOneWidget, reason: etiqueta);
+      }
+      expect(find.text('Detalle'), findsNothing);
+      expect(find.text('Reportar'), findsNothing);
+      expect(find.text('Cancelar'), findsNothing);
+      // SOS en rojo.
+      final sos = tester.widget<Icon>(find.byIcon(Icons.emergency_outlined));
+      expect(sos.color, const Color(0xFFDC2626));
+
+      await tester.tap(find.byKey(const Key('btn_mas_acciones')));
+      await avanzar(tester, 1);
+      expect(find.text('Información del cliente'), findsOneWidget);
+      expect(find.text('Reportar un problema'), findsOneWidget);
+      expect(find.byKey(const Key('accion_cancelar')), findsOneWidget);
+      expect(find.byKey(const Key('accion_solicitar_cancelacion')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('accion_detalle_cliente')));
+      await avanzar(tester, 1);
+      expect(find.text('Información del cliente'), findsOneWidget); // título del diálogo
+      expect(find.text('3001110001'), findsOneWidget);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('en curso la hoja "Más" ofrece solicitar la cancelación (requiere aprobación)', (tester) async {
+    pantalla(tester);
+    await conApiFalsa(backend, () async {
+      await abrir(tester, 'en_curso');
+      await tester.tap(find.byKey(const Key('btn_mas_acciones')));
+      await avanzar(tester, 1);
+      expect(find.byKey(const Key('accion_solicitar_cancelacion')), findsOneWidget);
+      expect(find.byKey(const Key('accion_cancelar')), findsNothing);
+      await cerrar(tester);
+    });
+  });
+
   testWidgets('la barra inferior respeta el área segura del sistema', (tester) async {
     pantalla(tester);
     tester.view.padding = const FakeViewPadding(bottom: 120);

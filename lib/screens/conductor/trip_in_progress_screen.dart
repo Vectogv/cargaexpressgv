@@ -38,6 +38,7 @@ import 'resumen_viaje_screen.dart';
 import 'calificar_cliente_screen.dart';
 import 'sos_alert_screen.dart';
 import '../shared/action_key.dart';
+import '../shared/ui_compartida.dart' show BarraInferiorFija;
 import '../shared/dispute_screen.dart';
 import 'disputa_iniciada_wrapper.dart';
 
@@ -2173,45 +2174,103 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
+  /// Barra fija: Chat, Llamar, SOS y "Más" (detalle del cliente, reportar y
+  /// cancelar según el estado). Antes eran seis botones apretados.
   Widget _buildBottomNav(Trip t, String estado) {
-    return Container(
-      decoration: const BoxDecoration(color: _white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))]),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 6),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            _navItem(Icons.chat_bubble_outline, 'Chat', () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
-            }),
-            _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
-            _navItem(Icons.info_outline, 'Detalle', () => _showClientDetail(t)),
-            _navItem(Icons.gavel_outlined, 'Reportar', () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
-            }),
-            _navItem(Icons.emergency_outlined, 'SOS', () {
-              // Con el viaje: el backend lo pasa a 'sos', avisa al cliente y
-              // los moderadores ven el caso con su viaje y zona.
-              Navigator.push(context, MaterialPageRoute(builder: (_) => SOSAlertScreen(tripId: t.id)));
-            }),
-            if (estado == TripStatus.aceptado || estado == TripStatus.enCamino)
-              _navItem(Icons.cancel_outlined, 'Cancelar', () => _cancelTrip(t)),
-            if (estado == TripStatus.enCurso || estado == TripStatus.llegada)
-              _navItem(Icons.report_problem_outlined, 'Solicitar\ncancelación', _isCancelling ? () {} : () => _requestCancellation(t)),
-          ]),
-        ),
+    return BarraInferiorFija(
+      padding: const EdgeInsets.only(top: 8, bottom: 6),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+        _navItem(Icons.chat_bubble_outline, 'Chat', () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
+        }),
+        _navItem(Icons.phone_outlined, 'Llamar', () => _showClientPhone(t)),
+        _navItem(Icons.emergency_outlined, 'SOS', () {
+          // Con el viaje: el backend lo pasa a 'sos', avisa al cliente y
+          // los moderadores ven el caso con su viaje y zona.
+          Navigator.push(context, MaterialPageRoute(builder: (_) => SOSAlertScreen(tripId: t.id)));
+        }, color: const Color(0xFFDC2626)),
+        _navItem(Icons.more_horiz_rounded, 'Más', () => _mostrarMasAcciones(t, estado), key: const Key('btn_mas_acciones')),
+      ]),
+    );
+  }
+
+  Widget _navItem(IconData icon, String label, VoidCallback onTap, {Color color = _textGrey, Key? key}) {
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 22, color: color),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 10, color: color, height: 1.1, fontWeight: color == _textGrey ? FontWeight.normal : FontWeight.w700)),
+        ]),
       ),
     );
   }
 
-  Widget _navItem(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 22, color: _textGrey),
-        const SizedBox(height: 4),
-        Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: _textGrey, height: 1.1)),
-      ]),
+  /// Hoja inferior con el resto de acciones del viaje.
+  void _mostrarMasAcciones(Trip t, String estado) {
+    final puedeCancelar = estado == TripStatus.aceptado || estado == TripStatus.enCamino;
+    final pideCancelacion = estado == TripStatus.enCurso || estado == TripStatus.llegada;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 6),
+            ListTile(
+              key: const Key('accion_detalle_cliente'),
+              leading: const Icon(Icons.info_outline, color: _primaryBlue),
+              title: const Text('Información del cliente'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showClientDetail(t);
+              },
+            ),
+            ListTile(
+              key: const Key('accion_reportar'),
+              leading: const Icon(Icons.gavel_outlined, color: _primaryBlue),
+              title: const Text('Reportar un problema'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
+              },
+            ),
+            if (puedeCancelar)
+              ListTile(
+                key: const Key('accion_cancelar'),
+                leading: const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626)),
+                title: const Text('Cancelar viaje', style: TextStyle(color: Color(0xFFDC2626))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _cancelTrip(t);
+                },
+              ),
+            if (pideCancelacion)
+              ListTile(
+                key: const Key('accion_solicitar_cancelacion'),
+                leading: const Icon(Icons.report_problem_outlined, color: Color(0xFFDC2626)),
+                title: const Text('Solicitar cancelación', style: TextStyle(color: Color(0xFFDC2626))),
+                subtitle: const Text('En este estado la cancelación requiere aprobación.'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (!_isCancelling) _requestCancellation(t);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 
