@@ -19,6 +19,7 @@ import 'services/error_handler_service.dart';
 import 'services/session_monitor_service.dart';
 import 'services/session_events.dart';
 import 'screens/user/auth_screen.dart';
+import 'screens/shared/cuenta_no_activa_dialog.dart' show mostrarCuentaSuspendidaDialog;
 import 'screens/home_by_role.dart';
 
 final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
@@ -188,6 +189,15 @@ Future<void> _onSessionEvent(SessionEvent event) async {
           : 'Tu sesión expiró. Inicia sesión nuevamente.';
   final messenger = _scaffoldMessengerKey.currentState;
   messenger?.hideCurrentSnackBar();
+  if (suspended) {
+    // Suspensión del administrador (no por pago): diálogo con acceso a
+    // Soporte sobre la bienvenida, en vez de un aviso que desaparece.
+    final ctx = nav.overlay?.context;
+    if (ctx != null && ctx.mounted) {
+      unawaited(mostrarCuentaSuspendidaDialog(ctx, message));
+      return;
+    }
+  }
   messenger?.showSnackBar(
     SnackBar(
       content: Text(message),

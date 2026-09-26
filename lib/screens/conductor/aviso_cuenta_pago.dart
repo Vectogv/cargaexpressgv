@@ -77,7 +77,11 @@ class AvisoCuentaPago extends StatelessWidget {
   final Map<String, dynamic>? deuda;
   final VoidCallback onAbrirPagos;
 
-  const AvisoCuentaPago({super.key, required this.deuda, required this.onAbrirPagos});
+  /// Si se da, con la cuenta bloqueada se ofrece también Soporte (p. ej. ya
+  /// pagó y sigue suspendido).
+  final VoidCallback? onSoporte;
+
+  const AvisoCuentaPago({super.key, required this.deuda, required this.onAbrirPagos, this.onSoporte});
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +152,17 @@ class AvisoCuentaPago extends StatelessWidget {
               child: Text(boton),
             ),
           ),
+          if (onSoporte != null && estado.bloqueaConexion)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const Key('aviso_pago_soporte'),
+                onPressed: onSoporte,
+                style: TextButton.styleFrom(foregroundColor: const Color(0xFF374151), visualDensity: VisualDensity.compact),
+                icon: const Icon(Icons.headset_mic_outlined, size: 16),
+                label: const Text('¿Ya pagaste? Escríbele a soporte', style: TextStyle(fontSize: 12.5)),
+              ),
+            ),
         ],
       ),
     );

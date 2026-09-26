@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:cargaexpress/contracts/socket_events.dart';
 import 'package:cargaexpress/contracts/solicitud.dart';
+import 'package:cargaexpress/screens/conductor/earnings_screen.dart';
 import 'package:cargaexpress/screens/conductor/home_screen.dart';
+import 'package:cargaexpress/screens/conductor/support_screen.dart';
+import 'package:cargaexpress/screens/shared/cuenta_no_activa_dialog.dart';
 import 'package:cargaexpress/screens/conductor/solicitudes_disponibles_section.dart';
+import 'package:cargaexpress/services/socket_service_client.dart';
 import 'package:cargaexpress/services/solicitudes_disponibles_service.dart';
 
 import '../../helpers/fake_api.dart';
@@ -31,6 +36,11 @@ void main() {
     if (p == '/api/trips/nearby') return jsonResp([]);
     if (p == '/api/drivers/offers') return jsonResp([]);
     if (p == '/api/drivers/today-stats') return jsonResp({'netaHoy': 45000, 'viajesHoy': 3, 'calificacion': 4.8});
+    if (p == '/api/drivers/earnings/history') return jsonResp({'data': [], 'total': 0});
+    if (p == '/api/drivers/earnings') {
+      const periodo = {'neto': 0, 'bruto': 0, 'comision': 0, 'viajes': 0};
+      return jsonResp({'hoy': periodo, 'semana': periodo, 'mes': periodo, 'total': periodo});
+    }
     return jsonResp({});
   }
 
@@ -136,5 +146,55 @@ void main() {
     expect(textoDistanciaRecogida(0.04), 'A menos de 100 m de la recogida');
     expect(textoDistanciaRecogida(2.31), '2.3 km hasta la recogida');
     expect(textoDistanciaRecogida(12.6), '13 km hasta la recogida');
+  });
+
+  testWidgets('suspensión por pago en caliente: diálogo con el monto y "Ir a Pagos" abre Pagos del conductor', (tester) async {
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      deuda = {'estadoCuenta': 'suspension_por_pago', 'montoDeuda': 20000};
+      SocketServiceClient.instance.simularEventoParaTest(SocketEvents.accountPaymentSuspended, {
+        'estadoCuenta': 'suspension_por_pago',
+        'code': 'CUENTA_SUSPENDIDA_POR_PAGO',
+        'montoDeuda': 20000,
+        'online': false,
+        'message': 'Tu deuda de comisión venció.',
+      });
+      await avanzar(tester, 1);
+      expect(find.byType(CuentaNoActivaDialog), findsOneWidget);
+      expect(find.text('Tu deuda de comisión venció.'), findsOneWidget);
+      expect(find.text('\$20.000'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('btn_ir_a_pagos')));
+      await avanzar(tester, 1);
+      expect(find.byType(CuentaNoActivaDialog), findsNothing);
+      expect(find.byType(EarningsScreen), findsOneWidget);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('suspendido por pago: el aviso del inicio también ofrece Soporte', (tester) async {
+    deuda = {'estadoCuenta': 'suspension_por_pago', 'montoDeuda': 20000};
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      expect(find.byKey(const Key('aviso_cuenta_pago')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('aviso_pago_soporte')));
+      await avanzar(tester, 1);
+      expect(find.byType(SupportScreen), findsOneWidget);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('cuenta no aprobada: al intentar conectarse se ofrece ir a Documentos', (tester) async {
+    perfil = {'id': 1, 'nombre': 'Luis', 'conductor': {'estadoVerificacion': 'pendiente'}};
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      final interruptor = tester.widget<Switch>(find.byType(Switch));
+      expect(interruptor.value, isFalse);
+      await tester.tap(find.byType(Switch));
+      await avanzar(tester, 1);
+      expect(find.text('Tu cuenta no está aprobada para recibir viajes'), findsOneWidget);
+      expect(find.widgetWithText(SnackBarAction, 'Documentos'), findsOneWidget);
+      await cerrar(tester);
+    });
   });
 }

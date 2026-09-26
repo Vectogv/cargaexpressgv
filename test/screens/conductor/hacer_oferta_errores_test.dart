@@ -51,8 +51,8 @@ void main() {
       expect(find.textContaining('Error:'), findsNothing);
       // Sigue en la pantalla para poder corregir.
       expect(find.text('Hacer oferta'), findsOneWidget);
-      // Suspendido por pago: acceso directo a Pagos.
-      expect(find.text('Pagos'), code == 'CUENTA_SUSPENDIDA_POR_PAGO' ? findsOneWidget : findsNothing);
+      // Suspendido por pago: diálogo con acceso directo a Pagos.
+      expect(find.byKey(const Key('btn_ir_a_pagos')), code == 'CUENTA_SUSPENDIDA_POR_PAGO' ? findsOneWidget : findsNothing);
     });
   });
 }

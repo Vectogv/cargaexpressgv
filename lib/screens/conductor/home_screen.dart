@@ -32,6 +32,7 @@ import 'solicitudes_disponibles_screen.dart';
 import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
 import '../shared/ui_compartida.dart' show FondoDegradado, TarjetaBlanca;
+import '../shared/cuenta_no_activa_dialog.dart' show CuentaNoActivaDialog;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -211,7 +212,12 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         return;
       }
-      if (estado != 'aprobado') return;
+      if (estado != 'aprobado') {
+        // Sin aprobación el backend no lo deja conectarse: el interruptor no
+        // debe quedar en "Conectado" (valor inicial) sin haberlo pedido.
+        if (mounted) setState(() => _online = false);
+        return;
+      }
       if (!mounted) return;
       if (_estadoPago.bloqueaConexion) {
         // Suspendido por pago o comprobante en revisión: el backend no lo deja
@@ -346,14 +352,35 @@ class _HomeScreenState extends State<HomeScreen> {
     unawaited(_cargarDeuda());
   }
 
+  /// Aplica un cambio llegado por socket fuera del build en curso y
+  /// garantiza que haya un frame (ver rastreo_screen._trasFrame).
+  void _trasFrame(VoidCallback fn) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => fn());
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  bool _dialogoPagoAbierto = false;
+
+  /// Bloqueo por pago (suspendida o comprobante en revisión): el mismo
+  /// diálogo que ve el cliente, con el monto y acceso a Pagos (Ganancias).
   void _avisarBloqueoPago(String mensaje) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(mensaje),
-      backgroundColor: Colors.orange.shade800,
-      duration: const Duration(seconds: 6),
-      action: SnackBarAction(label: 'Pagos', textColor: Colors.white, onPressed: _abrirPagos),
-    ));
+    if (!mounted || _dialogoPagoAbierto) return;
+    _dialogoPagoAbierto = true;
+    _trasFrame(() {
+      if (!mounted) {
+        _dialogoPagoAbierto = false;
+        return;
+      }
+      showDialog<void>(
+        context: context,
+        builder: (_) => CuentaNoActivaDialog(
+          mensaje: mensaje,
+          estadoCuenta: _deuda?['estadoCuenta']?.toString(),
+          montoDeuda: _deuda?['montoDeuda'],
+          onIrAPagos: _abrirPagos,
+        ),
+      ).whenComplete(() => _dialogoPagoAbierto = false);
+    });
   }
 
   void _snack(String mensaje) {
@@ -391,9 +418,11 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         if (estado != 'aprobado') {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tu cuenta no está aprobada para recibir viajes'), backgroundColor: Colors.orange),
-          );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: const Text('Tu cuenta no está aprobada para recibir viajes'),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(label: 'Documentos', textColor: Colors.white, onPressed: () => _navigate(10)),
+            ));
           }
           return;
         }
@@ -937,7 +966,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 4. deuda de comisión sin bloqueo.
   Widget? _avisoPrincipal() {
     final pago = _estadoPago;
-    if (pago.bloqueaConexion) return AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos);
+    if (pago.bloqueaConexion) {
+      return AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos, onSoporte: () => _navigate(12));
+    }
     final perfilCargado = _profile != null;
     if (perfilCargado && _profile!['conductor'] == null) {
       return _AvisoRegistro(

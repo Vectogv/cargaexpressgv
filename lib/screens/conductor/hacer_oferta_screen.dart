@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_client.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/server_clock.dart';
 import '../../services/api/http_client.dart';
+import '../shared/cuenta_no_activa_dialog.dart' show mostrarCuentaNoActivaDialog;
 import 'aviso_cuenta_pago.dart' show codigoSuspensionPago;
 import 'earnings_screen.dart';
 
@@ -135,13 +137,13 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
         // no verificada (403), viaje sin ofertas (400)...: el backend ya
         // explica el motivo en espa\u00f1ol.
         if (e.code == codigoSuspensionPago && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.message),
-            duration: const Duration(seconds: 6),
-            action: SnackBarAction(
-              label: 'Pagos',
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EarningsScreen())),
-            ),
+          // Suspendido por pago o comprobante en revisión: diálogo con el
+          // monto y acceso a Pagos (Ganancias del conductor).
+          final navigator = Navigator.of(context);
+          unawaited(mostrarCuentaNoActivaDialog(
+            context,
+            e,
+            onIrAPagos: () => navigator.push(MaterialPageRoute(builder: (_) => const EarningsScreen())),
           ));
         } else {
           _snack(e.message);
