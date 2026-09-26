@@ -213,28 +213,6 @@ class _EmergenciesScreenState extends State<EmergenciesScreen>
               ),
             ],
           ),
-          const Spacer(),
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined,
-                    color: Color(0xFF1C1C1E)),
-                onPressed: () {},
-              ),
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFD32F2F),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );

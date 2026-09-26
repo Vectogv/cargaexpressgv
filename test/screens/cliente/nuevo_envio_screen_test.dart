@@ -74,9 +74,9 @@ http.Client _geoClient() => MockClient((req) async {
     });
 
 Future<void> _pumpScreen(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(1080, 2400);
-  tester.view.devicePixelRatio = 3;
-  addTearDown(tester.view.reset);
+  // Pantalla alta: con "Mis rutas"/"Guardar ruta" y "Ahora/Programar" el
+  // formulario creció y el botón queda fuera de una pantalla más baja.
+  pantallaAlta(tester);
   await tester.pumpWidget(MaterialApp(
     home: NuevoEnvioScreen(geoClient: _geoClient(), mostrarMapa: false),
   ));

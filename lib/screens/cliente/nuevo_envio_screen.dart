@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_client.dart';
 import '../../services/api/coverage_service.dart';
+import '../../services/api/favorite_service.dart';
 import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
 import '../../services/location_permission.dart';
@@ -74,6 +75,11 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   int _versionDestino = 0;
 
   bool _precioTocado = false;
+
+  /// null = enviar ahora. Con fecha, se reserva (POST /api/trips/reserve);
+  /// el backend exige al menos `RESERVATION_MIN_LEAD_TIME_MINUTES` de
+  /// anticipación (400 si no se cumple, con el mensaje del servidor).
+  DateTime? _fechaHoraProgramada;
 
   // Nominatim (política de uso): User-Agent que identifica la app, máx. 1
   // petición/s y sin respuestas obsoletas.
@@ -626,6 +632,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     }
 
     setState(() => _loading = true);
+    final programada = _fechaHoraProgramada;
     final body = {
       'origen': {
         'direccion': _origenCtrl.text.trim(),
@@ -639,11 +646,18 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       },
       'descripcion': _descripcionCtrl.text.trim().isEmpty ? null : _descripcionCtrl.text.trim(),
       'precioCliente': precio,
+      if (programada != null) 'fechaProgramada': _formatFecha(programada),
+      if (programada != null) 'horaProgramada': _formatHora(programada),
     };
     try {
       // Misma clave si el usuario reintenta tras un fallo de red: el backend
-      // no crea un segundo viaje.
-      await ApiClient.instance.requestTrip(body, idempotencyKey: _requestKey.keyFor(body));
+      // no crea un segundo viaje/reserva.
+      final key = _requestKey.keyFor(body);
+      if (programada != null) {
+        await ApiClient.instance.reserveTrip(body, idempotencyKey: key);
+      } else {
+        await ApiClient.instance.requestTrip(body, idempotencyKey: key);
+      }
       _requestKey.settle();
 
       if (mounted) {
@@ -657,6 +671,166 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       if (mounted) _handleRequestError(e);
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  static String _formatFecha(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  static String _formatHora(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+  /// Abre el date/time picker nativo. El backend exige una anticipación
+  /// mínima (400 con su mensaje si no se cumple); aquí solo se evita el
+  /// pasado (`firstDate: hoy`).
+  Future<void> _elegirFechaHora() async {
+    final ahora = DateTime.now();
+    final base = _fechaHoraProgramada ?? ahora.add(const Duration(hours: 3));
+    final fecha = await showDatePicker(
+      context: context,
+      initialDate: base.isBefore(ahora) ? ahora : base,
+      firstDate: ahora,
+      lastDate: ahora.add(const Duration(days: 30)),
+    );
+    if (fecha == null || !mounted) return;
+    final hora = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: base.hour, minute: base.minute),
+    );
+    if (hora == null || !mounted) return;
+    setState(() => _fechaHoraProgramada = DateTime(fecha.year, fecha.month, fecha.day, hora.hour, hora.minute));
+  }
+
+  // ── Rutas favoritas (GET/POST/DELETE /api/favorites) ────────────────────────
+
+  Future<void> _mostrarFavoritos() async {
+    List<Map<String, dynamic>> favoritos;
+    try {
+      favoritos = await FavoriteService.getFavorites();
+    } catch (e) {
+      LoggerService.instance.warning('nuevo_envio._mostrarFavoritos error', e);
+      if (mounted) _snack('No se pudieron cargar tus rutas favoritas.');
+      return;
+    }
+    if (!mounted) return;
+    if (favoritos.isEmpty) {
+      _snack('Aún no tienes rutas favoritas. Elige origen y destino y toca "Guardar ruta".');
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text('Mis rutas', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.black87)),
+                ),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: favoritos.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final ruta = favoritos[i];
+                      final origen = ruta['origen'] as Map<String, dynamic>? ?? const {};
+                      final destino = ruta['destino'] as Map<String, dynamic>? ?? const {};
+                      return ListTile(
+                        leading: const Icon(Icons.star, color: _kPrimary),
+                        title: Text(ruta['nombre']?.toString() ?? ''),
+                        subtitle: Text(
+                          '${origen['direccion'] ?? ''}  →  ${destino['direccion'] ?? ''}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: _kDestino),
+                          tooltip: 'Borrar',
+                          onPressed: () async {
+                            try {
+                              await FavoriteService.deleteFavorite(ruta['id']);
+                              favoritos.removeAt(i);
+                              setSheetState(() {});
+                            } catch (e) {
+                              LoggerService.instance.warning('nuevo_envio._mostrarFavoritos borrar error', e);
+                              if (mounted) _snack('No se pudo borrar la ruta.');
+                            }
+                          },
+                        ),
+                        onTap: () => _usarFavorita(ctx, origen, destino),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _usarFavorita(BuildContext ctx, Map<String, dynamic> origen, Map<String, dynamic> destino) {
+    final oLat = double.tryParse(origen['lat']?.toString() ?? '');
+    final oLng = double.tryParse(origen['lng']?.toString() ?? '');
+    final dLat = double.tryParse(destino['lat']?.toString() ?? '');
+    final dLng = double.tryParse(destino['lng']?.toString() ?? '');
+    if (oLat == null || oLng == null || dLat == null || dLng == null) return;
+    Navigator.pop(ctx);
+    // Mismo mecanismo que al elegir una dirección buscada o en el mapa.
+    _setPunto(true, LatLng(oLat, oLng), origen['direccion']?.toString() ?? '');
+    _setPunto(false, LatLng(dLat, dLng), destino['direccion']?.toString() ?? '');
+  }
+
+  Future<void> _guardarRuta() async {
+    final ctrl = TextEditingController();
+    final nombre = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Guardar ruta'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Ej: Casa - Trabajo'),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _kPrimary),
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    // Se dispone en el siguiente frame: el diálogo aún se está cerrando
+    // (animación de salida) cuando `showDialog` resuelve.
+    WidgetsBinding.instance.addPostFrameCallback((_) => ctrl.dispose());
+    if (nombre == null || nombre.trim().isEmpty || !mounted) return;
+    if (!_origenOk || !_destinoOk) return;
+    try {
+      await FavoriteService.createFavorite(
+        nombre: nombre.trim(),
+        origenDireccion: _origenCtrl.text.trim(),
+        origenLat: _origenLatLng!.latitude,
+        origenLng: _origenLatLng!.longitude,
+        destinoDireccion: _destinoCtrl.text.trim(),
+        destinoLat: _destinoLatLng!.latitude,
+        destinoLng: _destinoLatLng!.longitude,
+      );
+      if (mounted) _snack('Ruta guardada.');
+    } catch (e) {
+      LoggerService.instance.warning('nuevo_envio._guardarRuta error', e);
+      if (mounted) _snack('No se pudo guardar la ruta.');
     }
   }
 
@@ -743,12 +917,16 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                     const _StepLabel(numero: 1, label: 'Ruta'),
                     const SizedBox(height: 8),
                     _buildRutaCard(),
+                    const SizedBox(height: 8),
+                    _buildRutasFavoritasRow(),
                     const SizedBox(height: 24),
-                    const _StepLabel(numero: 2, label: '¿Qué vas a enviar?', opcional: true),
+                    _buildProgramar(),
+                    const SizedBox(height: 24),
+                    const _StepLabel(numero: 3, label: '¿Qué vas a enviar?', opcional: true),
                     const SizedBox(height: 8),
                     _buildDescripcion(),
                     const SizedBox(height: 24),
-                    const _StepLabel(numero: 3, label: 'Tu oferta'),
+                    const _StepLabel(numero: 4, label: 'Tu oferta'),
                     const SizedBox(height: 8),
                     _buildPrecio(),
                     const SizedBox(height: 28),
@@ -937,6 +1115,72 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     );
   }
 
+  Widget _buildRutasFavoritasRow() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        OutlinedButton.icon(
+          key: const Key('btn_mis_rutas'),
+          onPressed: _mostrarFavoritos,
+          icon: const Icon(Icons.star_border, size: 18),
+          label: const Text('Mis rutas'),
+        ),
+        if (_origenOk && _destinoOk)
+          TextButton.icon(
+            key: const Key('btn_guardar_ruta'),
+            onPressed: _guardarRuta,
+            icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+            label: const Text('Guardar ruta'),
+          ),
+      ],
+    );
+  }
+
+  static const List<String> _diasSemana = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+
+  Widget _buildProgramar() {
+    final programada = _fechaHoraProgramada;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _StepLabel(numero: 2, label: 'Cuándo'),
+        const SizedBox(height: 8),
+        SegmentedButton<bool>(
+          key: const Key('segmento_ahora_programar'),
+          segments: const [
+            ButtonSegment(value: false, label: Text('Ahora')),
+            ButtonSegment(value: true, label: Text('Programar')),
+          ],
+          selected: {programada != null},
+          onSelectionChanged: (s) {
+            if (s.first) {
+              _elegirFechaHora();
+            } else {
+              setState(() => _fechaHoraProgramada = null);
+            }
+          },
+        ),
+        if (programada != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.event_outlined, size: 18, color: Colors.grey[600]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_diasSemana[programada.weekday - 1]} ${_formatFecha(programada)} ${_formatHora(programada)}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                ),
+              ),
+              TextButton(onPressed: _elegirFechaHora, child: const Text('Cambiar')),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildDescripcion() {
     return _Card(
       child: TextField(
@@ -1007,6 +1251,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   Widget _buildBoton() {
     final faltan = _faltantes;
     final habilitado = !_loading && _formValido;
+    final reservando = _fechaHoraProgramada != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1024,15 +1269,15 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: _loading
-                ? const Row(
+                ? Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)),
-                      SizedBox(width: 12),
-                      Text('Enviando solicitud…', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)),
+                      const SizedBox(width: 12),
+                      Text(reservando ? 'Reservando…' : 'Enviando solicitud…', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     ],
                   )
-                : const Text('Solicitar viaje', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                : Text(reservando ? 'Reservar viaje' : 'Solicitar viaje', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           ),
         ),
         if (faltan.isNotEmpty && !_loading) ...[

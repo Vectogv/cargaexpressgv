@@ -842,7 +842,16 @@ class _TicketCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () {},
+                          onPressed: () => showDialog<void>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text(ticket.title),
+                              content: SingleChildScrollView(child: Text(ticket.resolution)),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+                              ],
+                            ),
+                          ),
                           icon: const Icon(Icons.visibility_outlined, size: 14),
                           label: const Text('Ver'),
                           style: OutlinedButton.styleFrom(
