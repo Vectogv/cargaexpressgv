@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:cargaexpress/contracts/socket_events.dart';
 import 'package:cargaexpress/screens/cliente/calificar_conductor_screen.dart';
 import 'package:cargaexpress/screens/cliente/confirmar_entrega_screen.dart';
 import 'package:cargaexpress/screens/cliente/disputa_creada_screen.dart';
@@ -12,6 +13,7 @@ import 'package:cargaexpress/screens/cliente/nuevo_envio_screen.dart';
 import 'package:cargaexpress/screens/cliente/ofertas_recibidas_screen.dart';
 import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
 import 'package:cargaexpress/screens/cliente/viaje_finalizado.dart';
+import 'package:cargaexpress/services/socket_service_client.dart';
 
 import '../../helpers/fake_api.dart';
 
@@ -174,20 +176,114 @@ void main() {
       await tester.tap(find.text('Revisar y confirmar entrega'));
       await avanzar(tester);
 
-      await tester.tap(find.text('Rechazar entrega'));
+      await tester.tap(find.byKey(const Key('btn_rechazar_entrega')));
       await avanzar(tester);
-      await tester.enterText(find.byType(TextField), 'Faltan cajas');
-      await tester.tap(find.text('Confirmar rechazo'));
+      await tester.enterText(find.byKey(const Key('campo_motivo_rechazo')), 'Faltan cajas');
+      await tester.tap(find.byKey(const Key('btn_confirmar_rechazo')));
       await avanzar(tester, 2);
 
       expect(find.byType(DisputaCreadaScreen), findsOneWidget);
       expect(find.text('DSP-00009'), findsOneWidget);
       expect(find.byType(ReportarProblemaScreen), findsNothing);
+      expect(find.byType(ConfirmarEntregaScreen), findsNothing);
     }, log: log);
     expect(log.where((r) => r.url.path == '/api/disputes'), isEmpty);
     final cierre = log.singleWhere((r) => r.url.path == '/api/trips/t1/confirm-close');
     expect(cierre.body, contains('"confirmar":false'));
     expect(cierre.body, contains('Faltan cajas'));
+  });
+
+  testWidgets('si rechazar responde 422 (ya en disputa) se avisa, se sincroniza y el rastreo muestra la disputa',
+      (tester) async {
+    pantallaAlta(tester);
+    var estado = 'pendiente_confirmacion';
+    var cierres = 0;
+    await conApiFalsa((req) {
+      final p = req.url.path;
+      if (p == '/api/trips/active') return jsonResp(_viaje(estado));
+      if (p == '/api/trips/t1/confirm-close') {
+        cierres++;
+        estado = 'disputa';
+        return errorResp(422, 'El viaje no está pendiente de confirmación (estado actual: disputa)');
+      }
+      return jsonResp({});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      await tester.tap(find.text('Ir a confirmación'));
+      await avanzar(tester);
+      await tester.tap(find.text('Revisar y confirmar entrega'));
+      await avanzar(tester);
+
+      await tester.tap(find.byKey(const Key('btn_rechazar_entrega')));
+      await avanzar(tester);
+      await tester.enterText(find.byKey(const Key('campo_motivo_rechazo')), 'Faltan cajas');
+      await tester.tap(find.byKey(const Key('btn_confirmar_rechazo')));
+      await avanzar(tester, 2);
+
+      expect(cierres, 1);
+      expect(find.text('El viaje no está pendiente de confirmación (estado actual: disputa)'), findsOneWidget);
+      // El backend dice que ya está en disputa: la confirmación se cierra y
+      // el rastreo muestra la disputa (sin botones de confirmar/rechazar).
+      expect(find.byType(ConfirmarEntregaScreen), findsNothing);
+      expect(find.byType(LlegadaAlDestinoScreen), findsNothing);
+      expect(find.text('Viaje en disputa'), findsWidgets);
+      expect(find.text('Sí, confirmar entrega'), findsNothing);
+    });
+  });
+
+  testWidgets('si el viaje pasa a disputa por socket con la confirmación abierta, se cierra y se ve la disputa',
+      (tester) async {
+    pantallaAlta(tester);
+    var estado = 'pendiente_confirmacion';
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/trips/active') return jsonResp(_viaje(estado));
+      return jsonResp({});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      await tester.tap(find.text('Ir a confirmación'));
+      await avanzar(tester);
+      await tester.tap(find.text('Revisar y confirmar entrega'));
+      await avanzar(tester);
+      expect(find.byType(ConfirmarEntregaScreen), findsOneWidget);
+
+      estado = 'disputa';
+      SocketServiceClient.instance.simularEventoParaTest(
+        SocketEvents.tripStatusChanged,
+        {'id': 't1', 'estado': 'disputa', 'disputaId': 9},
+      );
+      await avanzar(tester, 2);
+
+      expect(find.byType(ConfirmarEntregaScreen), findsNothing);
+      expect(find.byType(LlegadaAlDestinoScreen), findsNothing);
+      expect(find.text('Viaje en disputa'), findsWidgets);
+      expect(find.text('Ir a confirmación'), findsNothing);
+
+      // Una solicitud de cierre repetida ya no reabre la confirmación.
+      SocketServiceClient.instance.simularEventoParaTest(
+        'trip:finalize_request',
+        {'viajeId': 't1', 'estado': 'pendiente_confirmacion'},
+      );
+      await avanzar(tester, 2);
+      expect(find.byType(LlegadaAlDestinoScreen), findsNothing);
+      expect(find.text('Viaje en disputa'), findsWidgets);
+    });
+  });
+
+  testWidgets('al reabrir con el viaje en disputa se muestra la disputa, no la confirmación', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/trips/active') return jsonResp(_viaje('disputa'));
+      return jsonResp({});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: RastreoScreen()));
+      await avanzar(tester);
+      expect(find.text('Viaje en disputa'), findsWidgets);
+      expect(find.text('Ir a confirmación'), findsNothing);
+      expect(find.byType(LlegadaAlDestinoScreen), findsNothing);
+      expect(find.byType(ConfirmarEntregaScreen), findsNothing);
+    });
   });
 
   testWidgets('ConfirmarEntrega: si confirm-close falla se avisa y se puede reintentar', (tester) async {

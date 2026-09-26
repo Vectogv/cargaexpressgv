@@ -391,6 +391,10 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       _showFinalizeConfirmation();
       return;
     }
+    if (rastreoVistaPara(estado) == RastreoVista.disputa) {
+      _mostrarDisputa();
+      return;
+    }
     if (rastreoVistaPara(estado) != RastreoVista.busqueda && estado != TripStatus.aceptado) {
       _cerrarCelebracion();
     }
@@ -404,10 +408,36 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     if (_enSeguimiento) _startRutaPolling();
   }
 
+  /// El viaje quedó en disputa (rechazo del cliente, moderador, o el socket /
+  /// sondeo lo trae al reabrir): se cierran la llegada y la confirmación de
+  /// entrega que estén abiertas encima, para que no se pueda confirmar ni
+  /// rechazar sobre una disputa, y el rastreo muestra "Viaje en disputa".
+  void _mostrarDisputa() {
+    if (!mounted) return;
+    _cerrarCelebracion();
+    _cerrarConductorEnLaZona();
+    _volverARastreo();
+    _pendingFinalizeRequest = null;
+    _finalizeShown = false;
+    if (rastreoVistaPara(_status) != RastreoVista.disputa) {
+      setState(() => _status = TripStatus.disputa);
+    }
+  }
+
+  /// Aplica un cambio llegado por socket fuera del build en curso y garantiza
+  /// que haya un frame: `addPostFrameCallback` solo corre en el siguiente
+  /// frame y, con una pantalla estática encima (p. ej. la confirmación de
+  /// entrega), Flutter no pinta ninguno hasta que el usuario toque algo, así
+  /// que el nuevo estado (disputa, cierre, cancelación) quedaba sin aplicar.
+  void _trasFrame(VoidCallback fn) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => fn());
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
   void _safePopUntilFirst() {
     if (_isNavigating) return;
     _isNavigating = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _trasFrame(() {
       if (!mounted) return;
       Navigator.popUntil(context, (route) => route.isFirst);
       _isNavigating = false;
@@ -418,7 +448,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
       final newStatus = (data['estado'] ?? data['status']) as String?;
       if (newStatus != null && newStatus != _status && mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+        _trasFrame(() {
           if (!mounted) return;
           setState(() {
             _status = newStatus;
@@ -460,7 +490,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
         _mostrarCanceladoPorSistema(data);
         return;
       }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         if (!mounted) return;
         setState(() => _loading = true);
       });
@@ -476,14 +506,14 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     });
 
     _newOfferSub = SocketServiceClient.instance.onNewOffer.listen((data) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         if (!mounted) return;
         _agregarOfertas([Map<String, dynamic>.from(data)]);
       });
     });
 
     _offerAcceptedSub = SocketServiceClient.instance.onOfferAccepted.listen((data) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         final conductor = data['conductor'] is Map
             ? Map<String, dynamic>.from(data['conductor'] as Map)
             : <String, dynamic>{};
@@ -492,7 +522,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     });
 
     _tripAcceptedSub = SocketServiceClient.instance.onTripAccepted.listen((data) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         if (!mounted) return;
         setState(() => _status = TripStatus.aceptado);
         _startLocationUpdates();
@@ -500,7 +530,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     });
 
     _tripStartedSub = SocketServiceClient.instance.onTripStarted.listen((data) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         if (!mounted) return;
         setState(() => _status = TripStatus.enCurso);
         _startLocationUpdates();
@@ -546,7 +576,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     });
 
     _finalizeRequestSub = SocketServiceClient.instance.onFinalizeRequest.listen((data) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         if (!mounted) return;
         _pendingFinalizeRequest = Map<String, dynamic>.from(data);
         _showFinalizeConfirmation();
@@ -554,14 +584,14 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     });
 
     _tripFinalizedSub = SocketServiceClient.instance.onTripCompleted.listen((data) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         if (!mounted) return;
         _showViajeFinalizado();
       });
     });
 
     _finalizeCancelledSub = SocketServiceClient.instance.onFinalizeCancelled.listen((_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trasFrame(() {
         if (!mounted) return;
         if (_route != null) {
           Navigator.of(context).popUntil((route) => route == _route);
@@ -834,7 +864,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     // (mismo criterio que la solicitud de confirmación).
     _cerrarCelebracion();
     _volverARastreo();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _trasFrame(() {
       if (!mounted || _isNavigating) return;
       final conductor = _trip?.conductor;
       _isNavigating = true;
@@ -946,6 +976,9 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
 
   void _showFinalizeConfirmation() {
     if (_finalizeShown || !mounted) return;
+    // Sobre una disputa no hay nada que confirmar: el backend responde 422 a
+    // confirm-close fuera de pendiente_confirmacion.
+    if (rastreoVistaPara(_status) == RastreoVista.disputa) return;
     _finalizeShown = true;
     final conductor = _trip?.conductor;
     // La celebración, el chat o cualquier otra pantalla del viaje no deben
@@ -1008,6 +1041,9 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Error al confirmar: ${e.message}')),
                 );
+                // Un 422 suele ser que el viaje ya no está pendiente (p. ej.
+                // pasó a disputa): sincronizar la pantalla con el backend.
+                _sincronizarTrasError(e);
                 return;
               } catch (e) {
                 _confirmCloseKey.settle(e);
@@ -1047,19 +1083,14 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
               } on ApiException catch (e) {
                 _rejectCloseKey.settle(e);
                 _isNavigating = false;
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error al rechazar: ${e.message}')),
-                );
-                return;
+                if (mounted) _sincronizarTrasError(e);
+                // ConfirmarEntregaScreen muestra el mensaje del backend y
+                // reactiva sus botones para reintentar.
+                rethrow;
               } catch (e) {
                 _rejectCloseKey.settle(e);
                 _isNavigating = false;
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error al rechazar: ${e.toString().replaceFirst("Exception: ", "")}')),
-                );
-                return;
+                rethrow;
               }
               // Emitir socket por compatibilidad
               SocketServiceClient.instance.emit('trip:finalize_response', {
@@ -1067,6 +1098,12 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
                 'motivo': motivo,
                 'tripId': _trip?.id,
               });
+              // El backend dejó el viaje en 'disputa' (no se depende del socket
+              // para reflejarlo): la confirmación ya no puede volver a abrirse.
+              if (mounted && rastreoVistaPara(_status) != RastreoVista.disputa) {
+                setState(() => _status = TripStatus.disputa);
+              }
+              _pendingFinalizeRequest = null;
               // El backend ya creó (o reutilizó) la disputa al rechazar y dejó
               // el viaje en 'disputa': no se abre otra con POST /api/disputes
               // (siempre fallaría). Se muestra la disputa del backend.
@@ -1075,10 +1112,8 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
               if (!mounted) return;
               final navigator = Navigator.of(context);
               if (disputaId == null || disputaId.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Rechazaste la entrega. Un moderador revisará el caso.'),
-                ));
-                navigator.popUntil((route) => route.isFirst);
+                // Sin id de disputa se deja la pantalla de confirmación en su
+                // estado "Disputa abierta" (el rastreo ya muestra la disputa).
                 return;
               }
               navigator.pushAndRemoveUntil(
@@ -1097,6 +1132,15 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       _isNavigating = false;
       _finalizeShown = false;
     });
+  }
+
+  /// Tras un 4xx de confirm-close el estado del viaje en el backend puede ser
+  /// otro (p. ej. ya está en disputa): se consulta y la pantalla se ajusta
+  /// (cierra la confirmación si corresponde).
+  void _sincronizarTrasError(ApiException e) {
+    final status = e.statusCode;
+    if (status == null || status < 400 || status >= 500) return;
+    _refrescarViaje();
   }
 
   /// Número visible de la disputa (GET /api/disputes/:id); si no se puede
@@ -1349,7 +1393,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   /// genérico. Llega por el socket `trip:cancelled` o, si se perdió el
   /// evento, al detectarlo en un sondeo ([_detectarCancelacionAlSondear]).
   void _mostrarCanceladoPorSistema(Map<String, dynamic> data) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _trasFrame(() {
       if (!mounted) return;
       _cerrarCelebracion();
       _volverARastreo();
