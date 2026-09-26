@@ -26,19 +26,30 @@ void main() {
     await avanzar(tester, 0.5);
   }
 
-  testWidgets('cuenta suspendida: muestra el motivo y "Soporte" abre la pantalla de soporte', (tester) async {
-    await conApiFalsa((_) => jsonResp({}), () async {
-      await abrirSuspendida(tester);
-      expect(find.text('Cuenta suspendida'), findsOneWidget);
-      expect(find.text('Tu cuenta fue suspendida por el administrador.'), findsOneWidget);
+  testWidgets('cuenta suspendida: muestra el motivo y "Soporte" abre la pantalla de soporte con el contacto', (tester) async {
+    await conApiFalsa(
+      (req) => req.url.path == '/api/support/help'
+          ? jsonResp({
+              'faq': [],
+              'contacto': {'email': 'soporte@cargaexpress.co', 'telefono': '+57 300 000 0000'},
+            })
+          : jsonResp({}),
+      () async {
+        await abrirSuspendida(tester);
+        expect(find.text('Cuenta suspendida'), findsOneWidget);
+        expect(find.text('Tu cuenta fue suspendida por el administrador.'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('btn_contactar_soporte')));
-      await avanzar(tester, 1);
-      expect(find.byType(CuentaSuspendidaDialog), findsNothing);
-      expect(find.byType(SupportScreen), findsOneWidget);
-      // Sin sesión (los tokens ya se limpiaron) no se llama a la API y se explica.
-      expect(find.byKey(const Key('soporte_sin_sesion')), findsOneWidget);
-    });
+        await tester.tap(find.byKey(const Key('btn_contactar_soporte')));
+        await avanzar(tester, 1);
+        expect(find.byType(CuentaSuspendidaDialog), findsNothing);
+        expect(find.byType(SupportScreen), findsOneWidget);
+        // Sin sesión (los tokens ya se limpiaron) igual se ven teléfono y
+        // correo: GET /api/support/help es público.
+        expect(find.text('+57 300 000 0000'), findsOneWidget);
+        expect(find.text('soporte@cargaexpress.co'), findsOneWidget);
+        expect(find.byKey(const Key('soporte_sin_sesion')), findsNothing);
+      },
+    );
   });
 
   testWidgets('"Cerrar" sólo cierra; con onSoporte propio se usa ese destino', (tester) async {

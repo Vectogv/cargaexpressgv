@@ -28,13 +28,8 @@ class _SupportScreenState extends State<SupportScreen> {
   }
 
   Future<void> _loadHelp() async {
-    // Sin sesión (p. ej. cuenta suspendida desde la bienvenida) el backend
-    // responde 401 y eso volvería a cerrar la sesión: se muestra la pantalla
-    // sin datos de contacto y se explica.
-    if (ApiClient.instance.token == null) {
-      if (mounted) setState(() => _loading = false);
-      return;
-    }
+    // GET /api/support/help es público: también sin sesión (p. ej. cuenta
+    // suspendida desde la bienvenida) se muestran teléfono y correo.
     try {
       final help = await ApiClient.instance.getHelp();
       if (mounted) setState(() { _help = help; _loading = false; });
@@ -73,16 +68,19 @@ class _SupportScreenState extends State<SupportScreen> {
 
   Widget _buildContactCard() {
     final contacto = _help?['contacto'] as Map<String, dynamic>?;
-    if (ApiClient.instance.token == null) {
+    if (contacto == null || (contacto['email'] == null && contacto['telefono'] == null)) {
+      // No llegó el contacto (sin red o el backend falló). Sin sesión se
+      // recuerda además que al entrar verá el motivo de la suspensión.
+      final sinSesion = ApiClient.instance.token == null;
       return Container(
-        key: const Key('soporte_sin_sesion'),
+        key: Key(sinSesion ? 'soporte_sin_sesion' : 'soporte_sin_contacto'),
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
-        child: const Text(
-          'Inicia sesión para ver los canales de contacto de soporte. Si tu cuenta está suspendida, '
-          'inicia sesión igualmente: verás el motivo y cómo escribirnos.',
-          style: TextStyle(fontSize: 13.5, color: _textDark, height: 1.4),
+        child: Text(
+          'No pudimos cargar los canales de contacto de soporte. Revisa tu conexión e inténtalo de nuevo.'
+          '${sinSesion ? ' Si tu cuenta está suspendida, inicia sesión igualmente: verás el motivo y cómo escribirnos.' : ''}',
+          style: const TextStyle(fontSize: 13.5, color: _textDark, height: 1.4),
         ),
       );
     }
@@ -95,18 +93,18 @@ class _SupportScreenState extends State<SupportScreen> {
         children: [
           const Text('Contacto', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
           const SizedBox(height: 12),
-          if (contacto?['email'] != null)
+          if (contacto['email'] != null)
             ListTile(
               dense: true,
               leading: const Icon(Icons.email_outlined, color: Color(0xFF1565C0)),
-              title: Text(contacto!['email'] as String),
+              title: Text(contacto['email'].toString()),
               contentPadding: EdgeInsets.zero,
             ),
-          if (contacto?['telefono'] != null)
+          if (contacto['telefono'] != null)
             ListTile(
               dense: true,
               leading: const Icon(Icons.phone_outlined, color: Color(0xFF1565C0)),
-              title: Text(contacto!['telefono'] as String),
+              title: Text(contacto['telefono'].toString()),
               contentPadding: EdgeInsets.zero,
             ),
         ],

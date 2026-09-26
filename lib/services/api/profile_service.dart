@@ -56,8 +56,11 @@ class ProfileService {
     return HttpClient.put('/api/settings', body: data, auth: true);
   }
 
+  /// Contacto y preguntas frecuentes de soporte. Endpoint público en el
+  /// backend (no exige sesión): así la pantalla de Soporte muestra teléfono y
+  /// correo también sin iniciar sesión (p. ej. con la cuenta suspendida).
   static Future<Map<String, dynamic>> getHelp() async {
-    return HttpClient.get('/api/support/help', auth: true);
+    return HttpClient.get('/api/support/help', auth: false);
   }
 
   static Future<Map<String, dynamic>> getEmergencyNumbers() async {
