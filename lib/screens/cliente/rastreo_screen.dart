@@ -18,6 +18,7 @@ import '../../services/api_client.dart';
 import '../../services/config_cliente_service.dart';
 import '../../services/map_config.dart';
 import '../../services/ruta_viaje_service.dart';
+import '../../services/server_clock.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/driver_nearby_warning_sheet.dart';
@@ -1557,7 +1558,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   /// apertura de esta pantalla.
   DateTime get _inicioBusqueda {
     final creado = DateTime.tryParse(_trip?.createdAt ?? '');
-    if (creado != null && creado.isBefore(DateTime.now())) return creado;
+    if (creado != null && creado.isBefore(ServerClock.ahora())) return creado;
     return _pantallaAbierta;
   }
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../models/trip.dart';
+import '../../services/server_clock.dart';
 import 'cancel_trip_screen.dart' show componerMotivoCancelacion;
 import 'nuevo_envio_screen.dart' show formatearMiles;
 
@@ -461,7 +462,8 @@ class _TiempoBuscandoState extends State<_TiempoBuscando> {
 
   @override
   Widget build(BuildContext context) {
-    var d = DateTime.now().difference(widget.inicio);
+    // `inicio` suele ser el createdAt del backend: se compara con su reloj.
+    var d = ServerClock.ahora().difference(widget.inicio);
     if (d.isNegative) d = Duration.zero;
     final h = d.inHours;
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/offer_service.dart';
 import '../../services/socket_service_client.dart';
+import '../../services/server_clock.dart';
 
 /// Cada cuánto el cliente consulta GET /api/trips/:id/offers mientras el
 /// viaje sigue sin conductor (`buscando_conductor` / `pendiente`). Es el
@@ -68,7 +69,9 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
   Timer? _sondeo;
   bool _sincronizando = false;
   List<Map<String, dynamic>>? _ofertasDurantePeticion;
-  DateTime _now = DateTime.now();
+  // Hora del servidor (`expiresAt` viene del backend): el reloj del
+  // teléfono puede estar desfasado.
+  DateTime _now = ServerClock.ahora();
 
   @override
   void initState() {
@@ -107,7 +110,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
         final hasCountdown = _offers.any((o) => o['expiresAt'] is String);
-        if (hasCountdown) setState(() => _now = DateTime.now());
+        if (hasCountdown) setState(() => _now = ServerClock.ahora());
       });
       _fetchOffers();
       _sondeo = Timer.periodic(intervaloSondeoOfertas, (_) => _sincronizarConServidor());

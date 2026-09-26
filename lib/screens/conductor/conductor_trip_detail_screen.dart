@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../contracts/solicitud.dart' show segundosRestantesSolicitud;
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
+import '../../services/server_clock.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/solicitudes_disponibles_service.dart';
 import 'hacer_oferta_screen.dart';
@@ -39,7 +40,8 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _secondsLeft = segundosRestantesSolicitud(widget.trip, DateTime.now());
+    // Hora del servidor: el reloj del teléfono puede estar desfasado.
+    _secondsLeft = segundosRestantesSolicitud(widget.trip, ServerClock.ahora());
     _expireTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_secondsLeft <= 0) {
         t.cancel();
@@ -352,10 +354,13 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            'La solicitud expirará en',
-            style: TextStyle(fontSize: 14, color: Color(0xFF92400E)),
+          const Expanded(
+            child: Text(
+              'La solicitud expirará en',
+              style: TextStyle(fontSize: 14, color: Color(0xFF92400E)),
+            ),
           ),
+          const SizedBox(width: 8),
           Text(
             _timerLabel,
             style: const TextStyle(
