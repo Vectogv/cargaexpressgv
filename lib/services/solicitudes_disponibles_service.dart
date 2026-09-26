@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -6,6 +7,7 @@ import '../contracts/solicitud.dart';
 import '../contracts/trip_status.dart';
 import '../models/oferta_pendiente.dart';
 import 'api_client.dart';
+import 'cache_service.dart';
 import 'driver_location_service.dart';
 import 'logger_service.dart';
 import 'server_clock.dart';
@@ -54,7 +56,19 @@ class SolicitudesDisponiblesService {
 
   final List<Map<String, dynamic>> _viajes = [];
   final Map<String, OfertaPendiente> _ofertas = {};
-  final Set<String> _rechazadas = {};
+
+  /// Viajes cuya última oferta propia rechazó el cliente → cuándo. El backend
+  /// no devuelve ofertas rechazadas (GET /api/drivers/offers sólo trae las
+  /// pendientes), así que se guardan en el teléfono para que la nota
+  /// "El cliente rechazó tu oferta" sobreviva a un reinicio de la app.
+  final Map<String, DateTime> _rechazadas = {};
+
+  /// Clave en las preferencias de [CacheService].
+  static const String preferenciaRechazadas = 'ofertas_rechazadas';
+
+  /// Un rechazo deja de recordarse cuando la solicitud ya no puede seguir
+  /// abierta (búsqueda de [busquedaTimeoutMin] con margen).
+  static const Duration vigenciaRechazo = Duration(minutes: busquedaTimeoutMin + 5);
   final List<StreamSubscription<Map<String, dynamic>>> _subs = [];
   final _ctrl = StreamController<List<SolicitudDisponible>>.broadcast();
   Timer? _timer;
@@ -78,7 +92,7 @@ class SolicitudesDisponiblesService {
       lista.add(SolicitudDisponible(
         viaje: v,
         oferta: (o != null && o.restante(ahora) != Duration.zero) ? o : null,
-        ofertaRechazada: _rechazadas.contains(id),
+        ofertaRechazada: _rechazadas.containsKey(id),
       ));
     }
     lista.sort((a, b) => _creado(b.viaje).compareTo(_creado(a.viaje)));
@@ -94,6 +108,7 @@ class SolicitudesDisponiblesService {
   void iniciar() {
     if (_activo) return;
     _activo = true;
+    _cargarRechazadas();
     final s = SocketServiceClient.instance;
     _subs.addAll([
       s.onOfferRejected.listen((e) => _ofertaRespondida(e, rechazada: true)),
@@ -139,11 +154,13 @@ class SolicitudesDisponiblesService {
       if (viajes != null) _reemplazarViajes(viajes);
       if (ofertas != null) {
         _ofertas.clear();
+        var cambio = false;
         for (final o in ofertas) {
           if (o.viajeId.isEmpty) continue;
           _ofertas[o.viajeId] = o;
-          _rechazadas.remove(o.viajeId);
+          if (_rechazadas.remove(o.viajeId) != null) cambio = true;
         }
+        if (cambio) _guardarRechazadas();
       }
       if (viajes != null || ofertas != null) _emitir();
     } finally {
@@ -228,7 +245,7 @@ class SolicitudesDisponiblesService {
       origen: '',
       destino: '',
     );
-    _rechazadas.remove(id);
+    if (_rechazadas.remove(id) != null) _guardarRechazadas();
     _emitir();
   }
 
@@ -239,7 +256,8 @@ class SolicitudesDisponiblesService {
     final habia = _viajes.length;
     _viajes.removeWhere((v) => idDeViaje(v) == id);
     final teniaOferta = _ofertas.remove(id) != null;
-    final estabaRechazada = _rechazadas.remove(id);
+    final estabaRechazada = _rechazadas.remove(id) != null;
+    if (estabaRechazada) _guardarRechazadas();
     if (habia != _viajes.length || teniaOferta || estabaRechazada) _emitir();
   }
 
@@ -251,8 +269,38 @@ class SolicitudesDisponiblesService {
     viajeId ??= (evento['viajeId'] ?? evento['tripId'])?.toString();
     if (viajeId == null || viajeId.isEmpty) return;
     _ofertas.remove(viajeId);
-    if (rechazada) _rechazadas.add(viajeId);
+    if (rechazada) {
+      _rechazadas[viajeId] = ServerClock.ahora();
+      _guardarRechazadas();
+    }
     _emitir();
+  }
+
+  /// Rechazos guardados en el teléfono (descartando los ya vencidos).
+  void _cargarRechazadas() {
+    _rechazadas.clear();
+    final crudo = CacheService.instance.getPreference(preferenciaRechazadas);
+    if (crudo is! String || crudo.isEmpty) return;
+    try {
+      final datos = jsonDecode(crudo);
+      if (datos is! Map) return;
+      final limite = ServerClock.ahora().subtract(vigenciaRechazo);
+      datos.forEach((id, fecha) {
+        final cuando = DateTime.tryParse(fecha?.toString() ?? '');
+        if (cuando != null && cuando.isAfter(limite)) _rechazadas[id.toString()] = cuando;
+      });
+    } catch (e) {
+      LoggerService.instance.debug('SolicitudesDisponiblesService: rechazos guardados ilegibles: $e');
+    }
+  }
+
+  void _guardarRechazadas() {
+    final limite = ServerClock.ahora().subtract(vigenciaRechazo);
+    _rechazadas.removeWhere((_, cuando) => !cuando.isAfter(limite));
+    CacheService.instance.setPreference(
+      preferenciaRechazadas,
+      jsonEncode({for (final e in _rechazadas.entries) e.key: e.value.toUtc().toIso8601String()}),
+    );
   }
 
   void _emitir() {

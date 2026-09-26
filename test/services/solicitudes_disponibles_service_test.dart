@@ -1,7 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:cargaexpress/services/cache_service.dart';
+
 import 'package:cargaexpress/services/server_clock.dart';
+import 'package:cargaexpress/services/socket_service_client.dart';
 import 'package:cargaexpress/services/solicitudes_disponibles_service.dart';
 
 import '../helpers/fake_api.dart';
@@ -100,6 +106,77 @@ void main() {
       // Detenido no ingresa avisos.
       s.ingresarAvisoSocket({'tripId': '10', 'origen': 'x'});
       expect(s.solicitudes, isEmpty);
+    });
+  });
+
+  group('rechazos que sobreviven a un reinicio de la app', () {
+    late Directory tempDir;
+
+    setUp(() async {
+      tempDir = Directory.systemTemp.createTempSync('hive_rechazos_');
+      Hive.init(tempDir.path);
+      await Hive.openBox('preferences');
+    });
+
+    tearDown(() async {
+      await Hive.deleteBoxFromDisk('preferences');
+      tempDir.deleteSync(recursive: true);
+    });
+
+    Future<void> tick() async {
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    test('offer:rejected se guarda en el teléfono y al reiniciar la tarjeta sigue diciendo que el cliente rechazó la oferta', () async {
+      cercanos = [viaje('5')];
+      ofertas = [
+        {'id': '31', 'viajeId': '5', 'monto': 55000, 'expiresAt': ahora.add(const Duration(seconds: 20)).toIso8601String()},
+      ];
+      await conApiFalsa(backend, () async {
+        final s = SolicitudesDisponiblesService.instance;
+        s.iniciar();
+        await tick();
+        expect(s.solicitudes.single.tieneOferta, isTrue);
+
+        // El cliente la rechaza (el backend deja de devolverla como pendiente).
+        ofertas = [];
+        SocketServiceClient.instance.simularEventoParaTest('offer:rejected', {'viajeId': '5', 'ofertaId': '31'});
+        await tick();
+        expect(s.solicitudes.single.ofertaRechazada, isTrue);
+        expect(CacheService.instance.getPreference(SolicitudesDisponiblesService.preferenciaRechazadas), contains('"5"'));
+
+        // "Reinicio": el servicio arranca de cero (como al abrir la app).
+        s.detener();
+        expect(s.solicitudes, isEmpty);
+        s.iniciar();
+        await tick();
+        expect(s.solicitudes.single.id, '5');
+        expect(s.solicitudes.single.ofertaRechazada, isTrue);
+        expect(s.solicitudes.single.tieneOferta, isFalse);
+
+        // Al ofertar de nuevo, o cuando el viaje desaparece, se olvida.
+        s.registrarOferta('5', monto: 60000, venceEn: ahora.add(const Duration(seconds: 28)));
+        expect(s.solicitudes.single.ofertaRechazada, isFalse);
+        expect(CacheService.instance.getPreference(SolicitudesDisponiblesService.preferenciaRechazadas), isNot(contains('"5"')));
+      });
+    });
+
+    test('un rechazo más viejo que la búsqueda del backend ya no se recuerda', () async {
+      cercanos = [viaje('5')];
+      final viejo = ahora.subtract(SolicitudesDisponiblesService.vigenciaRechazo + const Duration(minutes: 1));
+      CacheService.instance.setPreference(
+        SolicitudesDisponiblesService.preferenciaRechazadas,
+        '{"5": "${viejo.toIso8601String()}", "6": "${ahora.subtract(const Duration(minutes: 1)).toIso8601String()}"}',
+      );
+      cercanos = [viaje('5'), viaje('6')];
+      await conApiFalsa(backend, () async {
+        final s = SolicitudesDisponiblesService.instance;
+        s.iniciar();
+        await tick();
+        expect(s.solicitudes.firstWhere((x) => x.id == '5').ofertaRechazada, isFalse);
+        expect(s.solicitudes.firstWhere((x) => x.id == '6').ofertaRechazada, isTrue);
+      });
     });
   });
 }
