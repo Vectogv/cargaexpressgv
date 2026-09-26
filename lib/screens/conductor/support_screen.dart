@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../shared/tickets/acceso_tickets_soporte.dart';
 
+/// Soporte del conductor: tickets de soporte (Mis tickets / Nuevo ticket),
+/// datos de contacto y preguntas frecuentes. También la abre el diálogo de
+/// cuenta suspendida (sin sesión: se explica que debe iniciar sesión).
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
 
@@ -54,6 +58,8 @@ class _SupportScreenState extends State<SupportScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const AccesoTicketsSoporte(),
+                  const SizedBox(height: 16),
                   _buildContactCard(),
                   const SizedBox(height: 16),
                   const Text('Preguntas frecuentes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),

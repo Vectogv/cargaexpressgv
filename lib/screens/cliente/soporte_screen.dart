@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api/chat_service.dart';
 import '../../services/socket_service_client.dart';
+import '../shared/tickets/acceso_tickets_soporte.dart';
 import 'chat_thread_screen.dart';
 
 class SoporteScreen extends StatefulWidget {
@@ -80,23 +81,37 @@ class _SoporteScreenState extends State<SoporteScreen> {
     );
   }
 
+  /// Tickets de soporte arriba (siempre, con o sin conversaciones) y debajo
+  /// las conversaciones que abre un moderador con el cliente.
   Widget _buildBody() {
     if (_loading) return const Center(child: CircularProgressIndicator());
+    final cabecera = <Widget>[
+      const AccesoTicketsSoporte(),
+      const SizedBox(height: 20),
+      const Padding(
+        padding: EdgeInsets.only(left: 4, bottom: 8),
+        child: Text('Conversaciones con moderadores', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF757575))),
+      ),
+    ];
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('No se pudo cargar el soporte', style: TextStyle(fontSize: 15, color: Colors.black54)),
-              const SizedBox(height: 4),
-              Text(_error!, style: const TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              FilledButton(onPressed: _fetch, child: const Text('Reintentar')),
-            ],
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          ...cabecera,
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('No se pudo cargar el soporte', style: TextStyle(fontSize: 15, color: Colors.black54)),
+                const SizedBox(height: 4),
+                Text(_error!, style: const TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                FilledButton(onPressed: _fetch, child: const Text('Reintentar')),
+              ],
+            ),
           ),
-        ),
+        ],
       );
     }
     if (_conversaciones.isEmpty) {
@@ -104,13 +119,15 @@ class _SoporteScreenState extends State<SoporteScreen> {
         onRefresh: _fetch,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
           children: [
-            const SizedBox(height: 80),
+            ...cabecera,
+            const SizedBox(height: 24),
             const Icon(Icons.support_agent, size: 48, color: Colors.grey),
             const SizedBox(height: 12),
             const Center(child: Text('No tienes conversaciones de soporte', style: TextStyle(fontSize: 15, color: Colors.black45), textAlign: TextAlign.center)),
             const SizedBox(height: 4),
-            Center(child: Text('Un moderador se pondr\u00e1 en contacto contigo', style: TextStyle(fontSize: 12, color: Colors.grey.shade400))),
+            Center(child: Text('Si un moderador te escribe, la conversaci\u00f3n aparecer\u00e1 aqu\u00ed', style: TextStyle(fontSize: 12, color: Colors.grey.shade400), textAlign: TextAlign.center)),
           ],
         ),
       );
@@ -119,10 +136,11 @@ class _SoporteScreenState extends State<SoporteScreen> {
       onRefresh: () => _fetch(quiet: true),
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
-        itemCount: _conversaciones.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemCount: _conversaciones.length + 1,
+        separatorBuilder: (_, i) => SizedBox(height: i == 0 ? 0 : 10),
         itemBuilder: (_, i) {
-          final c = _conversaciones[i];
+          if (i == 0) return Column(crossAxisAlignment: CrossAxisAlignment.start, children: cabecera);
+          final c = _conversaciones[i - 1];
           return _buildTile(c);
         },
       ),
