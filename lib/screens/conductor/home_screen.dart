@@ -31,6 +31,7 @@ import 'settings_screen.dart';
 import 'solicitudes_disponibles_screen.dart';
 import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
+import '../shared/ui_compartida.dart' show FondoDegradado, TarjetaBlanca;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -673,15 +674,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHeader() {
     final nombre = (_profile?['nombre'] as String?)?.trim();
     final saludo = (nombre == null || nombre.isEmpty) ? 'Hola, conductor' : 'Hola, ${nombre.split(' ').first}';
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_primaryBlue, _accentBlue],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-      ),
+    return FondoDegradado(
+      colores: const [_primaryBlue, _accentBlue],
+      radio: const BorderRadius.vertical(bottom: Radius.circular(24)),
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -894,17 +889,20 @@ class _HomeScreenState extends State<HomeScreen> {
     ]);
   }
 
+  /// Orden del inicio: viaje pendiente de confirmación (si lo hay) → UN solo
+  /// aviso → solicitudes disponibles → resumen del día → mapa plegable.
+  /// "Documentos", "Mis viajes", etc. viven en el menú lateral, el perfil y
+  /// la barra inferior (antes había una fila de "Accesos rápidos" repetida).
   Widget _buildHomeContent() {
     if (_viajeOcupa) {
       return _buildActiveTripCard();
     }
-    final sinConductor = _profile?['conductor'] == null;
-    final noVerificado = _verificacionEstado == 'rechazado' || _verificacionEstado == 'pendiente';
+    final aviso = _avisoPrincipal();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Viaje que espera la confirmación del cliente: visible sin
           // bloquear el resto del inicio.
@@ -913,71 +911,7 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.only(bottom: 4),
               child: _buildActiveTripCard(margen: EdgeInsets.zero),
             ),
-          if (sinConductor)
-            GestureDetector(
-              onTap: () => _navigate(10),
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.person_add_alt_1, size: 40, color: Colors.blue.shade400),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Completa tu registro como conductor',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1)),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Toca para ir a Documentación',
-                      style: TextStyle(fontSize: 13, color: Colors.blue.shade700),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else if (noVerificado)
-            GestureDetector(
-              onTap: () => _navigate(10),
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.verified_outlined, size: 40, color: Colors.orange.shade400),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Debes completar la verificación',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFE65100)),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Toca para ir a Documentación',
-                      style: TextStyle(fontSize: 13, color: Colors.orange.shade700),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos),
-          _buildStatsRow(),
-          const SizedBox(height: 16),
-          _buildMapCard(),
-          const SizedBox(height: 16),
+          if (aviso != null) aviso,
           SolicitudesDisponiblesSection(
             online: _online,
             cargandoConexion: _statusLoading,
@@ -985,14 +919,51 @@ class _HomeScreenState extends State<HomeScreen> {
             maximo: _maxSolicitudesInicio,
             onVerTodas: () => _navigate(14),
           ),
-          const SizedBox(height: 20),
-          const Text('Accesos rápidos',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
-          const SizedBox(height: 10),
-          _buildQuickActions(),
+          const SizedBox(height: 16),
+          _buildStatsRow(),
+          const SizedBox(height: 12),
+          _MapaPlegable(online: _online),
+          const SizedBox(height: 8),
         ],
       ),
     );
+  }
+
+  /// Si hay varios motivos de aviso se muestra sólo el más importante:
+  /// 1. bloqueo por pago (suspendida o comprobante en revisión),
+  /// 2. registro de conductor incompleto (sólo con el perfil ya cargado:
+  ///    mientras carga no se sabe y antes salía "Completa tu registro"),
+  /// 3. verificación pendiente o rechazada,
+  /// 4. deuda de comisión sin bloqueo.
+  Widget? _avisoPrincipal() {
+    final pago = _estadoPago;
+    if (pago.bloqueaConexion) return AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos);
+    final perfilCargado = _profile != null;
+    if (perfilCargado && _profile!['conductor'] == null) {
+      return _AvisoRegistro(
+        key: const Key('aviso_registro_incompleto'),
+        icono: Icons.person_add_alt_1,
+        color: const Color(0xFF1D4ED8),
+        titulo: 'Completa tu registro como conductor',
+        detalle: 'Sube tus documentos para empezar a recibir viajes.',
+        onTap: () => _navigate(10),
+      );
+    }
+    final estado = _verificacionEstado;
+    if (estado == 'rechazado' || estado == 'pendiente') {
+      return _AvisoRegistro(
+        key: const Key('aviso_verificacion'),
+        icono: Icons.verified_outlined,
+        color: const Color(0xFFEA580C),
+        titulo: estado == 'rechazado' ? 'Tu verificación fue rechazada' : 'Verificación pendiente',
+        detalle: estado == 'rechazado'
+            ? 'Revisa tus documentos y vuelve a enviarlos.'
+            : 'Estamos revisando tus documentos. Te avisaremos cuando estés aprobado.',
+        onTap: () => _navigate(10),
+      );
+    }
+    if (pago == EstadoPagoConductor.conDeuda) return AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos);
+    return null;
   }
 
   num? _num(dynamic v) => v == null ? null : num.tryParse(v.toString());
@@ -1008,88 +979,52 @@ class _HomeScreenState extends State<HomeScreen> {
     return '\$ $b';
   }
 
+  /// Resumen del día en una sola fila compacta: ganancias · viajes · calificación.
   Widget _buildStatsRow() {
     final rating = _num(_stats?['calificacion']);
-    return Row(
-      children: [
-        _statTile(Icons.payments_rounded, 'Hoy', _money(_num(_stats?['netaHoy'])), const Color(0xFF16A34A)),
-        const SizedBox(width: 10),
-        _statTile(Icons.local_shipping_rounded, 'Viajes hoy', '${_num(_stats?['viajesHoy'])?.toInt() ?? 0}', _accentBlue),
-        const SizedBox(width: 10),
-        _statTile(Icons.star_rounded, 'Calificación',
-            rating == null || rating == 0 ? '—' : rating.toStringAsFixed(1), const Color(0xFFF59E0B)),
-      ],
-    );
-  }
-
-  Widget _statTile(IconData icon, String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: _white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return TarjetaBlanca(
+      key: const Key('resumen_dia'),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+      child: IntrinsicHeight(
+        child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(height: 10),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textDark)),
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+            _statCompacta(Icons.payments_rounded, _money(_num(_stats?['netaHoy'])), 'Hoy', const Color(0xFF16A34A)),
+            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+            _statCompacta(Icons.local_shipping_rounded, '${_num(_stats?['viajesHoy'])?.toInt() ?? 0}', 'Viajes', _accentBlue),
+            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+            _statCompacta(Icons.star_rounded, rating == null || rating == 0 ? '—' : rating.toStringAsFixed(1),
+                'Calificación', const Color(0xFFF59E0B)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMapCard() => _DriverMiniMap(online: _online);
-
-  Widget _buildQuickActions() {
-    final acciones = [
-      (Icons.receipt_long_rounded, 'Mis viajes', 11, const Color(0xFF2563EB)),
-      (Icons.bar_chart_rounded, 'Ingresos', 4, const Color(0xFF16A34A)),
-      (Icons.description_rounded, 'Documentos', 10, const Color(0xFFF59E0B)),
-      (Icons.person_rounded, 'Perfil', 9, const Color(0xFF7C3AED)),
-    ];
-    return Row(
-      children: [
-        for (var i = 0; i < acciones.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
-          Expanded(
-            child: Material(
-              color: _white,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => _navigate(acciones[i].$3),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Column(
-                    children: [
-                      Icon(acciones[i].$1, color: acciones[i].$4, size: 26),
-                      const SizedBox(height: 6),
-                      Text(acciones[i].$2,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark),
-                          overflow: TextOverflow.ellipsis),
-                    ],
+  Widget _statCompacta(IconData icon, String value, String label, Color color) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 16),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _textDark)),
                   ),
                 ),
-              ),
+              ],
             ),
-          ),
-        ],
-      ],
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 11, color: _textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1098,6 +1033,123 @@ class _HomeScreenState extends State<HomeScreen> {
     final parts = name.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return name[0].toUpperCase();
+  }
+}
+
+/// Aviso de registro incompleto o verificación pendiente/rechazada: lleva a
+/// Documentación.
+class _AvisoRegistro extends StatelessWidget {
+  final IconData icono;
+  final Color color;
+  final String titulo;
+  final String detalle;
+  final VoidCallback onTap;
+
+  const _AvisoRegistro({
+    super.key,
+    required this.icono,
+    required this.color,
+    required this.titulo,
+    required this.detalle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Material(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              children: [
+                Icon(icono, color: color, size: 26),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+                      const SizedBox(height: 3),
+                      Text(detalle, style: const TextStyle(fontSize: 12.5, color: Color(0xFF374151), height: 1.35)),
+                      const SizedBox(height: 4),
+                      Text('Ir a Documentación', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: color),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Tu ubicación": mini mapa pequeño que el conductor puede plegar (se
+/// recuerda entre sesiones).
+class _MapaPlegable extends StatefulWidget {
+  final bool online;
+  const _MapaPlegable({required this.online});
+
+  static const String _preferencia = 'inicio_mapa_plegado';
+
+  @override
+  State<_MapaPlegable> createState() => _MapaPlegableState();
+}
+
+class _MapaPlegableState extends State<_MapaPlegable> {
+  late bool _plegado = CacheService.instance.getPreference(_MapaPlegable._preferencia) == true;
+
+  void _alternar() {
+    setState(() => _plegado = !_plegado);
+    CacheService.instance.setPreference(_MapaPlegable._preferencia, _plegado);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TarjetaBlanca(
+      padding: EdgeInsets.zero,
+      radio: 18,
+      child: Column(
+        children: [
+          InkWell(
+            key: const Key('alternar_mapa'),
+            borderRadius: BorderRadius.circular(18),
+            onTap: _alternar,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.map_outlined, size: 18, color: Color(0xFF2563EB)),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('Tu ubicación en el mapa',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+                  ),
+                  Icon(_plegado ? Icons.expand_more_rounded : Icons.expand_less_rounded, color: const Color(0xFF6B7280)),
+                ],
+              ),
+            ),
+          ),
+          if (!_plegado)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+              child: _DriverMiniMap(online: widget.online),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1166,9 +1218,9 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
     final pos = _pos;
     final tienePosicion = pos != null;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(14),
       child: SizedBox(
-        height: 220,
+        height: 160,
         child: Stack(
           children: [
             if (pos == null)

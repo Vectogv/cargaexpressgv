@@ -34,3 +34,11 @@ String? idDeViaje(Map<String, dynamic> datos) {
   final s = id?.toString();
   return (s == null || s.isEmpty) ? null : s;
 }
+
+/// "2.3 km hasta la recogida" (o "12 km"). A menos de 100 m (p. ej. el
+/// conductor está justo en el origen) no tiene sentido "0.0 km".
+String textoDistanciaRecogida(double km) {
+  if (km < 0.1) return 'A menos de 100 m de la recogida';
+  final texto = km < 10 ? '${km.toStringAsFixed(1)} km' : '${km.round()} km';
+  return '$texto hasta la recogida';
+}

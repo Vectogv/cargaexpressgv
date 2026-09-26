@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../contracts/solicitud.dart' show solicitudSigueAbierta;
+import '../contracts/solicitud.dart' show solicitudSigueAbierta, textoDistanciaRecogida;
 import '../services/api/trip_service.dart';
 
 export '../contracts/solicitud.dart' show solicitudSigueAbierta;
@@ -180,7 +180,7 @@ class _SolicitudViajeSheetState extends State<SolicitudViajeSheet> {
               spacing: 8,
               runSpacing: 6,
               children: [
-                if (km != null) _chip(Icons.near_me_rounded, '${km.toStringAsFixed(1)} km hasta la recogida'),
+                if (km != null) _chip(Icons.near_me_rounded, textoDistanciaRecogida(km)),
                 if (minutos != null && minutos > 0) _chip(Icons.schedule_rounded, '$minutos min de viaje'),
               ],
             ),

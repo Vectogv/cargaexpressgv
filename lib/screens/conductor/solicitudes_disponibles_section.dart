@@ -183,26 +183,34 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
 
   Widget _encabezado(int ocultas) {
     final total = _lista.length;
+    // El título va en un Expanded (antes un Flexible y un Spacer se repartían
+    // el ancho a medias y el título salía cortado: "Solicitudes dispon…").
     return Row(
       children: [
         const Icon(Icons.inbox_rounded, color: _accentBlue, size: 20),
         const SizedBox(width: 8),
-        const Flexible(
-          child: Text('Solicitudes disponibles',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark),
-              overflow: TextOverflow.ellipsis),
-        ),
-        if (widget.online && total > 0) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: _accentBlue, borderRadius: BorderRadius.circular(12)),
-            child: Text('$total',
-                key: const Key('solicitudes_total'),
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+        Expanded(
+          child: Row(
+            children: [
+              const Flexible(
+                child: Text('Solicitudes disponibles',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              if (widget.online && total > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: _accentBlue, borderRadius: BorderRadius.circular(12)),
+                  child: Text('$total',
+                      key: const Key('solicitudes_total'),
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                ),
+              ],
+            ],
           ),
-        ],
-        const Spacer(),
+        ),
         if (widget.online)
           IconButton(
             key: const Key('refrescar_solicitudes'),
@@ -298,14 +306,17 @@ class SolicitudDisponibleCard extends StatelessWidget {
 
   /// Km hasta la recogida: desde el GPS actual si se conoce; si no, la
   /// `distancia` que calculó el backend con la última ubicación guardada.
+  /// El backend manda `distancia: 0` cuando no pudo calcularla (sin
+  /// ubicación guardada): en ese caso no se conoce y no se muestra nada.
   static double? kmHastaRecogida(Map<String, dynamic> viaje, double? lat, double? lng) {
     final origen = viaje['origen'];
     if (origen is Map && lat != null && lng != null) {
       final oLat = _num(origen['lat'])?.toDouble();
       final oLng = _num(origen['lng'])?.toDouble();
-      if (oLat != null && oLng != null) return distanciaKm(lat, lng, oLat, oLng);
+      if (oLat != null && oLng != null && !(oLat == 0 && oLng == 0)) return distanciaKm(lat, lng, oLat, oLng);
     }
-    return _num(viaje['distancia'])?.toDouble();
+    final backend = _num(viaje['distancia'])?.toDouble();
+    return (backend == null || backend <= 0) ? null : backend;
   }
 
   static String formatoKm(double km) => km < 10 ? '${km.toStringAsFixed(1)} km' : '${km.round()} km';
@@ -368,7 +379,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 6,
             children: [
-              if (km != null) _chip(Icons.near_me_rounded, '${formatoKm(km)} hasta la recogida'),
+              if (km != null) _chip(Icons.near_me_rounded, textoDistanciaRecogida(km)),
               if (minutos != null && minutos > 0) _chip(Icons.schedule_rounded, '$minutos min de viaje'),
             ],
           ),
