@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../widgets/media_image.dart';
 import 'package:latlong2/latlong.dart';
-import '../../widgets/mapa_viaje.dart';
 
+import '../../widgets/mapa_viaje.dart';
+import '../../widgets/media_image.dart';
+import '../shared/ui_compartida.dart';
+
+/// "Viaje aceptado": el cliente aceptó la oferta y el conductor debe ir al
+/// punto de recogida. El mapa muestra la recogida (no el destino) y, si el
+/// backend ya calculó la ruta hacia ella, la dibuja.
 class ViajeAceptadoScreen extends StatelessWidget {
   final String nombreCliente;
   final double ratingCliente;
@@ -14,13 +19,24 @@ class ViajeAceptadoScreen extends StatelessWidget {
   final bool isCancelling;
   final VoidCallback? onLlamar;
   final VoidCallback? onMensaje;
+
+  /// Acción principal de esta fase: avisar que va en camino a recoger
+  /// (POST /confirm-arrival → conductor_en_camino).
   final VoidCallback? onIniciarViaje;
   final VoidCallback? onCancelarViaje;
 
-  /// Coordenadas para el mapa; las que falten no se marcan.
+  /// Coordenadas para el mapa; las que falten no se marcan. El destino sólo
+  /// se usa en la lista de datos, no en el mapa (la fase es la recogida).
   final LatLng? origenPos;
   final LatLng? destinoPos;
   final LatLng? vehiculoPos;
+
+  /// Ruta conductor → recogida (GET /trips/:id/route, fase 'recogida').
+  final List<LatLng>? ruta;
+  final bool rutaAproximada;
+
+  /// Texto del botón principal.
+  final String textoAccion;
 
   const ViajeAceptadoScreen({
     super.key,
@@ -39,14 +55,15 @@ class ViajeAceptadoScreen extends StatelessWidget {
     this.origenPos,
     this.destinoPos,
     this.vehiculoPos,
+    this.ruta,
+    this.rutaAproximada = false,
+    this.textoAccion = 'Voy en camino a recoger',
   });
 
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _red = Color(0xFFDC2626);
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
-  static const Color _star = Color(0xFFF59E0B);
+  static const Color _textPrimary = ColoresApp.textoOscuro;
+  static const Color _textSecondary = ColoresApp.textoSecundario;
+  static const Color _divider = ColoresApp.borde;
+  static const Color _star = ColoresApp.ambar;
   static const Color _greenDark = Color(0xFF15803D);
   static const Color _iconDisabled = Color(0xFFD1D5DB);
 
@@ -55,55 +72,71 @@ class ViajeAceptadoScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: ColoresApp.fondo,
       appBar: _buildAppBar(context),
-      body: Column(
-        children: [
-          _buildMapSection(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const EncabezadoEstado(
+              titulo: '¡Oferta aceptada!',
+              detalle: 'Ve al punto de recogida. Avísale al cliente cuando salgas.',
+              icono: Icons.local_shipping_rounded,
+            ),
+            const SizedBox(height: 14),
+            _buildMapSection(),
+            const SizedBox(height: 14),
+            TarjetaBlanca(child: _buildClienteRow()),
+            const SizedBox(height: 12),
+            TarjetaBlanca(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildClienteRow(),
-                  const SizedBox(height: 16),
-                  const Divider(color: _divider, height: 1),
-                  _buildInfoRow('Origen', origen),
-                  const Divider(color: _divider, height: 1),
-                  _buildInfoRow('Destino', destino),
-                  const Divider(color: _divider, height: 1),
+                  _buildParada(Icons.trip_origin, ColoresApp.verde, 'Recogida', origen, destacada: true),
+                  const SizedBox(height: 12),
+                  _buildParada(Icons.location_on, Colors.red, 'Destino', destino),
+                  const Divider(height: 26, color: _divider),
                   _buildPrecioRow(),
-                  const SizedBox(height: 8),
                 ],
               ),
             ),
-          ),
-          _buildBottomButtons(),
-        ],
+          ],
+        ),
       ),
+      bottomNavigationBar: _buildBottomButtons(),
     );
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: ColoresApp.fondo,
       elevation: 0,
       centerTitle: true,
       title: const Text(
         'Viaje aceptado',
-        style: TextStyle(color: Color(0xFF111827), fontSize: 17, fontWeight: FontWeight.w700),
+        style: TextStyle(color: _textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
       ),
       leading: IconButton(
-        icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF111827), size: 28),
+        icon: const Icon(Icons.chevron_left_rounded, color: _textPrimary, size: 28),
         onPressed: () => Navigator.of(context).maybePop(),
       ),
     );
   }
 
   Widget _buildMapSection() {
-    return SizedBox(
-      height: 220,
-      child: MapaViaje(origen: origenPos, destino: destinoPos, vehiculo: vehiculoPos),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 200,
+        child: MapaViaje(
+          key: const Key('mapa_recogida'),
+          origen: origenPos,
+          vehiculo: vehiculoPos,
+          ruta: ruta,
+          rutaAproximada: rutaAproximada,
+        ),
+      ),
     );
   }
 
@@ -124,6 +157,8 @@ class ViajeAceptadoScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(nombreCliente,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textPrimary)),
               const SizedBox(height: 3),
               Row(
@@ -132,103 +167,96 @@ class ViajeAceptadoScreen extends StatelessWidget {
                   const SizedBox(width: 3),
                   Text(ratingCliente.toStringAsFixed(1),
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary)),
+                  const Text('  ·  Cliente', style: TextStyle(fontSize: 13, color: _textSecondary)),
                 ],
               ),
             ],
           ),
         ),
-        _buildActionIcon(Icons.phone_outlined, onLlamar),
+        _buildActionIcon(Icons.phone_outlined, 'Llamar', onLlamar),
         const SizedBox(width: 10),
-        _buildActionIcon(Icons.chat_bubble_outline_rounded, onMensaje),
+        _buildActionIcon(Icons.chat_bubble_outline_rounded, 'Chat', onMensaje),
       ],
     );
   }
 
-  Widget _buildActionIcon(IconData icon, VoidCallback? onTap) {
+  Widget _buildActionIcon(IconData icon, String tooltip, VoidCallback? onTap) {
     final disabled = onTap == null;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: disabled ? _iconDisabled : _divider, width: 1.5),
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        shape: CircleBorder(side: BorderSide(color: disabled ? _iconDisabled : _divider, width: 1.5)),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(icon, color: disabled ? _iconDisabled : _textPrimary, size: 20),
+          ),
         ),
-        child: Icon(icon, color: disabled ? _iconDisabled : _textPrimary, size: 20),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
-          const SizedBox(height: 3),
-          Text(value,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: _textPrimary)),
-        ],
-      ),
+  Widget _buildParada(IconData icono, Color color, String titulo, String texto, {bool destacada = false}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icono, size: 20, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titulo, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+              const SizedBox(height: 2),
+              Text(texto,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: destacada ? FontWeight.w700 : FontWeight.w500,
+                    color: destacada ? _textPrimary : const Color(0xFF374151),
+                  )),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildPrecioRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 13),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('Precio acordado', style: TextStyle(fontSize: 13, color: _textSecondary)),
-          Text(precioAcordado,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textPrimary)),
-        ],
-      ),
+    return Row(
+      children: [
+        const Expanded(
+          child: Text('Precio acordado', style: TextStyle(fontSize: 14, color: _textSecondary)),
+        ),
+        Text(precioAcordado, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _textPrimary)),
+      ],
     );
   }
 
   Widget _buildBottomButtons() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 32),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: _divider)),
-      ),
+    return BarraInferiorFija(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (_busy || onIniciarViaje == null) ? null : onIniciarViaje,
-              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
-                backgroundColor: _accentBlue,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-              child: isStarting
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                  : const Text('Iniciar viaje',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-            ),
+          BotonPrincipal(
+            key: const Key('btn_voy_en_camino'),
+            texto: textoAccion,
+            icono: Icons.navigation_rounded,
+            cargando: isStarting,
+            onPressed: (_busy || onIniciarViaje == null) ? null : onIniciarViaje,
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: (_busy || onCancelarViaje == null) ? null : onCancelarViaje,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                side: const BorderSide(color: _red, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: isCancelling
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: _red))
-                  : const Text('Cancelar viaje',
-                      style: TextStyle(color: _red, fontSize: 15, fontWeight: FontWeight.w600)),
-            ),
+          BotonSecundario(
+            key: const Key('btn_cancelar_viaje_aceptado'),
+            texto: 'Cancelar viaje',
+            color: ColoresApp.rojo,
+            cargando: isCancelling,
+            onPressed: (_busy || onCancelarViaje == null) ? null : onCancelarViaje,
           ),
         ],
       ),

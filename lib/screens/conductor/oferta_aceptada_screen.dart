@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../services/driver_location_service.dart';
+import '../../services/ruta_viaje_service.dart';
 import '../../widgets/mapa_viaje.dart';
 import 'trip_chat_screen.dart';
 import 'viaje_aceptado_screen.dart';
@@ -69,24 +72,65 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
   bool _starting = false;
   bool _cancelling = false;
 
-  Future<void> _iniciarViaje() async {
+  /// Ruta conductor → recogida calculada por el backend (si ya existe).
+  List<LatLng>? _ruta;
+  bool _rutaAproximada = false;
+
+  /// Id del viaje en cualquiera de los formatos del backend (`_id`/`id` del
+  /// detalle, `viajeId`/`tripId` de los sockets).
+  String? get _tripId {
+    final id = widget.trip['_id'] ?? widget.trip['id'] ?? widget.trip['viajeId'] ?? widget.trip['tripId'];
+    final s = id?.toString();
+    return (s == null || s.isEmpty) ? null : s;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarRuta();
+  }
+
+  Future<void> _cargarRuta() async {
+    final id = _tripId;
+    if (id == null) return;
+    final ruta = await RutaViaje.obtener(id);
+    if (!mounted || ruta == null || ruta.fase != 'recogida') return;
+    final coords = ruta.coords;
+    if (coords == null || coords.length < 2) return;
+    setState(() {
+      _ruta = coords;
+      _rutaAproximada = ruta.aproximada;
+    });
+  }
+
+  /// "Voy en camino a recoger": POST /confirm-arrival (aceptado →
+  /// conductor_en_camino) y se abre la vista del viaje ya en ese estado. Si
+  /// el backend lo rechaza se muestra el motivo y se abre igual la vista del
+  /// viaje (ella sincroniza el estado real y tiene su propio botón).
+  Future<void> _irARecoger() async {
     if (_starting) return;
-    final tripId = widget.trip['viajeId']?.toString()
-        ?? widget.trip['tripId']?.toString()
-        ?? widget.trip['id']?.toString()
-        ?? widget.trip['_id']?.toString();
-    if (tripId == null || tripId.isEmpty) {
+    final tripId = _tripId;
+    if (tripId == null) {
       _snack('Error: ID del viaje no disponible');
       return;
     }
     setState(() => _starting = true);
+    var estado = TripStatus.aceptado;
+    try {
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.confirmArrival(tripId));
+      estado = TripStatus.enCamino;
+    } on ApiException catch (e) {
+      _snack(e.message);
+    } catch (e) {
+      _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+    }
+    if (!mounted) return;
+    setState(() => _starting = false);
 
     final capturedTrip = Map<String, dynamic>.from(widget.trip);
     capturedTrip['id'] = tripId;
-    // El viaje queda 'aceptado'; el conductor confirma llegada al origen y
-    // luego inicia el viaje (flujo conductor_en_camino -> conductor_llegada -> en_curso).
-    capturedTrip['estado'] = TripStatus.aceptado;
-    if (!mounted) return;
+    // Flujo del backend: conductor_en_camino -> conductor_llegada -> en_curso.
+    capturedTrip['estado'] = estado;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -96,11 +140,8 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
   }
 
   Future<void> _cancelarViaje() async {
-    final tripId = widget.trip['viajeId']?.toString()
-        ?? widget.trip['tripId']?.toString()
-        ?? widget.trip['id']?.toString()
-        ?? widget.trip['_id']?.toString();
-    if (tripId == null || tripId.isEmpty) {
+    final tripId = _tripId;
+    if (tripId == null) {
       _snack('Error: ID del viaje no disponible');
       return;
     }
@@ -168,11 +209,13 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
       isCancelling: _cancelling,
       onLlamar: _mostrarTelefono,
       onMensaje: _abrirChat,
-      onIniciarViaje: _iniciarViaje,
+      onIniciarViaje: _irARecoger,
       onCancelarViaje: _cancelarViaje,
       origenPos: MapaViaje.puntoDe(widget.trip['origen']),
       destinoPos: MapaViaje.puntoDe(widget.trip['destino']),
       vehiculoPos: MapaViaje.punto(DriverLocationService.instance.lastLat, DriverLocationService.instance.lastLng),
+      ruta: _ruta,
+      rutaAproximada: _rutaAproximada,
     );
   }
 }
