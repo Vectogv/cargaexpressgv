@@ -180,7 +180,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
   void _abrir(Widget screen, {bool recargar = false}) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then((_) {
-      if (recargar && mounted) _refrescar();
+      if (!mounted) return;
+      // El admin puede liberar la cuenta sin evento de socket: se relee siempre.
+      recargar ? _refrescar() : _loadDeuda();
     });
   }
 

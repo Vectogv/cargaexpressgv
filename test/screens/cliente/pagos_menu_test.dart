@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/screens/cliente/home_screen.dart';
 import 'package:cargaexpress/screens/cliente/pagos_screen.dart';
+import 'package:cargaexpress/screens/cliente/soporte_screen.dart';
 
 import '../../helpers/fake_api.dart';
 
@@ -99,6 +100,23 @@ void main() {
       await tester.tap(find.byKey(const Key('aviso_pago_pendiente')));
       await avanzar(tester);
       expect(find.byType(PagosScreen), findsOneWidget);
+    });
+  });
+
+  testWidgets('el admin libera la cuenta: al volver al inicio desaparece el aviso', (tester) async {
+    pantallaAlta(tester);
+    Object deuda = {'estadoCuenta': 'suspension_por_pago', 'montoDeuda': '90000.00'};
+    await conApiFalsa((req) => _base(req, deuda), () async {
+      await tester.pumpWidget(const MaterialApp(home: ClienteHomeScreen()));
+      await avanzar(tester);
+      expect(find.text('Tienes un pago pendiente'), findsOneWidget);
+
+      await tester.tap(find.text('Soporte').first);
+      await avanzar(tester);
+      deuda = {'estadoCuenta': 'activa', 'montoDeuda': null};
+      Navigator.of(tester.element(find.byType(SoporteScreen))).pop();
+      await avanzar(tester);
+      expect(find.text('Tienes un pago pendiente'), findsNothing);
     });
   });
 }
