@@ -3,7 +3,10 @@ import '../models/report_model.dart';
 
 class ReportService {
   /// Contrato backend: POST /api/trips/:id/report con `motivo` (enum) y
-  /// `descripcion`. El motivo debe ser uno de: no_pago, comportamiento, otro.
+  /// `descripcion` opcional. El rol decide a quién se reporta:
+  /// - conductor → cliente del viaje: no_pago, comportamiento, otro.
+  /// - cliente → conductor asignado: no_se_presento, cobro_incorrecto,
+  ///   comportamiento, otro. Repetido en el mismo viaje: 409.
   static Future<ReportModel> createReport({
     required String tripId,
     required String motivo,

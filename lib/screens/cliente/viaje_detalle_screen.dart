@@ -4,6 +4,7 @@ import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/error_carga.dart';
+import 'reportar_conductor_screen.dart';
 
 class ViajeDetalleScreen extends StatefulWidget {
   final dynamic tripId;
@@ -18,6 +19,8 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   bool _loading = true;
   bool _rated = false;
   int _rating = 0;
+  /// El cliente ya reportó al conductor de este viaje (en esta sesión).
+  bool _conductorReportado = false;
 
   @override
   void initState() {
@@ -59,6 +62,18 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _reportarConductor() async {
+    final trip = _trip;
+    if (trip == null || _conductorReportado) return;
+    final enviado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => ReportarConductorScreen(trip: trip)),
+    );
+    if (!mounted || enviado != true) return;
+    setState(() => _conductorReportado = true);
+    _snack('Reporte enviado. Un administrador lo revisará.');
   }
 
   String _estadoLabel(String estado) {
@@ -273,6 +288,28 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
               Text(_vehiculoTexto(conductor), style: const TextStyle(fontSize: 12, color: Colors.black45)),
             ])),
           ]),
+          const SizedBox(height: 12),
+          if (_conductorReportado)
+            const Row(children: [
+              Icon(Icons.check_circle_outline, size: 16, color: Colors.black45),
+              SizedBox(width: 6),
+              Expanded(child: Text('Ya reportaste a este conductor', style: TextStyle(fontSize: 13, color: Colors.black45))),
+            ])
+          else
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _reportarConductor,
+                icon: const Icon(Icons.flag_outlined, size: 18),
+                label: const Text('Reportar conductor', style: TextStyle(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFEF4444),
+                  side: const BorderSide(color: Color(0xFFFECACA)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
         ],
       ),
     );
