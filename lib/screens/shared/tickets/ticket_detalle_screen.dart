@@ -86,6 +86,19 @@ class _TicketDetalleScreenState extends State<TicketDetalleScreen> with WidgetsB
     if (state == AppLifecycleState.resumed) _cargar(quiet: true);
   }
 
+  /// Alto del teclado en el último cambio de métricas, para bajar al último
+  /// mensaje solo cuando el teclado se abre (no al cerrarse ni al girar).
+  double _tecladoAnterior = 0;
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final vista = View.of(context);
+    final teclado = vista.viewInsets.bottom / vista.devicePixelRatio;
+    if (teclado > _tecladoAnterior) _scrollAbajo();
+    _tecladoAnterior = teclado;
+  }
+
   /// Aplica un cambio llegado por socket fuera del build en curso y
   /// garantiza que haya un frame (ver rastreo_screen._trasFrame).
   void _trasFrame(VoidCallback fn) {

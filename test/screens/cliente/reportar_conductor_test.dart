@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/screens/cliente/reportar_conductor_screen.dart';
+import 'package:cargaexpress/screens/shared/ui_compartida.dart';
 
 import '../../helpers/fake_api.dart';
 
@@ -120,13 +121,13 @@ void main() {
     });
   });
 
-  testWidgets('el botón de enviar va en bottomNavigationBar dentro de SafeArea', (tester) async {
+  testWidgets('el botón de enviar va en bottomNavigationBar en una BarraInferiorFija (sube con el teclado)', (tester) async {
     pantallaAlta(tester);
     await conApiFalsa((_) => jsonResp({}), () async {
       await tester.pumpWidget(const MaterialApp(home: ReportarConductorScreen(trip: tripConGuion)));
       await avanzar(tester);
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-      expect(scaffold.bottomNavigationBar, isA<SafeArea>());
+      expect(scaffold.bottomNavigationBar, isA<BarraInferiorFija>());
       expect(
         find.descendant(of: find.byWidget(scaffold.bottomNavigationBar!), matching: find.text('Enviar reporte')),
         findsOneWidget,

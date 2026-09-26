@@ -76,6 +76,42 @@ void main() {
     expect(tester.getBottomLeft(find.text('Acción')).dy, lessThanOrEqualTo(alto - 30 - 12));
   });
 
+  testWidgets('BarraInferiorFija sube con el teclado (el Scaffold no mueve el bottomNavigationBar)', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 3.0;
+    // Teclado de 900 px físicos = 300 dp.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: SizedBox.expand(key: Key('cuerpo')),
+        bottomNavigationBar: BarraInferiorFija(child: Text('Acción')),
+      ),
+    ));
+    final alto = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    // El botón queda por encima del teclado (y del padding de 12).
+    expect(tester.getBottomLeft(find.text('Acción')).dy, lessThanOrEqualTo(alto - 300 - 12));
+    // El cuerpo termina donde empieza la barra: no se cuenta el teclado dos veces.
+    final finCuerpo = tester.getBottomLeft(find.byKey(const Key('cuerpo'))).dy;
+    final inicioBarra = tester.getTopLeft(find.byType(BarraInferiorFija)).dy;
+    expect((finCuerpo - inicioBarra).abs(), lessThan(1));
+  });
+
+  testWidgets('BarraInferiorFija con subeConTeclado=false se queda abajo', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 3.0;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: SizedBox.expand(),
+        bottomNavigationBar: BarraInferiorFija(subeConTeclado: false, child: Text('Acción')),
+      ),
+    ));
+    final alto = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    expect(tester.getBottomLeft(find.text('Acción')).dy, greaterThan(alto - 300));
+  });
+
   testWidgets('EncabezadoEstado muestra título y detalle sobre el degradado', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../contracts/calificacion.dart';
 import '../../services/api_client.dart';
+import '../shared/ui_compartida.dart';
 
 class CalificarConductorScreen extends StatefulWidget {
   final Map<String, dynamic> conductor;
@@ -167,13 +168,12 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
           ),
         ),
       ),
-      // Fijo abajo y sobre la barra de navegación: antes estaba al final del
+      // Fijo abajo, sobre la barra de navegación y sobre el teclado del
+      // comentario (BarraInferiorFija sube con él): antes estaba al final del
       // contenido y había que desplazarse para encontrarlo.
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-          child: SizedBox(
+      bottomNavigationBar: BarraInferiorFija(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+        child: SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
@@ -220,7 +220,6 @@ class _CalificarConductorScreenState extends State<CalificarConductorScreen> {
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
-          ),
         ),
       ),
     );

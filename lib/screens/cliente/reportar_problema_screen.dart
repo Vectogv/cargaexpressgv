@@ -6,6 +6,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/trip_service.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
+import '../shared/ui_compartida.dart';
 
 class ReportarProblemaScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -343,32 +344,30 @@ class _ReportarProblemaScreenState extends State<ReportarProblemaScreen> {
           ),
         ),
       ),
-      // Fijo abajo y sobre la barra de navegación (antes al final del
-      // formulario, tapado o fuera de vista).
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-          child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _submitting ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFEF4444),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+      // Fijo abajo, sobre la barra de navegación y sobre el teclado
+      // (BarraInferiorFija sube con él); antes al final del formulario,
+      // tapado o fuera de vista.
+      bottomNavigationBar: BarraInferiorFija(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _submitting ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: _submitting
+                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text(
+                    'Enviar reporte',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
-                  child: _submitting
-                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text(
-                          'Enviar reporte',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                ),
           ),
         ),
       ),

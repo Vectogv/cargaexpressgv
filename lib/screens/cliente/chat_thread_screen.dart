@@ -297,8 +297,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   Widget _buildInputBar() {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+    // Va en el body: el Scaffold ya lo encoge con el teclado (sumar
+    // viewInsets aquí lo contaba dos veces). SafeArea: sin teclado respeta
+    // la barra de navegación del teléfono.
+    return SafeArea(
+      top: false,
       child: Container(
         color: _white,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -317,6 +320,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                     border: InputBorder.none,
                   ),
                   style: const TextStyle(fontSize: 14),
+                  minLines: 1,
+                  maxLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.send,
+                  // Al abrir el teclado se baja al último mensaje.
+                  onTap: () => Future.delayed(const Duration(milliseconds: 350), _scrollDown),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),

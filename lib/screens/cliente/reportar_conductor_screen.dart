@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/report_service.dart';
+import '../shared/ui_compartida.dart';
 
 /// El cliente reporta al conductor asignado a un viaje
 /// (POST /api/trips/:id/report). El backend decide la sanción: el reporte
@@ -214,30 +215,29 @@ class _ReportarConductorScreenState extends State<ReportarConductorScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _submitting ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEF4444),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+      // BarraInferiorFija: sobre la barra de navegación y sube con el teclado
+      // de la descripción.
+      bottomNavigationBar: BarraInferiorFija(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _submitting ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: _submitting
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text(
-                      'Enviar reporte',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
             ),
+            child: _submitting
+                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text(
+                    'Enviar reporte',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
           ),
         ),
       ),

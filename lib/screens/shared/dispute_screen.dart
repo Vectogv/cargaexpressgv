@@ -6,6 +6,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/trip_service.dart';
 import '../../services/logger_service.dart';
+import 'ui_compartida.dart';
 
 class DisputeScreen extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -276,26 +277,24 @@ class _DisputeScreenState extends State<DisputeScreen> {
           ],
         ),
       ),
-      // Fijo abajo y sobre la barra de navegación: antes estaba al final del
+      // Fijo abajo, sobre la barra de navegación y sobre el teclado
+      // (BarraInferiorFija sube con él): antes estaba al final del
       // formulario y quedaba tapado o había que desplazarse para verlo.
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: SizedBox(
-            width: double.infinity, height: 50,
-            child: ElevatedButton(
-              onPressed: _submitting ? null : _submitDispute,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-              child: _submitting
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Enviar disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+      bottomNavigationBar: BarraInferiorFija(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: SizedBox(
+          width: double.infinity, height: 50,
+          child: ElevatedButton(
+            onPressed: _submitting ? null : _submitDispute,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
             ),
+            child: _submitting
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Enviar disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
           ),
         ),
       ),

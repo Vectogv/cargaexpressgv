@@ -185,26 +185,39 @@ class EncabezadoEstado extends StatelessWidget {
 
 /// Barra fija de acciones para `Scaffold.bottomNavigationBar`: fondo blanco,
 /// sombra hacia arriba y respeto del área segura inferior.
+///
+/// Sube con el teclado. `Scaffold` solo encoge el `body` cuando aparece el
+/// teclado; el `bottomNavigationBar` se queda pegado al borde de la pantalla
+/// y el teclado lo tapa (así se perdía el botón de enviar del chat del
+/// ticket). Aquí se suma `viewInsets.bottom` para que la barra quede justo
+/// encima del teclado; el cuerpo se encoge lo mismo, sin contarlo dos veces.
+/// Con [subeConTeclado] en `false` se deja el comportamiento nativo.
 class BarraInferiorFija extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final bool subeConTeclado;
 
   const BarraInferiorFija({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    this.subeConTeclado = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final teclado = subeConTeclado ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -2))],
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(padding: padding, child: child),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: teclado),
+        child: SafeArea(
+          top: false,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
   }

@@ -253,6 +253,27 @@ void main() {
       }, log: log);
     });
 
+    testWidgets('con el teclado abierto la caja y el botón de enviar quedan encima del teclado', (tester) async {
+      pantallaAlta(tester);
+      // Teclado de 900 px físicos = 300 dp (pantallaAlta: 960 dp de alto).
+      tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+      final mensajes = [for (var i = 0; i < 12; i++) mensajeJson(100 + i, 'Mensaje largo número $i para llenar el hilo.')];
+      await conApiFalsa((req) => jsonResp(ticketJson(mensajes: mensajes)), () async {
+        await tester.pumpWidget(const MaterialApp(home: TicketDetalleScreen(ticketId: '12')));
+        await avanzar(tester);
+        final alto = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+        final enviar = tester.getBottomLeft(find.byKey(const Key('btn_enviar_mensaje'))).dy;
+        final campo = tester.getBottomLeft(find.byKey(const Key('campo_mensaje'))).dy;
+        expect(enviar, lessThanOrEqualTo(alto - 300));
+        expect(campo, lessThanOrEqualTo(alto - 300));
+        // El botón sigue siendo tocable (no está tapado ni fuera de la pantalla).
+        await tester.enterText(find.byKey(const Key('campo_mensaje')), 'Hola');
+        await tester.tap(find.byKey(const Key('btn_enviar_mensaje')));
+        await avanzar(tester);
+        await cerrarPantalla(tester);
+      });
+    });
+
     testWidgets('ticket:mensaje por socket agrega el mensaje al instante y al reconectar se vuelve a consultar', (tester) async {
       pantallaAlta(tester);
       var detalles = 0;
