@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import '../../models/trip.dart';
 import '../../services/server_clock.dart';
 import 'cancel_trip_screen.dart' show componerMotivoCancelacion;
-import 'nuevo_envio_screen.dart' show formatearMiles;
 
 import 'rastreo_ui.dart';
+import '../../core/formato_dinero.dart';
 
 const Color _kPrimary = RastreoColores.primario;
 const Color _kTexto = RastreoColores.texto;
@@ -631,7 +631,7 @@ class _ResumenViaje extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '\$${formatearMiles(precio.round().toString())} COP',
+                  '${formatearPesos(precio)} COP',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,

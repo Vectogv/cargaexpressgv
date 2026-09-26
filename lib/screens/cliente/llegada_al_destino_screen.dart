@@ -5,6 +5,7 @@ import '../../widgets/mapa_viaje.dart';
 import 'confirmar_entrega_screen.dart' show AvisoConfirmacionPendiente;
 import '../../widgets/media_image.dart';
 import '../shared/ui_compartida.dart';
+import '../../core/formato_dinero.dart';
 
 class LlegadaAlDestinoScreen extends StatelessWidget {
   final Map<String, dynamic> conductor;
@@ -36,12 +37,7 @@ class LlegadaAlDestinoScreen extends StatelessWidget {
     return (d == null || d.trim().isEmpty) ? null : d;
   }
 
-  static String? _precio(dynamic v) {
-    final n = v is num ? v : num.tryParse(v?.toString() ?? '');
-    if (n == null || n <= 0) return null;
-    final miles = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-    return '\$$miles';
-  }
+  static String? _precio(dynamic v) => formatearPesosSiPositivo(v);
 
   @override
   Widget build(BuildContext context) {

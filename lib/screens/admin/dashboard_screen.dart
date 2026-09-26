@@ -18,6 +18,7 @@ import 'mapa_vivo_screen.dart';
 import 'admin_live_screen.dart';
 import 'admin_common.dart';
 import '../user/auth_screen.dart';
+import '../../core/formato_dinero.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -158,7 +159,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 child: _StatCard(
                                   title: 'Ingresos Totales',
                                   value:
-                                      '\$${_num(_data['totalEarnings']).toStringAsFixed(2)}',
+                                      formatearPesos(_num(_data['totalEarnings'])),
                                   child: const _LineMiniChart(
                                       color: Color(0xFF66BB6A)),
                                 ),
@@ -383,13 +384,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           iconType: 'plan',
           label: 'Ingresos de hoy',
           sub: '',
-          time: '\$${_num(_data['todayEarnings']).toStringAsFixed(2)}',
+          time: formatearPesos(_num(_data['todayEarnings'])),
         ),
         _ActivityTile(
           iconType: 'plan',
           label: 'Ingresos del mes',
           sub: '',
-          time: '\$${_num(_data['monthEarnings']).toStringAsFixed(2)}',
+          time: formatearPesos(_num(_data['monthEarnings'])),
         ),
         _ActivityTile(
           iconType: 'drive',

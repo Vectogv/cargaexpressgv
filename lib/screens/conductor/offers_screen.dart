@@ -8,6 +8,7 @@ import '../../models/trip.dart';
 import '../../services/server_clock.dart';
 import 'oferta_aceptada_screen.dart';
 import 'trip_in_progress_screen.dart';
+import '../../core/formato_dinero.dart';
 
 class OffersScreen extends StatefulWidget {
   const OffersScreen({super.key});
@@ -129,10 +130,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     ));
   }
 
-  static String _dinero(num n) {
-    final s = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-    return '\$$s';
-  }
+  static String _dinero(num n) => formatearPesos(n);
 
   Future<void> _fetchActive() async {
     try {
@@ -313,7 +311,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
               ]),
               const SizedBox(height: 12),
               Text('Carga: ${t['carga'] as String? ?? ''}', style: const TextStyle(color: _textGrey)),
-              Text('Precio: \$${(t['precioFinal'] as num? ?? t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text('Precio: ${formatearPesos((t['precioFinal'] as num?) ?? (t['precioEstimado'] as num?) ?? 0)}', style: const TextStyle(fontWeight: FontWeight.w700)),
             ]),
           ),
           const SizedBox(height: 12),
@@ -393,7 +391,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
         Row(children: [
           _estadoBadge(estado),
           const Spacer(),
-          Text('\$${(t['precioFinal'] as num? ?? t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(formatearPesos((t['precioFinal'] as num?) ?? (t['precioEstimado'] as num?) ?? 0), style: const TextStyle(fontWeight: FontWeight.w700)),
         ]),
         const SizedBox(height: 8),
         Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13)),

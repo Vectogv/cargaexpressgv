@@ -53,9 +53,10 @@ void main() {
                 ],
               }),
           falla: () => false, body: () async {
-        expect(find.text('\$32000'), findsOneWidget);
-        expect(find.text('\$30000'), findsNothing);
-        expect(find.text('\$25000'), findsOneWidget);
+        // Con punto de miles: "$32.000", no "$32000".
+        expect(find.text('\$32.000'), findsOneWidget);
+        expect(find.text('\$30.000'), findsNothing);
+        expect(find.text('\$25.000'), findsOneWidget);
       });
     });
 

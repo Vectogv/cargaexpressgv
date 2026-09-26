@@ -6,6 +6,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import 'aviso_cuenta_pago.dart' show formatoDinero, numeroDe;
+import '../../core/formato_dinero.dart';
 
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -258,7 +259,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('\$${_formatAmount(netaHoy)}', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+              Text(_pesos(netaHoy), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
               const SizedBox(width: 8),
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -272,7 +273,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
             children: [
               _todayStat('$viajesHoy', 'Viajes'),
               _todayStat('${horasOnline.toStringAsFixed(1)}h', 'Online'),
-              _todayStat('\$${_formatAmount(gananciasHoy)}', 'Bruto'),
+              _todayStat(_pesos(gananciasHoy), 'Bruto'),
               _todayStat(calificacion > 0 ? calificacion.toStringAsFixed(1) : '--', 'Rating'),
             ],
           ),
@@ -324,11 +325,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
       ),
       child: Column(
         children: [
-          Text('\$${_formatAmount(p['neto'])}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _primaryDark)),
+          Text(_pesos(p['neto']), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _primaryDark)),
           const SizedBox(height: 2),
           Text('neto', style: TextStyle(fontSize: 10, color: _textGrey)),
           const SizedBox(height: 4),
-          Text('\$${_formatAmount(p['bruto'])}', style: TextStyle(fontSize: 11, color: _textGrey)),
+          Text(_pesos(p['bruto']), style: TextStyle(fontSize: 11, color: _textGrey)),
           const SizedBox(height: 2),
           Text(label, style: TextStyle(fontSize: 11, color: _textGrey, fontWeight: FontWeight.w500)),
         ],
@@ -353,7 +354,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
         children: [
           _statItem(Icons.route_outlined, '$viajes', 'Viajes\ncompletados'),
           _statItem(Icons.star_rounded, calificacion > 0 ? calificacion.toStringAsFixed(1) : '--', 'Calificación'),
-          _statItem(Icons.monetization_on_outlined, '\$${_formatAmount(total['neto'])}', 'Total\nacumulado'),
+          _statItem(Icons.monetization_on_outlined, _pesos(total['neto']), 'Total\nacumulado'),
         ],
       ),
     );
@@ -440,9 +441,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('\$${_formatAmount(neto)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _primaryDark)),
-              Text('comisión \$${_formatAmount(comision)}', style: TextStyle(fontSize: 10, color: _textGrey)),
-              Text('bruto \$${_formatAmount(bruto)}', style: TextStyle(fontSize: 10, color: _textGrey)),
+              Text(_pesos(neto), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _primaryDark)),
+              Text('comisión ${_pesos(comision)}', style: TextStyle(fontSize: 10, color: _textGrey)),
+              Text('bruto ${_pesos(bruto)}', style: TextStyle(fontSize: 10, color: _textGrey)),
             ],
           ),
         ],
@@ -553,7 +554,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                 Text(_estadoCuentaLabel(estado), style: TextStyle(fontSize: 11, color: _textGrey)),
               ]),
             ),
-            Text('\$${_formatAmount(monto)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: estadoColor)),
+            Text(_pesos(monto), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: estadoColor)),
           ]),
           const SizedBox(height: 10),
           Container(
@@ -620,10 +621,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
     );
   }
 
-  String _formatAmount(num amount) {
-    if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(amount % 1000 == 0 ? 0 : 1)}k';
-    }
-    return amount.toStringAsFixed(amount == amount.roundToDouble() ? 0 : 2);
-  }
+  /// "$12.000" (los montos del backend pueden venir como texto decimal).
+  String _pesos(dynamic v) => formatearPesos(montoDe(v) ?? 0);
 }

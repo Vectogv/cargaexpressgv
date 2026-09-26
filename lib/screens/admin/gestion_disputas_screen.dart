@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api/http_client.dart';
 import 'admin_common.dart';
+import '../../core/formato_dinero.dart';
 
 /// Disputa tal como la devuelve GET /api/admin/disputes:
 /// {id, viajeId, conductorId, clienteId, versionConductor, versionCliente,
@@ -135,7 +136,7 @@ class _DisputesScreenState extends State<DisputesScreen> {
               Text(d.ruta, style: const TextStyle(fontSize: 12, color: Colors.black54)),
             ],
             if (d.montoFinal != null)
-              Text('Monto final: \$${d.montoFinal}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              Text('Monto final: ${formatearPesos(d.montoFinal)}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
             const SizedBox(height: 16),
             _DetailBlock(title: 'Cliente: ${d.user}', text: d.description),
             _DetailBlock(title: 'Conductor: ${d.conductor}', text: d.versionConductor),

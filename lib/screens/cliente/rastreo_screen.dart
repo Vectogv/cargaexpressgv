@@ -42,6 +42,7 @@ import 'llegada_al_destino_screen.dart';
 import 'chat_screen.dart';
 import 'emergencia_chat_screen.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
+import '../../core/formato_dinero.dart';
 
 /// Cada cuánto el seguimiento consulta GET /api/trips/:id/route como respaldo
 /// del socket (posición del conductor, ETA y ruta). Honor, Xiaomi y similares
@@ -1174,8 +1175,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   String _montoFinalLabel() {
     final monto = _trip?.precioFinal ?? _trip?.precioEstimado;
     if (monto == null) return '';
-    final miles = monto.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-    return 'Monto final: \$$miles';
+    return 'Monto final: ${formatearPesos(monto)}';
   }
 
   String _formatDistance(double km) {

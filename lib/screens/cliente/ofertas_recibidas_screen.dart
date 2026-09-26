@@ -5,6 +5,7 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/offer_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/server_clock.dart';
+import '../../core/formato_dinero.dart';
 
 /// Cada cuánto el cliente consulta GET /api/trips/:id/offers mientras el
 /// viaje sigue sin conductor (`buscando_conductor` / `pendiente`). Es el
@@ -197,9 +198,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
     return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
-  String _formatPrecio(num monto) {
-    return '\$${monto.toStringAsFixed(0)}';
-  }
+  String _formatPrecio(num monto) => formatearPesos(monto);
 
   String? _offerId(Map<String, dynamic> offer) =>
       (offer['_id'] ?? offer['id'])?.toString();

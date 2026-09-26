@@ -3,6 +3,7 @@ import '../../services/api/http_client.dart';
 import '../cliente/pagos_screen.dart';
 import '../conductor/support_screen.dart';
 import 'ui_compartida.dart';
+import '../../core/formato_dinero.dart';
 
 /// El backend responde 403 `{ error, code: 'CUENTA_NO_ACTIVA', estadoCuenta,
 /// montoDeuda }` cuando el cliente tiene deuda (suspension_por_pago) o un
@@ -70,14 +71,7 @@ class CuentaNoActivaDialog extends StatelessWidget {
 
   String get _textoBoton => _enRevision ? 'Ver estado del pago' : 'Ir a Pagos';
 
-  String? get _montoFormateado {
-    final v = montoDeuda;
-    if (v == null) return null;
-    final n = (v is num) ? v.toDouble() : double.tryParse(v.toString());
-    if (n == null || n <= 0) return null;
-    final miles = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-    return '\$$miles';
-  }
+  String? get _montoFormateado => formatearPesosSiPositivo(montoDeuda);
 
   @override
   Widget build(BuildContext context) {

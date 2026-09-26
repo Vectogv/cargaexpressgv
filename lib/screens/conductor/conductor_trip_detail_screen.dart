@@ -9,6 +9,7 @@ import '../../services/socket_service_client.dart';
 import '../../services/solicitudes_disponibles_service.dart';
 import 'hacer_oferta_screen.dart';
 import 'oferta_enviada_screen.dart';
+import '../../core/formato_dinero.dart';
 
 export '../../contracts/solicitud.dart' show busquedaTimeoutMin, segundosRestantesSolicitud;
 
@@ -126,7 +127,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     try {
       final precioEstimado = widget.trip['precioEstimado'];
       final ofertaInicial = _toNum(precioEstimado)?.toDouble() ?? 55000;
-      final precioStr = precioEstimado != null ? '\$${_formatMonto(precioEstimado)}' : '\$50.000';
+      final precioStr = precioEstimado != null ? _formatMonto(precioEstimado) : '\$50.000';
       final creada = await Navigator.push<OfertaCreada>(
         context,
         MaterialPageRoute(
@@ -164,17 +165,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     }
   }
 
-  String _formatMonto(dynamic v) {
-    final n = _toNum(v);
-    if (n == null) return '0';
-    final s = n.toInt().toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(s[i]);
-    }
-    return buffer.toString();
-  }
+  String _formatMonto(dynamic v) => formatearPesos(_toNum(v) ?? 0);
 
   @override
   Widget build(BuildContext context) {
@@ -257,7 +248,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '\$$precio',
+            precio,
             style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _green),
           ),
         ],

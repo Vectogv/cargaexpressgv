@@ -8,6 +8,7 @@ import '../../services/logger_service.dart';
 import '../../services/server_clock.dart';
 import 'oferta_aceptada_screen.dart';
 import 'offers_screen.dart';
+import '../../core/formato_dinero.dart';
 
 class OfertaEnviadaScreen extends StatefulWidget {
   final String montoOferta;
@@ -160,7 +161,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
       fullTrip = tripData;
     }
 
-    final monto = tripData['monto'] is num ? '\$${_fmt((tripData['monto'] as num).toInt())}' : widget.montoOferta;
+    final monto = tripData['monto'] is num ? formatearPesos(tripData['monto'] as num) : widget.montoOferta;
 
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
@@ -170,16 +171,6 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
       ),
       (route) => route.isFirst,
     );
-  }
-
-  String _fmt(int n) {
-    final s = n.toString();
-    final b = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
-      b.write(s[i]);
-    }
-    return b.toString();
   }
 
   @override

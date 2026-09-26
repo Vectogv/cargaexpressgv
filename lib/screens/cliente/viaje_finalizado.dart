@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'calificar_conductor_screen.dart';
+import '../../core/formato_dinero.dart';
 
 class ViajeFinalizado extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -48,18 +49,6 @@ class _ViajeFinalizadoState extends State<ViajeFinalizado> {
     final monto = precio(widget.trip['precioFinal']) ??
         precio(widget.trip['monto']) ??
         precio(widget.trip['precioEstimado']);
-
-    String f(double v) {
-      final clamped = v.abs();
-      final parts = clamped.toStringAsFixed(0).split('.');
-      final intPart = parts[0];
-      final buf = StringBuffer();
-      for (var i = 0; i < intPart.length; i++) {
-        if (i > 0 && (intPart.length - i) % 3 == 0) buf.write('.');
-        buf.write(intPart[i]);
-      }
-      return buf.toString();
-    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -113,7 +102,7 @@ class _ViajeFinalizadoState extends State<ViajeFinalizado> {
                     const SizedBox(height: 14),
                     _ResumenRow(
                       label: 'Total pagado',
-                      value: monto == null ? '\u2014' : '\$${f(monto)}',
+                      value: formatearPesos(monto, siNulo: '\u2014'),
                       labelBold: true,
                       valueBold: true,
                     ),

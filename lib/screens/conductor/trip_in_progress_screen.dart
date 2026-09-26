@@ -42,6 +42,7 @@ import '../shared/ui_compartida.dart' show BarraInferiorFija;
 import '../shared/dispute_screen.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
 import 'disputa_iniciada_wrapper.dart';
+import '../../core/formato_dinero.dart';
 
 class TripInProgressScreen extends StatefulWidget {
   final Trip? trip;
@@ -1214,11 +1215,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
     final precio = t.precioFinal ?? t.precioEstimado ?? 0;
     final pctComision = t.toJson()['porcentajeComision'] as num? ?? 10;
-    String miles(num v) => v.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-    final precioStr = '\$${miles(precio)}';
+    final precioStr = formatearPesos(precio);
     final comisionVal = precio * (pctComision / 100);
-    final comisionStr = '- \$${miles(comisionVal)}';
-    final totalStr = '\$${miles(precio - comisionVal)}';
+    final comisionStr = '- ${formatearPesos(comisionVal)}';
+    final totalStr = formatearPesos(precio - comisionVal);
     final cliente = t.cliente;
     final nombreCliente = cliente?.nombre ?? '';
     final rating = cliente?.calificacion ?? 4.0;
@@ -1366,16 +1366,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       km == km.roundToDouble() ? '${km.toStringAsFixed(0)} km' : '${km.toStringAsFixed(1)} km';
 
   /// Precio con separador de miles: 17000 -> "$17.000".
-  static String _fmtPrecio(num? v) {
-    if (v == null) return '--';
-    final s = v.round().abs().toString();
-    final b = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
-      b.write(s[i]);
-    }
-    return '${v < 0 ? '-' : ''}\$$b';
-  }
+  static String _fmtPrecio(num? v) => formatearPesos(v, siNulo: '--');
 
   // ETA y metros restantes del backend (trip:eta_update / GET route) para la
   // fase actual: la misma estimación que ve el cliente.

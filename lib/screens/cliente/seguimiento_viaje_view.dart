@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../models/trip.dart';
-import 'nuevo_envio_screen.dart' show formatearMiles;
 import 'rastreo_ui.dart';
+import '../../core/formato_dinero.dart';
 
 /// Vista "viaje en curso" del cliente (conductor asignado, en camino, en el
 /// origen, viaje en curso, SOS): el mapa con la ruta ocupa toda la pantalla,
@@ -650,7 +650,7 @@ class _SeccionDetalles extends StatelessWidget {
           if (precio != null)
             _FilaValor(
               etiqueta: etiquetaPrecio,
-              valor: '\$${formatearMiles(precio.round().toString())} COP',
+              valor: '${formatearPesos(precio)} COP',
             ),
           if (precio != null && distanciaViaje != null)
             const SizedBox(height: 8),

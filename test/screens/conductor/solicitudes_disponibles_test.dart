@@ -110,7 +110,7 @@ void main() {
       // La tarjeta sigue con precio, distancia, ruta, carga y tiempo restante.
       expect(find.text('Solicitudes disponibles'), findsOneWidget);
       expect(tarjeta5, findsOneWidget);
-      expect(find.text('\$ 60.000'), findsOneWidget);
+      expect(find.text('\$60.000'), findsOneWidget);
       expect(find.text('2.3 km hasta la recogida'), findsOneWidget);
       expect(find.text('12 min de viaje'), findsOneWidget);
       expect(find.text('Calle 10 #5-20'), findsOneWidget);
@@ -160,7 +160,7 @@ void main() {
       await avanzar(tester, 1);
       await ignorarAviso(tester);
       expect(find.byKey(const Key('solicitud_7')), findsOneWidget);
-      expect(find.text('\$ 48.000'), findsOneWidget);
+      expect(find.text('\$48.000'), findsOneWidget);
       expect(find.text('Avenida 30 #4-10'), findsOneWidget);
 
       // El sondeo ya lo trae completo.
@@ -188,7 +188,7 @@ void main() {
       expect(find.text('Nueva solicitud'), findsNothing);
       expect(tarjeta5, findsOneWidget);
       expect(find.byKey(const Key('oferta_enviada')), findsOneWidget);
-      expect(find.text('Oferta enviada · \$ 70.000 · vence en 0:25'), findsOneWidget);
+      expect(find.text('Oferta enviada · \$70.000 · vence en 0:25'), findsOneWidget);
       expect(find.text('Ver mi oferta'), findsOneWidget);
       expect(find.text('Ver y ofertar'), findsNothing);
 

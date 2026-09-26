@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import '../../services/api/http_client.dart';
 import 'admin_common.dart';
+import '../../core/formato_dinero.dart';
 
 /// Montos: el backend puede serializar decimales como texto.
 num _num(dynamic v) => v is num ? v : num.tryParse('${v ?? ''}') ?? 0;
@@ -283,7 +284,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                 ),
                               ),
                               Text(
-                                '${_fmtDate(h['createdAt'])} · bruto \$${_num(h['montoBruto']).toStringAsFixed(2)}',
+                                '${_fmtDate(h['createdAt'])} · bruto ${formatearPesos(_num(h['montoBruto']))}',
                                 style: const TextStyle(
                                   fontSize: 11,
                                   color: Colors.black45,
@@ -293,7 +294,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                           ),
                         ),
                         Text(
-                          '\$${comision.toStringAsFixed(2)}',
+                          formatearPesos(comision),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -612,7 +613,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                   ),
                                 ),
                                 Text(
-                                  '\$${_num(c['monto']).toStringAsFixed(2)}',
+                                  formatearPesos(_num(c['monto'])),
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
@@ -806,7 +807,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                                     ),
                                   ),
                                   Text(
-                                    '\$${_num(p['monto']).toStringAsFixed(2)}',
+                                    formatearPesos(_num(p['monto'])),
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w800,
@@ -999,7 +1000,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
                     AnimatedBuilder(
                       animation: _anim,
                       builder: (_, _) => Text(
-                        '\$${(total * _anim.value).toStringAsFixed(2)}',
+                        formatearPesos(total * _anim.value),
                         style: const TextStyle(
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
@@ -1104,7 +1105,7 @@ class _PagosFinanzasScreenState extends State<PagosFinanzasScreen>
     final metricas = [
       {
         'label': 'Comisión pendiente',
-        'valor': '\$${_num(_data['totalTransacciones']).toStringAsFixed(2)}',
+        'valor': formatearPesos(_num(_data['totalTransacciones'])),
         'icon': Icons.account_balance_wallet_outlined,
         'color': const Color(0xFF1E88E5),
       },
@@ -1344,7 +1345,7 @@ class _PagoRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '\$${monto.toStringAsFixed(2)}',
+                    formatearPesos(monto),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,

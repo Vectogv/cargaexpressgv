@@ -34,6 +34,7 @@ import 'aviso_cuenta_pago.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
 import '../shared/ui_compartida.dart' show FondoDegradado, TarjetaBlanca;
 import '../shared/cuenta_no_activa_dialog.dart' show CuentaNoActivaDialog;
+import '../../core/formato_dinero.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -1013,16 +1014,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   num? _num(dynamic v) => v == null ? null : num.tryParse(v.toString());
 
-  String _money(num? v) {
-    if (v == null) return '\$ 0';
-    final s = v.round().toString();
-    final b = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) b.write('.');
-      b.write(s[i]);
-    }
-    return '\$ $b';
-  }
+  String _money(num? v) => formatearPesos(v ?? 0);
 
   /// Resumen del día en una sola fila compacta: ganancias · viajes · calificación.
   Widget _buildStatsRow() {

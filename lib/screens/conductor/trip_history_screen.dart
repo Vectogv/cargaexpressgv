@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../core/formato_dinero.dart';
 
 class TripHistoryScreen extends StatefulWidget {
   const TripHistoryScreen({super.key});
@@ -119,7 +120,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
             children: [
               _estadoBadge(estado),
               const Spacer(),
-              Text('\$${(t['precioFinal'] as num? ?? t['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '0'}',
+              Text(formatearPesos((t['precioFinal'] as num?) ?? (t['precioEstimado'] as num?) ?? 0),
                   style: const TextStyle(fontWeight: FontWeight.w700)),
             ],
           ),
@@ -131,7 +132,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
             children: [
               Text(_formatDate(t['createdAt'] as String?), style: TextStyle(fontSize: 11, color: _textGrey)),
               const Spacer(),
-              Text('Comisión: \$${(t['comision'] as num?)?.toStringAsFixed(0) ?? '-'}',
+              Text('Comisión: ${formatearPesos(t['comision'] as num?)}',
                   style: TextStyle(fontSize: 11, color: Colors.red.shade400)),
             ],
           ),

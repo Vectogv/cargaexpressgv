@@ -26,6 +26,9 @@ void main() {
       await avanzar(tester);
       expect(find.text('Calle 1'), findsOneWidget);
       expect(find.text('Finalizado'), findsOneWidget);
+      // Precios con punto de miles ("$30.000", no "$30000").
+      expect(find.text('\$30.000'), findsOneWidget);
+      expect(find.text('\$32.000'), findsOneWidget);
     });
   });
 

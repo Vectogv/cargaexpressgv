@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import '../../services/socket_service_client.dart';
+import '../../core/formato_dinero.dart';
 
 /// Cuenta suspendida hasta que el cliente pague (p. ej. tras una disputa
 /// resuelta con acuerdo de pago, admin_controller.resolveDispute).
@@ -136,11 +137,7 @@ class _PagosScreenState extends State<PagosScreen> {
     }
   }
 
-  String _currency(dynamic value) {
-    final n = (value is num) ? value.toDouble() : double.tryParse(value?.toString() ?? '') ?? 0.0;
-    final miles = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-    return '\$$miles';
-  }
+  String _currency(dynamic value) => formatearPesos(montoDe(value) ?? 0);
 
   String? _formatDate(dynamic ts) {
     final dt = DateTime.tryParse(ts?.toString() ?? '');

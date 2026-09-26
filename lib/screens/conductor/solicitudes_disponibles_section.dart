@@ -11,6 +11,7 @@ import '../../services/server_clock.dart';
 import '../../services/solicitudes_disponibles_service.dart';
 import 'conductor_trip_detail_screen.dart';
 import 'offers_screen.dart';
+import '../../core/formato_dinero.dart';
 
 /// Abre el detalle de la solicitud para ofertar, confirmando antes con el
 /// backend que sigue abierta (GET /api/trips/:id).
@@ -292,11 +293,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
 
   static num? _num(dynamic v) => v == null ? null : num.tryParse(v.toString());
 
-  static String dinero(num? v) {
-    if (v == null) return '—';
-    final s = v.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-    return '\$ $s';
-  }
+  static String dinero(num? v) => formatearPesos(v, siNulo: '—');
 
   static String _direccion(dynamic v) {
     if (v is String) return v;

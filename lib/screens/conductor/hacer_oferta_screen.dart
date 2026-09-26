@@ -8,6 +8,7 @@ import '../../services/api/http_client.dart';
 import '../shared/cuenta_no_activa_dialog.dart' show mostrarCuentaNoActivaDialog;
 import 'aviso_cuenta_pago.dart' show codigoSuspensionPago;
 import 'earnings_screen.dart';
+import '../../core/formato_dinero.dart';
 
 /// Resultado de enviar la oferta: el monto formateado y cuándo vence.
 class OfertaCreada {
@@ -95,16 +96,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
     super.dispose();
   }
 
-  String _formatValue(double value) {
-    final int v = value.toInt();
-    final String s = v.toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(s[i]);
-    }
-    return '\$${buffer.toString()}';
-  }
+  String _formatValue(double value) => formatearPesos(value);
 
   void _aplicarIncremento(double incremento) {
     _ofertaActual += incremento;
@@ -297,8 +289,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
         const SizedBox(height: 12),
         Row(
           children: _incrementos.map((inc) {
-            final label =
-                '+ \$${inc >= 1000 ? '${(inc / 1000).toStringAsFixed(0)}.000' : inc.toStringAsFixed(0)}';
+            final label = '+ ${formatearPesos(inc)}';
             return Expanded(
               child: Padding(
                 padding: EdgeInsets.only(

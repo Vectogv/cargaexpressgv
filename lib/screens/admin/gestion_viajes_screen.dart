@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api/http_client.dart';
 import 'admin_common.dart';
+import '../../core/formato_dinero.dart';
 
 /// Montos: el backend puede serializar decimales como texto.
 num? _asNum(dynamic v) => v is num ? v : num.tryParse('${v ?? ''}');
@@ -409,10 +410,10 @@ class _ViajeCard extends StatelessWidget {
             child: Row(
               children: [
                 if (precioEstimado != null)
-                  Text('\$${precioEstimado.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
+                  Text(formatearPesos(precioEstimado), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
                 if (precioEstimado != null && precioFinal != null) const SizedBox(width: 4),
                 if (precioFinal != null)
-                  Text('\$${precioFinal.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+                  Text(formatearPesos(precioFinal), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
               ],
             ),
           ),

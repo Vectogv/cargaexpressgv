@@ -6,6 +6,7 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../services/report_service.dart';
 import '../../widgets/error_carga.dart';
 import 'reportar_conductor_screen.dart';
+import '../../core/formato_dinero.dart';
 
 class ViajeDetalleScreen extends StatefulWidget {
   final dynamic tripId;
@@ -255,8 +256,8 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
           const SizedBox(height: 10),
           if (_trip!['descripcion'] != null && (_trip!['descripcion'] as String).isNotEmpty)
             _infoRow('Carga', _trip!['descripcion'] as String),
-          _infoRow('Precio estimado', '\$${(_trip!['precioEstimado'] as num?)?.toStringAsFixed(0) ?? '-'}'),
-          _infoRow('Precio final', '\$${(_trip!['precioFinal'] as num?)?.toStringAsFixed(0) ?? '-'}'),
+          _infoRow('Precio estimado', formatearPesos(_trip!['precioEstimado'] as num?)),
+          _infoRow('Precio final', formatearPesos(_trip!['precioFinal'] as num?)),
           if (_trip!['motivoCancelacion'] != null)
             _infoRow('Motivo cancelación', _trip!['motivoCancelacion'] as String),
         ],

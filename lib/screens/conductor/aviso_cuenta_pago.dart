@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formato_dinero.dart';
 
 /// Situación de la deuda de comisión del conductor según
 /// GET /api/payment/debt (`estadoCuenta`, `montoDeuda`, `deudaFechaLimite`).
@@ -27,12 +28,7 @@ EstadoPagoConductor estadoPagoConductor(Map<String, dynamic>? deuda) {
   return monto > 0 ? EstadoPagoConductor.conDeuda : EstadoPagoConductor.alDia;
 }
 
-String? _dinero(dynamic v) {
-  final n = _numero(v);
-  if (n == null || n <= 0) return null;
-  final s = n.round().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-  return '\$$s';
-}
+String? _dinero(dynamic v) => formatearPesosSiPositivo(_numero(v));
 
 /// Número de un campo del backend (acepta num o texto decimal).
 num? numeroDe(dynamic v) => _numero(v);

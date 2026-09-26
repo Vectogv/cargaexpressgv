@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../contracts/disputa_resultado.dart';
 import 'detalle_resolucion_screen.dart';
+import '../../core/formato_dinero.dart';
 
 export '../../contracts/disputa_resultado.dart' show etiquetaResultado;
 
 /// Reembolso con separador de miles (`$15.000`); null si no hay reembolso.
 /// El backend lo envía como número o como texto decimal.
-String? formatoReembolso(dynamic valor) {
-  final n = valor is num ? valor : num.tryParse(valor?.toString() ?? '');
-  if (n == null || n <= 0) return null;
-  final digitos = n.round().toString();
-  final conPuntos = digitos.replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
-  return '\$$conPuntos';
-}
+String? formatoReembolso(dynamic valor) => formatearPesosSiPositivo(valor);
 
 /// Fecha `dd/MM/yyyy` (hora local) de un ISO; null si no es válida.
 String? formatoFecha(dynamic iso) {

@@ -79,7 +79,7 @@ void main() {
       expect(resumen, lessThan(mapa));
 
       // Resumen compacto con los datos del día.
-      expect(find.text('\$ 45.000'), findsOneWidget);
+      expect(find.text('\$45.000'), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
       expect(find.text('4.8'), findsOneWidget);
 

@@ -3,6 +3,7 @@ import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import 'viaje_detalle_screen.dart';
+import '../../core/formato_dinero.dart';
 
 class MisEnviosScreen extends StatefulWidget {
   const MisEnviosScreen({super.key});
@@ -163,7 +164,7 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
             ),
             if (monto != null) ...[
               const SizedBox(height: 6),
-              Text('\$${monto.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
+              Text(formatearPesos(monto), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A3C6E))),
             ],
           ],
         ),
