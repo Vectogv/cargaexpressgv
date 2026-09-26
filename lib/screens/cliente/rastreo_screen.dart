@@ -90,6 +90,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   StreamSubscription? _positionSub;
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripCancelledSub;
+  StreamSubscription<Map<String, dynamic>>? _cancellationRejectedSub;
   StreamSubscription<Map<String, dynamic>>? _newOfferSub;
   StreamSubscription<Map<String, dynamic>>? _offerAcceptedSub;
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
@@ -503,6 +504,18 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
         if (msg != null) messenger.showSnackBar(SnackBar(content: Text(msg)));
         if (!mounted) return;
         setState(() => _loading = false);
+      });
+    });
+
+    _cancellationRejectedSub = SocketServiceClient.instance.onCancellationRejected.listen((data) {
+      final id = viajeIdDesde(data['viajeId']);
+      if (id != null && _trip != null && id != _trip!.id.toString()) return;
+      _trasFrame(() {
+        if (!mounted) return;
+        setState(() => _cancelling = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(mensajeCancelacionRechazada(data))),
+        );
       });
     });
 
@@ -1187,6 +1200,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     _positionSub?.cancel();
     _tripStatusSub?.cancel();
     _tripCancelledSub?.cancel();
+    _cancellationRejectedSub?.cancel();
     _newOfferSub?.cancel();
     _offerAcceptedSub?.cancel();
     _tripAcceptedSub?.cancel();

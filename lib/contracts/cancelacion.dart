@@ -58,6 +58,23 @@ String etiquetaCancelacion(String? motivoCancelacion) =>
         ? 'Cancelado: sin conductor disponible'
         : 'Cancelado';
 
+/// Id de viaje de un payload de socket: puede venir como string directo
+/// (`viajeId`) o, en payloads más viejos, como un mapa con `_id` o `id`.
+String? viajeIdDesde(dynamic value) {
+  if (value == null) return null;
+  if (value is Map) return (value['_id'] ?? value['id'])?.toString();
+  return value.toString();
+}
+
+/// Aviso para `trip:cancellation_rejected` (cliente y conductor): el admin
+/// rechazó la solicitud de cancelación (`request-cancellation`) y el viaje
+/// sigue activo.
+String mensajeCancelacionRechazada(Map<String, dynamic> data) {
+  final motivo = data['motivo']?.toString().trim();
+  final sufijo = (motivo != null && motivo.isNotEmpty) ? ' Motivo: $motivo.' : '';
+  return 'El administrador rechazó la cancelación. El viaje continúa.$sufijo';
+}
+
 /// Aviso para el evento de socket `trip:cancelled` según quién canceló.
 ///
 /// El backend envía `canceladoPor` ('cliente' | 'conductor' | 'admin' |

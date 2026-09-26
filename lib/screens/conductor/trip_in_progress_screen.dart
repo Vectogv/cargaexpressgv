@@ -120,6 +120,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
   StreamSubscription<Map<String, dynamic>>? _driverStopGpsSub;
   StreamSubscription<Map<String, dynamic>>? _closeRejectedSub;
+  StreamSubscription<Map<String, dynamic>>? _cancellationRejectedSub;
   StreamSubscription<bool>? _lifecycleSub;
   final MapController _mapController = MapController();
   Timer? _tripStateTimer;
@@ -147,6 +148,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _gpsSubscription = NotificationService.instance.onNotification.listen(_onSocketEvent);
     _finalizeResponseSub = SocketServiceClient.instance.onFinalizeResponse.listen(_onFinalizeResponse);
     _closeRejectedSub = SocketServiceClient.instance.onCloseRejected.listen(_onCloseRejected);
+    _cancellationRejectedSub = SocketServiceClient.instance.onCancellationRejected.listen(_onCancellationRejected);
     _driverStopGpsSub = SocketServiceClient.instance.onDriverStopGps.listen((_) {
       _stopGpsTimer();
     });
@@ -205,6 +207,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _gpsSubscription?.cancel();
     _finalizeResponseSub?.cancel();
     _closeRejectedSub?.cancel();
+    _cancellationRejectedSub?.cancel();
     _driverStopGpsSub?.cancel();
     _etaSub?.cancel();
     _rutaSub?.cancel();
@@ -537,6 +540,27 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         disputeId: data['disputaId'],
         motivo: data['motivo']?.toString() ?? 'El cliente rechaz\u00f3 el cierre del servicio',
       );
+    });
+  }
+
+  /// Aplica un cambio llegado por socket fuera del build en curso y garantiza
+  /// que haya un frame (ver rastreo_screen._trasFrame).
+  void _trasFrame(VoidCallback fn) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => fn());
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  /// `trip:cancellation_rejected` (cliente o conductor pidieron cancelar en
+  /// un estado que requiere aprobaci\u00f3n, `request-cancellation`): el admin la
+  /// rechaz\u00f3 y el viaje sigue activo. Se filtra por viajeId porque el
+  /// conductor puede estar en la sala del viaje aunque el evento sea de otro.
+  void _onCancellationRejected(Map<String, dynamic> data) {
+    final id = viajeIdDesde(data['viajeId']);
+    if (id != null && _trip != null && id != _trip!.id.toString()) return;
+    _trasFrame(() {
+      if (!mounted) return;
+      setState(() => _isCancelling = false);
+      _snack(mensajeCancelacionRechazada(data));
     });
   }
 

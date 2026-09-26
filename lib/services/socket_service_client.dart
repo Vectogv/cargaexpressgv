@@ -46,6 +46,7 @@ class SocketServiceClient {
   final _tripStartedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCompletedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _tripCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _cancellationRejectedCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeRequestCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeResponseCtrl = StreamController<Map<String, dynamic>>.broadcast();
   final _finalizeCancelledCtrl = StreamController<Map<String, dynamic>>.broadcast();
@@ -104,6 +105,10 @@ class SocketServiceClient {
   Stream<Map<String, dynamic>> get onTripStarted => _tripStartedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCompleted => _tripCompletedCtrl.stream;
   Stream<Map<String, dynamic>> get onTripCancelled => _tripCancelledCtrl.stream;
+
+  /// `{id, viajeId, estado: 'rechazado', motivo}` (cliente y conductor): el
+  /// admin rechazó la solicitud de cancelación; el viaje sigue activo.
+  Stream<Map<String, dynamic>> get onCancellationRejected => _cancellationRejectedCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeRequest => _finalizeRequestCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeResponse => _finalizeResponseCtrl.stream;
   Stream<Map<String, dynamic>> get onFinalizeCancelled => _finalizeCancelledCtrl.stream;
@@ -449,6 +454,10 @@ class SocketServiceClient {
         if (data is Map) safeAdd(_tripCancelledCtrl, Map<String, dynamic>.from(data));
       });
 
+      safeOn(SocketEvents.tripCancellationRejected, (data) {
+        if (data is Map) safeAdd(_cancellationRejectedCtrl, Map<String, dynamic>.from(data));
+      });
+
       safeOn('trip:finalize_request', (data) {
         if (data is Map) safeAdd(_finalizeRequestCtrl, Map<String, dynamic>.from(data));
       });
@@ -601,6 +610,7 @@ class SocketServiceClient {
       SocketEvents.paymentRejected: _paymentRejectedCtrl,
       SocketEvents.accountPaymentSuspended: _accountPaymentSuspendedCtrl,
       'trip:cancelled': _tripCancelledCtrl,
+      SocketEvents.tripCancellationRejected: _cancellationRejectedCtrl,
       'trip:finalize_request': _finalizeRequestCtrl,
       'dispute:updated': _disputeUpdatedCtrl,
       'dispute:resolved': _disputeResolvedCtrl,
@@ -702,6 +712,7 @@ class SocketServiceClient {
     _tripStartedCtrl.close();
     _tripCompletedCtrl.close();
     _tripCancelledCtrl.close();
+    _cancellationRejectedCtrl.close();
     _finalizeRequestCtrl.close();
     _finalizeResponseCtrl.close();
     _finalizeCancelledCtrl.close();

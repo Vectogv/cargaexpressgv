@@ -7,6 +7,11 @@ class SocketEvents {
   static const String tripStarted = 'trip:started';
   static const String tripFinalized = 'trip:finalized';
   static const String tripCancelled = 'trip:cancelled';
+
+  /// `{id, viajeId, estado: 'rechazado', motivo}` (cliente y conductor): el
+  /// admin rechazó una solicitud de cancelación (`request-cancellation`); el
+  /// viaje sigue activo.
+  static const String tripCancellationRejected = 'trip:cancellation_rejected';
   static const String chatMessage = 'chat:message';
   static const String sosActivated = 'sos:activated';
   static const String paymentConfirmed = 'payment:confirmed';

@@ -92,6 +92,46 @@ void main() {
     });
   });
 
+  group('viajeIdDesde', () {
+    test('string directo (payload actual de trip:cancellation_rejected)', () {
+      expect(viajeIdDesde('5'), '5');
+      expect(viajeIdDesde(5), '5');
+    });
+
+    test('mapa con _id o id (payloads viejos)', () {
+      expect(viajeIdDesde({'_id': '5'}), '5');
+      expect(viajeIdDesde({'id': '5'}), '5');
+      expect(viajeIdDesde({'_id': '5', 'id': '6'}), '5');
+    });
+
+    test('null si no viene', () {
+      expect(viajeIdDesde(null), isNull);
+    });
+  });
+
+  group('mensajeCancelacionRechazada', () {
+    test('mensaje base sin motivo', () {
+      expect(
+        mensajeCancelacionRechazada({}),
+        'El administrador rechazó la cancelación. El viaje continúa.',
+      );
+    });
+
+    test('agrega el motivo del admin cuando viene', () {
+      expect(
+        mensajeCancelacionRechazada({'motivo': 'El viaje ya casi termina'}),
+        'El administrador rechazó la cancelación. El viaje continúa. Motivo: El viaje ya casi termina.',
+      );
+    });
+
+    test('motivo vacío no agrega nada', () {
+      expect(
+        mensajeCancelacionRechazada({'motivo': '   '}),
+        'El administrador rechazó la cancelación. El viaje continúa.',
+      );
+    });
+  });
+
   group('cancelacionRequiereSolicitud', () {
     test('en_curso y conductor_llegada requieren solicitud (motivos "en curso")', () {
       expect(cancelacionRequiereSolicitud(TripStatus.enCurso), isTrue);
