@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../core/formato_dinero.dart';
+import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class TripHistoryScreen extends StatefulWidget {
   const TripHistoryScreen({super.key});
@@ -109,38 +110,35 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
     final origen = t['origen'] as Map<String, dynamic>?;
     final destino = t['destino'] as Map<String, dynamic>?;
     final estado = t['estado'] as String? ?? '';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _estadoBadge(estado),
-              const Spacer(),
-              Text(formatearPesos((t['precioFinal'] as num?) ?? (t['precioEstimado'] as num?) ?? 0),
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13)),
-          Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13, color: _textGrey)),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Text(_formatDate(t['createdAt'] as String?), style: TextStyle(fontSize: 11, color: _textGrey)),
-              const Spacer(),
-              Text('Comisión: ${formatearPesos(t['comision'] as num?)}',
-                  style: TextStyle(fontSize: 11, color: Colors.red.shade400)),
-            ],
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TarjetaBlanca(
+        radio: 14,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _estadoBadge(estado),
+                const Spacer(),
+                Text(formatearPesos((t['precioFinal'] as num?) ?? (t['precioEstimado'] as num?) ?? 0),
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13)),
+            Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13, color: _textGrey)),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(_formatDate(t['createdAt'] as String?), style: TextStyle(fontSize: 11, color: _textGrey)),
+                const Spacer(),
+                Text('Comisión: ${formatearPesos(t['comision'] as num?)}',
+                    style: TextStyle(fontSize: 11, color: Colors.red.shade400)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

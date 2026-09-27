@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/notification_service.dart';
 import '../shared/tickets/ticket_detalle_screen.dart';
+import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -214,13 +215,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return InkWell(
       onTap: () => _onNotifTap(notif),
       borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: _white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-        ),
+      child: TarjetaBlanca(
+        radio: 14,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

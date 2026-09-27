@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class ForumScreen extends StatefulWidget {
   const ForumScreen({super.key});
@@ -120,11 +121,9 @@ class _ForumScreenState extends State<ForumScreen> {
   }
 
   Widget _buildPostCard(Map<String, dynamic> post) {
-    return Container(
+    return TarjetaBlanca(
+      radio: 14,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14), boxShadow: [
-        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
-      ]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

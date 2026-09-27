@@ -5,6 +5,7 @@ import 'offers_screen.dart';
 import 'trip_chat_screen.dart';
 import 'profile_screen.dart';
 import 'disputa_iniciada_wrapper.dart';
+import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class ReportScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -105,14 +106,8 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildRatingCard() {
-    return Container(
-      width: double.infinity,
+    return TarjetaBlanca(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -159,13 +154,9 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget _buildMenuCard(IconData icon, String label, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: _white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-        ),
+      child: TarjetaBlanca(
+        radio: 14,
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             Icon(icon, size: 22, color: _textDark),

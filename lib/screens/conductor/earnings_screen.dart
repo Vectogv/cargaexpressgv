@@ -7,6 +7,7 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import 'aviso_cuenta_pago.dart' show formatoDinero, numeroDe;
 import '../../core/formato_dinero.dart';
+import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -316,13 +317,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
   }
 
   Widget _buildPeriodCard(String label, Map<String, dynamic> p) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
+    return TarjetaBlanca(
+      radio: 14,
       child: Column(
         children: [
           Text(_pesos(p['neto']), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _primaryDark)),
@@ -341,14 +337,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
     final viajes = (_stats?['viajes'] as num?)?.toInt() ?? 0;
     final calificacion = (_stats?['calificacion'] as num?) ?? 0;
     final total = _periodo(_earnings?['total'] as Map<String, dynamic>?);
-    return Container(
-      width: double.infinity,
+    return TarjetaBlanca(
+      radio: 14,
       padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -372,15 +363,15 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
   Widget _buildHistoryCard() {
     if (_history.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
-        child: const Text('Aún no hay ganancias registradas', style: TextStyle(color: Colors.black45)),
+      return const TarjetaBlanca(
+        radio: 14,
+        padding: EdgeInsets.all(20),
+        child: Text('Aún no hay ganancias registradas', style: TextStyle(color: Colors.black45)),
       );
     }
-    return Container(
-      decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
+    return TarjetaBlanca(
+      radio: 14,
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           ..._history.map((h) => _historyItem(h)),
@@ -453,21 +444,18 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
   Widget _buildPdfCard() {
     if (_downloadingPdf) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
-        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      return const TarjetaBlanca(
+        radio: 14,
+        padding: EdgeInsets.all(16),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
           SizedBox(width: 12),
           Text('Generando PDF...'),
         ]),
       );
     }
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
+    return TarjetaBlanca(
+      radio: 14,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -520,11 +508,10 @@ class _EarningsScreenState extends State<EarningsScreen> {
     final sinDeuda = (monto <= 0) && (estado == null || estado == 'activa');
 
     if (sinDeuda) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
-        child: const Row(children: [
+      return const TarjetaBlanca(
+        radio: 14,
+        padding: EdgeInsets.all(16),
+        child: Row(children: [
           Icon(Icons.check_circle_outline, color: Color(0xFF4CAF50), size: 20),
           SizedBox(width: 10),
           Expanded(child: Text('No tienes deudas pendientes', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),

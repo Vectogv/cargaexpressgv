@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
+import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -115,12 +116,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
         ),
-        Container(
-          decoration: BoxDecoration(
-            color: _white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-          ),
+        TarjetaBlanca(
+          radio: 14,
+          padding: EdgeInsets.zero,
           child: Column(children: children),
         ),
       ],

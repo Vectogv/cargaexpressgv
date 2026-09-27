@@ -5,6 +5,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
 import '../../services/socket_service_client.dart';
+import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -322,64 +323,62 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final subiendo = _uploadingDoc == doc.type;
     final nota = _conductor?['notaRechazo'] as String?;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: _white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: _primaryDark.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TarjetaBlanca(
+        radio: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _primaryDark.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(doc.icon, color: _primaryDark, size: 22),
             ),
-            child: Icon(doc.icon, color: _primaryDark, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(doc.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                if (estado == 'rechazado' && nota != null && nota.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(nota, style: TextStyle(fontSize: 11, color: _accentRed.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ),
-                if (estado != 'no_subido') ...[
-                  const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: () => _showDocumentPreview(doc.type),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: MediaImage(
-                        path: _fotoUrl(doc.type),
-                        height: 56,
-                        width: 80,
-                        placeholder: Container(
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(doc.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  if (estado == 'rechazado' && nota != null && nota.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(nota, style: TextStyle(fontSize: 11, color: _accentRed.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ),
+                  if (estado != 'no_subido') ...[
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => _showDocumentPreview(doc.type),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: MediaImage(
+                          path: _fotoUrl(doc.type),
                           height: 56,
                           width: 80,
-                          color: const Color(0xFFF2F2F7),
-                          child: const Center(child: Icon(Icons.image, size: 24, color: Colors.black26)),
+                          placeholder: Container(
+                            height: 56,
+                            width: 80,
+                            color: const Color(0xFFF2F2F7),
+                            child: const Center(child: Icon(Icons.image, size: 24, color: Colors.black26)),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          subiendo
-              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
-              : _buildAction(doc.type, estado),
-        ],
+            const SizedBox(width: 8),
+            subiendo
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
+                : _buildAction(doc.type, estado),
+          ],
+        ),
       ),
     );
   }
