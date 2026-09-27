@@ -52,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _profile;
   Map<String, dynamic>? _stats;
   Timer? _uiTimer;
+  Timer? _activeTripPollTimer;
 
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   StreamSubscription<List<SolicitudDisponible>>? _solicitudesSub;
@@ -90,6 +91,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchData();
+
+    // Respaldo sin socket: si el cliente aceptó la oferta y el evento no
+    // llegó (socket caído), esto detecta el viaje aceptado igual. Sigue
+    // sondeando aunque ya haya uno activo, para que la tarjeta del inicio no
+    // se quede congelada cuando el viaje avanza o termina.
+    _activeTripPollTimer = Timer.periodic(const Duration(seconds: 20), (_) => _pollActiveTrip());
 
     _socketSub = NotificationService.instance.onNotification.listen((event) async {
       final tipo = event['__event'] as String?;
@@ -163,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _pagoConfirmadoSub?.cancel();
     _pagoRechazadoSub?.cancel();
     _uiTimer?.cancel();
+    _activeTripPollTimer?.cancel();
     // El inicio es la raíz del conductor: sin él no hay quién muestre la lista.
     SolicitudesDisponiblesService.instance.detener();
     super.dispose();
@@ -284,6 +292,18 @@ class _HomeScreenState extends State<HomeScreen> {
     _actualizarSolicitudes();
     if (_online && !_viajeOcupa && !_estadoPago.bloqueaConexion) {
       unawaited(DriverLocationService.instance.start());
+    }
+  }
+
+  Future<void> _pollActiveTrip() async {
+    // Sólo redirige cuando el viaje activo aparece (transición libre→ocupado):
+    // no debe interrumpir al conductor cada 20 s si ya está viendo otra
+    // pestaña o volvió atrás a propósito.
+    final estabaLibre = _activeTrip == null;
+    await _fetchActiveTrip();
+    if (estabaLibre && _activeTrip != null) {
+      CacheService.instance.cacheActiveTrip(_activeTrip!);
+      _redirectToActiveTrip();
     }
   }
 
