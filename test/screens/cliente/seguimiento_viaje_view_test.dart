@@ -143,6 +143,27 @@ void main() {
     expect(find.text('--'), findsNothing);
   });
 
+  testWidgets('con pinEntrega muestra el PIN de entrega en los detalles', (tester) async {
+    final trip = Trip.fromJson({
+      '_id': 't1',
+      'estado': 'aceptado',
+      'origen': {'direccion': 'Calle 10 # 43-20, Medellín', 'lat': 6.2, 'lng': -75.5},
+      'destino': {'direccion': 'Carrera 70, Envigado', 'lat': 6.17, 'lng': -75.59},
+      'pinEntrega': '1234',
+    });
+    await _pump(tester, trip: trip);
+
+    expect(find.byKey(const Key('pin_entrega')), findsOneWidget);
+    expect(find.text('1234'), findsOneWidget);
+    expect(find.text('PIN de entrega'), findsOneWidget);
+  });
+
+  testWidgets('sin pinEntrega no aparece la tarjeta del PIN', (tester) async {
+    await _pump(tester); // _trip() no manda pinEntrega
+    expect(find.byKey(const Key('pin_entrega')), findsNothing);
+    expect(find.text('PIN de entrega'), findsNothing);
+  });
+
   testWidgets('el botón recentrar sólo aparece con callback y lo dispara al tocarlo', (tester) async {
     await _pump(tester, onRecentrar: null);
     expect(find.byKey(const Key('btn_recentrar')), findsNothing);

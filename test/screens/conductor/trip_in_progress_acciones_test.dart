@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +21,11 @@ void main() {
     if (p.endsWith('/confirm-pickup')) return jsonResp({'id': '5', 'estado': 'conductor_llegada'});
     if (p.endsWith('/start-trip')) return jsonResp({'id': '5', 'estado': 'en_curso'});
     if (p == '/api/config/cliente') return jsonResp({'radioCierreKm': 1, 'confirmacionTimeoutMin': 15});
+    // El sondeo de respaldo (_sincronizarConServidor, cada 20 s) llama a este
+    // mismo endpoint mientras el viaje sigue en curso; sin este caso, las
+    // pruebas con varios reintentos superan los 20 s de tiempo virtual y
+    // Trip.fromJson truena con un {} sin id.
+    if (req.method == 'GET' && p == '/api/trips/5') return jsonResp({'id': '5', 'estado': 'en_curso'});
     return jsonResp({});
   }
 
@@ -204,6 +211,116 @@ void main() {
       expect(find.byKey(const Key('accion_cancelar')), findsNothing);
       await cerrar(tester);
     });
+  });
+
+  // El conductor de estas pruebas nunca tiene GPS (no hay plataforma real de
+  // Geolocator): el backend siempre exige justificación ANTES del PIN, y
+  // como `pedirJustificacion` nunca se apaga, cada intento de /complete pide
+  // primero la justificación otra vez y, si ya toca, también el PIN, antes
+  // de volver a llamar al backend.
+  Future<void> justificar(WidgetTester tester) async {
+    expect(find.text('Justificación de cierre'), findsOneWidget);
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      'Motivo suficientemente largo',
+    );
+    await avanzar(tester, 1);
+    await tester.tap(find.text('Continuar'));
+    await avanzar(tester, 1);
+  }
+
+  Future<void> ingresarPin(WidgetTester tester, String pin) async {
+    expect(find.text('PIN de entrega'), findsOneWidget);
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      pin,
+    );
+    await avanzar(tester, 1);
+    await tester.tap(find.text('Continuar'));
+    await avanzar(tester, 1);
+  }
+
+  testWidgets('cerca del destino el backend pide el PIN que sólo tiene el cliente; se reintenta con el PIN y se completa', (tester) async {
+    pantalla(tester);
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      if (req.url.path.endsWith('/complete')) {
+        final pin = (jsonDecode(req.body) as Map<String, dynamic>)['pin'];
+        if (pin != '1234') {
+          return errorResp(422, 'Ingresa el PIN de 4 dígitos que ve el cliente.',
+              pin == null ? 'PIN_REQUERIDO' : 'PIN_INCORRECTO');
+        }
+        return jsonResp({'id': '5', 'estado': 'pendiente_confirmacion'});
+      }
+      return backend(req);
+    }, () async {
+      await abrir(tester, 'en_curso');
+
+      await tester.tap(find.text('Finalizar viaje'));
+      await avanzar(tester, 1);
+      expect(find.text('Finalizar entrega'), findsOneWidget);
+      await tester.tap(find.text('Sin foto'));
+      // Sin plataforma de Geolocator real, getCurrentPosition() no falla al
+      // instante: espera todo su timeLimit (8 s) antes de continuar sin
+      // ubicación.
+      await avanzar(tester, 9);
+
+      await justificar(tester); // intento 1: sin pin -> PIN_REQUERIDO
+      await justificar(tester); // intento 2: pide justificación otra vez, luego el PIN
+      expect(find.textContaining('El PIN no coincide'), findsNothing);
+      await ingresarPin(tester, '1234'); // intento 2: pin correcto -> éxito
+
+      final completes = log.where((r) => r.method == 'POST' && r.url.path == '/api/trips/5/complete').toList();
+      expect(completes, hasLength(2));
+      expect(jsonDecode(completes.first.body)['pin'], isNull);
+      expect(jsonDecode(completes.last.body)['pin'], '1234');
+
+      expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('Esperando confirmación')), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await cerrar(tester);
+    }, log: log);
+  });
+
+  testWidgets('el PIN incorrecto se avisa en el propio diálogo antes de reintentar', (tester) async {
+    pantalla(tester);
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      if (req.url.path.endsWith('/complete')) {
+        final pin = (jsonDecode(req.body) as Map<String, dynamic>)['pin'];
+        if (pin != '1234') {
+          return errorResp(422, 'El PIN no coincide.', pin == null ? 'PIN_REQUERIDO' : 'PIN_INCORRECTO');
+        }
+        return jsonResp({'id': '5', 'estado': 'pendiente_confirmacion'});
+      }
+      return backend(req);
+    }, () async {
+      await abrir(tester, 'en_curso');
+      await tester.tap(find.text('Finalizar viaje'));
+      await avanzar(tester, 1);
+      await tester.tap(find.text('Sin foto'));
+      await avanzar(tester, 9);
+
+      await justificar(tester); // intento 1: sin pin -> PIN_REQUERIDO
+      await justificar(tester); // intento 2: pide justificación, luego el PIN
+      expect(find.textContaining('El PIN no coincide'), findsNothing);
+      await ingresarPin(tester, '0000'); // intento 2: pin equivocado -> PIN_INCORRECTO
+      await justificar(tester); // intento 3: pide justificación otra vez
+
+      // El backend rechazó el PIN: el diálogo aclara que no coincidió.
+      expect(find.text('PIN de entrega'), findsOneWidget);
+      expect(find.textContaining('El PIN no coincide'), findsOneWidget);
+      await ingresarPin(tester, '1234'); // intento 3: pin correcto -> éxito
+
+      final completes = log.where((r) => r.method == 'POST' && r.url.path == '/api/trips/5/complete').toList();
+      expect(completes, hasLength(3));
+      expect(jsonDecode(completes[0].body)['pin'], isNull);
+      expect(jsonDecode(completes[1].body)['pin'], '0000');
+      expect(jsonDecode(completes[2].body)['pin'], '1234');
+
+      expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('Esperando confirmación')), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await cerrar(tester);
+    }, log: log);
   });
 
   testWidgets('la barra inferior respeta el área segura del sistema', (tester) async {

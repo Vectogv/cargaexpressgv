@@ -15,6 +15,11 @@ enum EstadoPagoConductor {
 
 const String codigoSuspensionPago = 'CUENTA_SUSPENDIDA_POR_PAGO';
 
+/// 403 cuando la deuda de comisión supera el tope (`DRIVER_DEBT_MAX_AMOUNT`),
+/// aunque la cuenta siga 'activa': mismo diálogo que la suspensión por pago
+/// (ver `cuenta_no_activa_dialog.dart`).
+const String codigoDeudaSuperaTope = 'DEUDA_SUPERA_TOPE';
+
 num? _numero(dynamic v) => v is num ? v : num.tryParse(v?.toString() ?? '');
 
 EstadoPagoConductor estadoPagoConductor(Map<String, dynamic>? deuda) {

@@ -243,14 +243,15 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> getReservations({int page = 1, int limit = 20, String? estado}) => TripService.getReservations(page: page, limit: limit, estado: estado);
   Future<void> declineTrip(dynamic id) => TripService.declineTrip(id);
   Future<Map<String, dynamic>> disputeAppeal(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeAppeal(id, motivo: motivo, descripcion: descripcion);
-  Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) => TripService.completeTrip(id, montoFinal: montoFinal, justificacion: justificacion, idempotencyKey: idempotencyKey);
-  Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) => TripService.finalizeTrip(id, montoFinal: montoFinal, justificacion: justificacion, idempotencyKey: idempotencyKey);
+  Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion, String? pin, String? idempotencyKey}) => TripService.completeTrip(id, montoFinal: montoFinal, justificacion: justificacion, pin: pin, idempotencyKey: idempotencyKey);
+  Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion, String? pin, String? idempotencyKey}) => TripService.finalizeTrip(id, montoFinal: montoFinal, justificacion: justificacion, pin: pin, idempotencyKey: idempotencyKey);
   Future<void> cancelTrip(dynamic id, {String? motivo, String? justificacion}) => TripService.cancelTrip(id, motivo: motivo, justificacion: justificacion);
   Future<void> requestCancellation(dynamic id, {String? motivo, String? justificacion}) => TripService.requestCancellation(id, motivo: motivo, justificacion: justificacion);
   Future<Map<String, dynamic>> confirmClose(dynamic id, {required bool confirmar, String? motivo, String? idempotencyKey}) => TripService.confirmClose(id, confirmar: confirmar, motivo: motivo, idempotencyKey: idempotencyKey);
   Future<Map<String, dynamic>> disputeTrip(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeTrip(id, motivo: motivo, descripcion: descripcion);
   Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) => TripService.rateTrip(id, puntaje, comentario: comentario);
   Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) => TripService.deliveryPhoto(tripId, bytes, filename);
+  Future<String> pickupPhoto(dynamic tripId, Uint8List bytes, String filename) => TripService.pickupPhoto(tripId, bytes, filename);
 
   // --- Disputes ---
 

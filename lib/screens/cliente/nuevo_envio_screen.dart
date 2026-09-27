@@ -49,6 +49,8 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   final _destinoCtrl = TextEditingController();
   final _descripcionCtrl = TextEditingController();
   final _precioCtrl = TextEditingController();
+  final _receptorNombreCtrl = TextEditingController();
+  final _receptorTelefonoCtrl = TextEditingController();
   final _mapCtrl = MapController();
 
   LatLng? _origenLatLng;
@@ -205,6 +207,8 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     _destinoCtrl.dispose();
     _descripcionCtrl.dispose();
     _precioCtrl.dispose();
+    _receptorNombreCtrl.dispose();
+    _receptorTelefonoCtrl.dispose();
     _mapCtrl.dispose();
     if (widget.geoClient == null) _geoClient.close();
     super.dispose();
@@ -646,6 +650,8 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       },
       'descripcion': _descripcionCtrl.text.trim().isEmpty ? null : _descripcionCtrl.text.trim(),
       'precioCliente': precio,
+      if (_receptorNombreCtrl.text.trim().isNotEmpty) 'receptorNombre': _receptorNombreCtrl.text.trim(),
+      if (_receptorTelefonoCtrl.text.trim().isNotEmpty) 'receptorTelefono': _receptorTelefonoCtrl.text.trim(),
       if (programada != null) 'fechaProgramada': _formatFecha(programada),
       if (programada != null) 'horaProgramada': _formatHora(programada),
     };
@@ -926,7 +932,11 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                     const SizedBox(height: 8),
                     _buildDescripcion(),
                     const SizedBox(height: 24),
-                    const _StepLabel(numero: 4, label: 'Tu oferta'),
+                    const _StepLabel(numero: 4, label: '¿Quién recibe?', opcional: true),
+                    const SizedBox(height: 8),
+                    _buildReceptor(),
+                    const SizedBox(height: 24),
+                    const _StepLabel(numero: 5, label: 'Tu oferta'),
                     const SizedBox(height: 8),
                     _buildPrecio(),
                     const SizedBox(height: 28),
@@ -1197,6 +1207,45 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
           counterText: '',
           hintText: 'Ej: 3 cajas medianas, una nevera, 200 kg aprox.',
         ),
+      ),
+    );
+  }
+
+  Widget _buildReceptor() {
+    return _Card(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              key: const Key('campo_receptor_nombre'),
+              controller: _receptorNombreCtrl,
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Nombre de quien recibe',
+              ),
+            ),
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFF0F0F0)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              key: const Key('campo_receptor_telefono'),
+              controller: _receptorTelefonoCtrl,
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Teléfono de quien recibe',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

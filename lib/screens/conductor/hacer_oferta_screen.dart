@@ -5,8 +5,7 @@ import '../../services/api_client.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/server_clock.dart';
 import '../../services/api/http_client.dart';
-import '../shared/cuenta_no_activa_dialog.dart' show mostrarCuentaNoActivaDialog;
-import 'aviso_cuenta_pago.dart' show codigoSuspensionPago;
+import '../shared/cuenta_no_activa_dialog.dart' show esCuentaNoActiva, mostrarCuentaNoActivaDialog;
 import 'earnings_screen.dart';
 import '../../core/formato_dinero.dart';
 
@@ -128,9 +127,9 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
         // FUERA_DE_ZONA (422), CONDUCTOR_OCUPADO (409), cuenta suspendida o
         // no verificada (403), viaje sin ofertas (400)...: el backend ya
         // explica el motivo en espa\u00f1ol.
-        if (e.code == codigoSuspensionPago && mounted) {
-          // Suspendido por pago o comprobante en revisión: diálogo con el
-          // monto y acceso a Pagos (Ganancias del conductor).
+        if (esCuentaNoActiva(e) && mounted) {
+          // Suspendido por pago, comprobante en revisión o deuda por encima
+          // del tope: diálogo con el monto y acceso a Pagos (Ganancias).
           final navigator = Navigator.of(context);
           unawaited(mostrarCuentaNoActivaDialog(
             context,

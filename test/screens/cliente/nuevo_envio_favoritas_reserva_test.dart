@@ -134,6 +134,7 @@ void main() {
 
         await tester.enterText(find.byKey(const Key('campo_precio')), '150000');
         await tester.pump();
+        await tester.ensureVisible(find.byKey(const Key('btn_solicitar')));
         await tester.tap(find.byKey(const Key('btn_solicitar')));
         await avanzar(tester, 2);
 

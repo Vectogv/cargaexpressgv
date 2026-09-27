@@ -13,9 +13,18 @@ import '../../core/formato_dinero.dart';
 /// Compatibilidad: mientras el backend viejo sólo manda el texto plano
 /// "Tu cuenta no está activa. No puedes solicitar viajes." (sin `code`),
 /// también se reconoce por el mensaje.
+///
+/// También cubre 403 `DEUDA_SUPERA_TOPE` y `CUENTA_SUSPENDIDA_POR_PAGO`
+/// (conductor con deuda de comisión por encima del tope o suspendido por
+/// pago, aunque la cuenta siga "activa"): mismo diálogo, con el texto
+/// ajustado (ver [CuentaNoActivaDialog._titulo]).
 bool esCuentaNoActiva(Object error) {
   if (error is! ApiException) return false;
-  if (error.code == 'CUENTA_NO_ACTIVA') return true;
+  if (error.code == 'CUENTA_NO_ACTIVA' ||
+      error.code == 'DEUDA_SUPERA_TOPE' ||
+      error.code == 'CUENTA_SUSPENDIDA_POR_PAGO') {
+    return true;
+  }
   return error.message.contains('no está activa');
 }
 
@@ -32,6 +41,7 @@ Future<void> mostrarCuentaNoActivaDialog(BuildContext context, ApiException erro
       mensaje: error.message,
       estadoCuenta: estadoCuenta,
       montoDeuda: montoDeuda,
+      code: error.code,
       onIrAPagos: onIrAPagos,
     ),
   );
@@ -54,6 +64,9 @@ class CuentaNoActivaDialog extends StatelessWidget {
   final String? estadoCuenta;
   final dynamic montoDeuda;
 
+  /// `error.code` del backend (p. ej. `CUENTA_NO_ACTIVA`, `DEUDA_SUPERA_TOPE`).
+  final String? code;
+
   /// Qué abrir al tocar "Ir a Pagos" (por defecto, Pagos del cliente).
   final VoidCallback? onIrAPagos;
 
@@ -62,12 +75,18 @@ class CuentaNoActivaDialog extends StatelessWidget {
     required this.mensaje,
     this.estadoCuenta,
     this.montoDeuda,
+    this.code,
     this.onIrAPagos,
   });
 
   bool get _enRevision => estadoCuenta == 'esperando_confirmacion';
 
-  String get _titulo => _enRevision ? 'Pago en revisión' : 'Tienes un saldo pendiente';
+  bool get _superaTope => code == 'DEUDA_SUPERA_TOPE';
+
+  String get _titulo {
+    if (_superaTope) return 'Deuda supera el tope permitido';
+    return _enRevision ? 'Pago en revisión' : 'Tienes un saldo pendiente';
+  }
 
   String get _textoBoton => _enRevision ? 'Ver estado del pago' : 'Ir a Pagos';
 

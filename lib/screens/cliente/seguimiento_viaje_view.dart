@@ -620,6 +620,10 @@ class _SeccionDetalles extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (t?.pinEntrega != null) ...[
+          _TarjetaPinEntrega(pin: t!.pinEntrega!),
+          const SizedBox(height: 16),
+        ],
         const TituloSeccionRastreo('Detalles del viaje'),
         const SizedBox(height: 12),
         LineaDatoRastreo(
@@ -660,6 +664,56 @@ class _SeccionDetalles extends StatelessWidget {
             _FilaValor(etiqueta: 'Distancia', valor: distanciaViaje!),
         ],
       ],
+    );
+  }
+}
+
+/// PIN de 4 dígitos para cerrar la entrega (sólo lo ve el cliente): se le
+/// pide al conductor al llegar al destino.
+class _TarjetaPinEntrega extends StatelessWidget {
+  final String pin;
+  const _TarjetaPinEntrega({required this.pin});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: RastreoColores.primarioSuave,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.password_rounded, color: RastreoColores.primario),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'PIN de entrega',
+                  style: TextStyle(fontSize: 12, color: RastreoColores.gris),
+                ),
+                Text(
+                  pin,
+                  key: const Key('pin_entrega'),
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: RastreoColores.primario,
+                    letterSpacing: 4,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Dáselo a quien recibe la carga al momento de la entrega.',
+                  style: TextStyle(fontSize: 12, color: RastreoColores.gris),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -30,6 +30,13 @@ class Trip {
   /// Fecha y hora programadas de una reserva ('YYYY-MM-DD' / 'HH:mm'), null si es inmediata.
   final String? fechaProgramada;
   final String? horaProgramada;
+  /// PIN de 4 dígitos para cerrar la entrega cerca del destino. Sólo lo ve el
+  /// cliente (el backend siempre manda null al conductor); null en viajes
+  /// viejos, que cierran sin pedirlo.
+  final String? pinEntrega;
+  /// Quién recibe la carga en el destino (opcionales, los llena el cliente).
+  final String? receptorNombre;
+  final String? receptorTelefono;
 
   Trip({
     required this.id,
@@ -51,6 +58,9 @@ class Trip {
     this.tipoProgramacion,
     this.fechaProgramada,
     this.horaProgramada,
+    this.pinEntrega,
+    this.receptorNombre,
+    this.receptorTelefono,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {

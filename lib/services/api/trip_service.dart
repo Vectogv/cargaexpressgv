@@ -84,17 +84,19 @@ class TripService {
     return HttpClient.post('/api/trips/$id/dispute/appeal', body: {'motivo': motivo, 'descripcion': descripcion}, auth: true);
   }
 
-  static Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) async {
+  static Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion, String? pin, String? idempotencyKey}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
     if (justificacion != null) body['justificacion'] = justificacion;
+    if (pin != null) body['pin'] = pin;
     await HttpClient.post('/api/trips/$id/complete', body: body, auth: true, idempotent: true, idempotencyKey: idempotencyKey);
   }
 
-  static Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion, String? idempotencyKey}) async {
+  static Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion, String? pin, String? idempotencyKey}) async {
     final body = <String, dynamic>{};
     if (montoFinal != null) body['montoFinal'] = montoFinal;
     if (justificacion != null) body['justificacion'] = justificacion;
+    if (pin != null) body['pin'] = pin;
     await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true, idempotent: true, idempotencyKey: idempotencyKey);
   }
 
@@ -127,6 +129,13 @@ class TripService {
   static Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) async {
     final data = await HttpClient.uploadFile('/api/trips/$tripId/delivery-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
     return data['fotoEntrega'] as String? ?? data['url'] as String? ?? '';
+  }
+
+  /// Foto de la carga al recogerla (evidencia, no bloquea el flujo). El
+  /// backend exige estar en 'conductor_llegada' o 'en_curso'.
+  static Future<String> pickupPhoto(dynamic tripId, Uint8List bytes, String filename) async {
+    final data = await HttpClient.uploadFile('/api/trips/$tripId/pickup-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
+    return data['fotoRecogida'] as String? ?? data['url'] as String? ?? '';
   }
 
   // La subida de fotos de disputa es SOLO de cliente: POST /api/trips/:id/dispute/support

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -117,6 +118,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     return _mapAlto * 0.5;
   }
   String? _deliveryPhotoUrl;
+  String? _pickupPhotoUrl;
   Timer? _elapsedTimer;
   StreamSubscription<Map<String, dynamic>>? _finalizeResponseSub;
   StreamSubscription<Map<String, dynamic>>? _driverStopGpsSub;
@@ -644,12 +646,39 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     return null;
   }
 
+  /// Foto de la carga al recogerla (evidencia, no bloquea el flujo). Mismo
+  /// mecanismo que [_takeDeliveryPhoto].
+  Future<String?> _takePickupPhoto() async {
+    _photoError = null;
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
+      );
+      if (file == null) return null;
+      final bytes = await file.readAsBytes();
+      final url = await TripService.pickupPhoto(_trip!.id, bytes, 'pickup_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      return url;
+    } on ApiException catch (e) {
+      LoggerService.instance.error('Error uploading pickup photo', e);
+      _photoError = e.message;
+    } catch (e) {
+      LoggerService.instance.error('Error taking pickup photo', e);
+      _photoError = 'No se pudo subir la foto: ${e.toString().replaceFirst("Exception: ", "")}';
+    }
+    if (mounted && _photoError != null) _snack(_photoError!);
+    return null;
+  }
+
   // El backend exige llegar a 'esperando_confirmacion' ANTES de finalizar:
   // en_curso -> entregado -> esperando_confirmacion -> finalizado.
   // POST /api/trips/:id/complete {montoFinal, justificacion?} hace en_curso/entregado ->
   // esperando_confirmacion automáticamente. Devuelve false si no se pudo
   // completar (se aborta la solicitud de finalización).
-  Future<bool> _completeTripIfNeeded(num? montoFinalOverride, {String? justificacion}) async {
+  Future<bool> _completeTripIfNeeded(num? montoFinalOverride, {String? justificacion, String? pin}) async {
     _ultimoErrorCierre = null;
     final t = _trip;
     if (t == null) return true;
@@ -661,8 +690,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       return false;
     }
     try {
-      final key = _completeKey.keyFor('${t.id}|$montoFinal|$justificacion');
-      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion, idempotencyKey: key));
+      final key = _completeKey.keyFor('${t.id}|$montoFinal|$justificacion|$pin');
+      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion, pin: pin, idempotencyKey: key));
       _completeKey.settle();
       // El backend deja el viaje en 'pendiente_confirmacion' hasta que el
       // cliente confirme (no está finalizado todavía).
@@ -677,6 +706,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         // El backend la exige (fuera del radio del destino): se pide la
         // justificaci\u00f3n en el di\u00e1logo; su mensaje ya trae la distancia.
         if (mounted) _snack(e.message);
+      } else if (e.code == 'PIN_REQUERIDO' || e.code == 'PIN_INCORRECTO') {
+        // Cerca del destino el backend exige el PIN que ve el cliente: el
+        // di\u00e1logo de arriba lo pide (o lo corrige si fue incorrecto).
       } else if (e.code == 'FUERA_DE_RANGO_ORIGEN') {
         if (mounted) _snack('Fuera de rango del origen. Distancia: ${e.message}');
       } else {
@@ -767,6 +799,60 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     );
   }
 
+  /// Pide el PIN de 4 dígitos que el backend exige al cerrar cerca del
+  /// destino (lo tiene el cliente, no el conductor); null si cancela.
+  Future<String?> _pedirPinEntrega({required bool incorrecto}) {
+    // Fuera del builder por el mismo motivo que en _pedirJustificacionCierre.
+    String? localPin;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            scrollable: true,
+            title: const Text('PIN de entrega'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(incorrecto
+                    ? 'El PIN no coincide. Pídele al cliente el PIN de 4 dígitos que ve en su pantalla.'
+                    : 'Pídele al cliente el PIN de 4 dígitos que ve en su pantalla para cerrar el viaje.'),
+                const SizedBox(height: 16),
+                TextField(
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    hintText: '0000',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                    counterText: '',
+                  ),
+                  onChanged: (v) {
+                    localPin = v.trim();
+                    setDialogState(() {});
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: (localPin != null && localPin!.length == 4)
+                    ? () => Navigator.pop(ctx, localPin)
+                    : null,
+                child: const Text('Continuar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _requestFinalization() async {
     if (_trip == null || _actionLoading) return;
     setState(() => _actionLoading = true);
@@ -844,6 +930,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       radioKm: reglas.radioCierreKm,
     );
     String? justificacion;
+    String? pin;
+    var pedirPin = false;
     while (true) {
       if (pedirJustificacion) {
         justificacion = await _pedirJustificacionCierre(reglas.radioCierreKm);
@@ -853,12 +941,24 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           return;
         }
       }
-      final completado = await _completeTripIfNeeded(montoFinal, justificacion: justificacion);
+      if (pedirPin) {
+        pin = await _pedirPinEntrega(incorrecto: _ultimoErrorCierre == 'PIN_INCORRECTO');
+        if (!mounted) return;
+        if (pin == null) {
+          setState(() => _actionLoading = false);
+          return;
+        }
+      }
+      final completado = await _completeTripIfNeeded(montoFinal, justificacion: justificacion, pin: pin);
       if (!mounted) return;
       if (completado) break;
       // El backend es quien decide: si la exige, se muestra el campo.
       if (!pedirJustificacion && _ultimoErrorCierre == 'JUSTIFICACION_REQUERIDA') {
         pedirJustificacion = true;
+        continue;
+      }
+      if (_ultimoErrorCierre == 'PIN_REQUERIDO' || _ultimoErrorCierre == 'PIN_INCORRECTO') {
+        pedirPin = true;
         continue;
       }
       setState(() => _actionLoading = false);
@@ -2036,12 +2136,20 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       case TripStatus.llegada:
         return [
           ..._avisoOrigen('iniciar el viaje'),
+          if (_pickupPhotoUrl != null) ...[_avisoFotoRecogidaLista(), const SizedBox(height: 8)],
+          _botonFotoRecogida(),
+          const SizedBox(height: 8),
           _botonPrincipal('Iniciar viaje', Icons.play_arrow_rounded, _lejosDelOrigen ? null : _startTrip, _accentGreen),
         ];
       case TripStatus.enCurso:
       case TripStatus.entregado:
         return [
           ..._avisoDestino(),
+          if (estado == TripStatus.enCurso) ...[
+            if (_pickupPhotoUrl != null) ...[_avisoFotoRecogidaLista(), const SizedBox(height: 8)],
+            _botonFotoRecogida(),
+            const SizedBox(height: 8),
+          ],
           _botonFoto(),
           const SizedBox(height: 8),
           _botonPrincipal('Finalizar viaje', Icons.flag_rounded, _requestFinalization, _isNearDestination ? _accentGreen : _primaryBlue),
@@ -2165,6 +2273,34 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (url != null && mounted) {
       setState(() => _deliveryPhotoUrl = url);
       _snack('Foto de evidencia subida correctamente');
+    }
+  }
+
+  Widget _avisoFotoRecogidaLista() => _aviso(Icons.check_circle_rounded, 'Foto de la carga subida como evidencia.', Colors.green);
+
+  Widget _botonFotoRecogida() {
+    final lista = _pickupPhotoUrl != null;
+    return SizedBox(
+      height: 46,
+      child: OutlinedButton.icon(
+        onPressed: _actionLoading ? null : _subirFotoRecogida,
+        icon: Icon(lista ? Icons.check_circle_rounded : Icons.photo_camera_outlined, size: 20),
+        label: Text(lista ? 'Foto de la carga lista (tomar otra)' : 'Foto de la carga'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: lista ? const Color(0xFF15803D) : _primaryBlue,
+          side: BorderSide(color: lista ? const Color(0xFF15803D) : _primaryBlue, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _subirFotoRecogida() async {
+    // _takePickupPhoto ya muestra el error del backend si falla.
+    final url = await _takePickupPhoto();
+    if (url != null && mounted) {
+      setState(() => _pickupPhotoUrl = url);
+      _snack('Foto de la carga subida correctamente');
     }
   }
 
@@ -2387,6 +2523,18 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                 const SizedBox(width: 4),
                 Text(calificacion.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
               ]),
+            ],
+            if (t.receptorNombre != null) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 4),
+              Text(
+                t.receptorTelefono != null && t.receptorTelefono!.isNotEmpty
+                    ? 'Recibe: ${t.receptorNombre} — ${t.receptorTelefono}'
+                    : 'Recibe: ${t.receptorNombre}',
+                style: const TextStyle(fontSize: 14, color: _textDark),
+                textAlign: TextAlign.center,
+              ),
             ],
           ],
         ),

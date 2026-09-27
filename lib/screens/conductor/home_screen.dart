@@ -236,9 +236,9 @@ class _HomeScreenState extends State<HomeScreen> {
         // suspendido: no fingir que está en línea.
         DriverLocationService.instance.stop();
         if (mounted) setState(() => _online = false);
-        if (e is ApiException && e.code == codigoSuspensionPago) {
+        if (e is ApiException && (e.code == codigoSuspensionPago || e.code == codigoDeudaSuperaTope)) {
           _aplicarBloqueoPago(e.data);
-          _avisarBloqueoPago(e.message);
+          _avisarBloqueoPago(e.message, code: e.code);
           return;
         }
         messenger.showSnackBar(SnackBar(
@@ -363,9 +363,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _dialogoPagoAbierto = false;
 
-  /// Bloqueo por pago (suspendida o comprobante en revisión): el mismo
-  /// diálogo que ve el cliente, con el monto y acceso a Pagos (Ganancias).
-  void _avisarBloqueoPago(String mensaje) {
+  /// Bloqueo por pago (suspendida o comprobante en revisión) o por tope de
+  /// deuda (`DEUDA_SUPERA_TOPE`): el mismo diálogo que ve el cliente, con el
+  /// monto y acceso a Pagos (Ganancias).
+  void _avisarBloqueoPago(String mensaje, {String? code}) {
     if (!mounted || _dialogoPagoAbierto) return;
     _dialogoPagoAbierto = true;
     _trasFrame(() {
@@ -379,6 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mensaje: mensaje,
           estadoCuenta: _deuda?['estadoCuenta']?.toString(),
           montoDeuda: _deuda?['montoDeuda'],
+          code: code,
           onIrAPagos: _abrirPagos,
         ),
       ).whenComplete(() => _dialogoPagoAbierto = false);
@@ -461,9 +463,9 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) setState(() => _online = false);
       }
     } catch (e) {
-      if (e is ApiException && e.code == codigoSuspensionPago) {
+      if (e is ApiException && (e.code == codigoSuspensionPago || e.code == codigoDeudaSuperaTope)) {
         _aplicarBloqueoPago(e.data);
-        _avisarBloqueoPago(e.message);
+        _avisarBloqueoPago(e.message, code: e.code);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(_errorMessage(e)), backgroundColor: Colors.orange),
