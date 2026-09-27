@@ -25,7 +25,6 @@ class ConductorTripDetailScreen extends StatefulWidget {
 class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   bool _enviandoOferta = false;
   String? _placa;
-  String? _tipoVehiculo;
   StreamSubscription<Map<String, dynamic>>? _tripStatusSub;
   StreamSubscription<Map<String, dynamic>>? _tripAcceptedSub;
 
@@ -97,7 +96,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       if (conductor != null && mounted) {
         setState(() {
           _placa = conductor['placa'] as String?;
-          _tipoVehiculo = conductor['tipoVehiculo'] as String?;
         });
       }
     } catch (e) {
@@ -177,7 +175,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         ? '${(t['distancia'] as num).toStringAsFixed(1)} km'
         : (t['distancia'] != null ? '${t['distancia']}' : distanciaRectaTexto(origen, destino));
     final descripcionCarga = (t['descripcion'] ?? t['carga']) as String? ?? 'No especificada';
-    final tipoVehiculoStr = _tipoVehiculo ?? t['tipoVehiculo'] as String? ?? 'No especificado';
+    final tipoVehiculoStr = t['tipoVehiculoRequerido'] as String? ?? 'No especificado';
 
     return Scaffold(
       backgroundColor: Colors.white,
