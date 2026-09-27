@@ -19,6 +19,7 @@ import '../shared/action_key.dart';
 import '../shared/cuenta_no_activa_dialog.dart';
 import '../../widgets/vehiculo_mapa.dart';
 import 'rastreo_screen.dart';
+import 'viaje_detalle_screen.dart';
 
 const Color _kPrimary = Color(0xFF2563EB);
 const Color _kOrigen = Color(0xFF16A34A);
@@ -671,8 +672,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       // Misma clave si el usuario reintenta tras un fallo de red: el backend
       // no crea un segundo viaje/reserva.
       final key = _requestKey.keyFor(body);
+      Map<String, dynamic>? creado;
       if (programada != null) {
-        await ApiClient.instance.reserveTrip(body, idempotencyKey: key);
+        creado = await ApiClient.instance.reserveTrip(body, idempotencyKey: key);
       } else {
         await ApiClient.instance.requestTrip(body, idempotencyKey: key);
       }
@@ -681,7 +683,15 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RastreoScreen()));
+          // Una reserva no aparece en GET /trips/active (a propósito: no
+          // bloquea pedir otro viaje ya), así que RastreoScreen no la vería.
+          // El detalle sí la trae por id.
+          final tripId = creado?['id']?.toString();
+          if (tripId != null) {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ViajeDetalleScreen(tripId: tripId)));
+          } else {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RastreoScreen()));
+          }
         });
       }
     } catch (e) {

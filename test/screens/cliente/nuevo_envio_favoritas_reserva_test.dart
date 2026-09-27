@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cargaexpress/screens/cliente/nuevo_envio_screen.dart';
-import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
+import 'package:cargaexpress/screens/cliente/viaje_detalle_screen.dart';
 
 import '../../helpers/fake_api.dart';
 
@@ -116,6 +116,16 @@ void main() {
           return jsonResp({'id': '77', 'estado': 'reservado'});
         }
         if (req.url.path == '/api/trips/active') return errorResp(404, 'Sin viaje');
+        // La reserva no queda "activa": el detalle se abre por id.
+        if (req.url.path == '/api/trips/77') {
+          return jsonResp({
+            'id': '77',
+            'estado': 'reservado',
+            'tipoProgramacion': 'programada',
+            'origen': {'direccion': 'Origen actual'},
+            'destino': {'direccion': 'Destino actual'},
+          });
+        }
         return jsonResp({'data': []});
       }, () async {
         _prefsConRuta();
@@ -138,7 +148,7 @@ void main() {
         await tester.tap(find.byKey(const Key('btn_solicitar')));
         await avanzar(tester, 2);
 
-        expect(find.byType(RastreoScreen), findsOneWidget);
+        expect(find.byType(ViajeDetalleScreen), findsOneWidget);
       }, log: log);
 
       final peticion = log.singleWhere((r) => r.method == 'POST' && r.url.path == '/api/trips/reserve');

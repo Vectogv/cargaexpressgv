@@ -191,12 +191,29 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
             ],
           ),
           const SizedBox(height: 8),
+          if (_trip!['tipoProgramacion'] == 'programada') _reservaRow(),
           _timestampRow('Creado', _trip!['createdAt'] as String?),
           _timestampRow('Aceptado', _trip!['aceptadoAt'] as String?),
           _timestampRow('En curso', _trip!['enCursoAt'] as String?),
           _timestampRow('Completado', _trip!['completadoAt'] as String?),
           _timestampRow('Finalizado', _trip!['finalizadoAt'] as String?),
           if (_trip!['canceladoAt'] != null) _timestampRow('Cancelado', _trip!['canceladoAt'] as String?),
+        ],
+      ),
+    );
+  }
+
+  Widget _reservaRow() {
+    final fecha = _trip!['fechaProgramada'] as String?;
+    final hora = _trip!['horaProgramada'] as String?;
+    if (fecha == null || hora == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          const SizedBox(width: 20),
+          const Text('Programado para: ', style: TextStyle(fontSize: 12, color: Colors.black45)),
+          Text('$fecha $hora', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -256,6 +273,12 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
           const SizedBox(height: 10),
           if (_trip!['descripcion'] != null && (_trip!['descripcion'] as String).isNotEmpty)
             _infoRow('Carga', _trip!['descripcion'] as String),
+          if (_trip!['tipoVehiculoRequerido'] != null)
+            _infoRow('Vehículo pedido', _trip!['tipoVehiculoRequerido'] as String),
+          if (_trip!['receptorNombre'] != null)
+            _infoRow('Recibe', _trip!['receptorNombre'] as String),
+          if (_trip!['receptorTelefono'] != null)
+            _infoRow('Teléfono de quien recibe', _trip!['receptorTelefono'] as String),
           _infoRow('Precio estimado', formatearPesos(_trip!['precioEstimado'] as num?)),
           _infoRow('Precio final', formatearPesos(_trip!['precioFinal'] as num?)),
           if (_trip!['motivoCancelacion'] != null)
