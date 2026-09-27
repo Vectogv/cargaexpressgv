@@ -77,7 +77,18 @@ class _ForumScreenState extends State<ForumScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _posts.isEmpty
-                    ? const Center(child: Text('No hay publicaciones aún', style: TextStyle(color: Colors.black45)))
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.forum_outlined, size: 64, color: Colors.grey.shade300),
+                            const SizedBox(height: 12),
+                            const Text('No hay publicaciones aún', style: TextStyle(fontSize: 16, color: Colors.black45)),
+                            const SizedBox(height: 6),
+                            const Text('Sé el primero en escribir en el foro', style: TextStyle(fontSize: 13, color: Colors.black38)),
+                          ],
+                        ),
+                      )
                     : ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: _posts.length,

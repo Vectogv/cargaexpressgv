@@ -40,6 +40,11 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
   static const Color _bgLight = Color(0xFFF5F7FA);
+  static final BoxDecoration _tarjeta = BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+  );
 
   @override
   void initState() {
@@ -230,7 +235,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+      decoration: _tarjeta,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
@@ -294,7 +299,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+            decoration: _tarjeta,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('Ruta', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
               const SizedBox(height: 10),
@@ -386,7 +391,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+      decoration: _tarjeta,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           _estadoBadge(estado),

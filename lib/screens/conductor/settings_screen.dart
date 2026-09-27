@@ -116,7 +116,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
         ),
         Container(
-          decoration: BoxDecoration(color: _white, borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(
+            color: _white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
           child: Column(children: children),
         ),
       ],
