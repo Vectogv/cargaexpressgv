@@ -31,6 +31,10 @@ class ViajeAceptadoScreen extends StatelessWidget {
   final LatLng? destinoPos;
   final LatLng? vehiculoPos;
 
+  /// Tipo de vehículo del conductor (furgón/camioneta/carro/moto), para
+  /// dibujarlo en el mapa con su ícono real en vez de uno genérico.
+  final String? tipoVehiculo;
+
   /// Ruta conductor → recogida (GET /trips/:id/route, fase 'recogida').
   final List<LatLng>? ruta;
   final bool rutaAproximada;
@@ -55,6 +59,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
     this.origenPos,
     this.destinoPos,
     this.vehiculoPos,
+    this.tipoVehiculo,
     this.ruta,
     this.rutaAproximada = false,
     this.textoAccion = 'Voy en camino a recoger',
@@ -133,6 +138,9 @@ class ViajeAceptadoScreen extends StatelessWidget {
           key: const Key('mapa_recogida'),
           origen: origenPos,
           vehiculo: vehiculoPos,
+          dibujarVehiculo: true,
+          tipoVehiculo: tipoVehiculo,
+          etiquetaVehiculo: 'Tú',
           ruta: ruta,
           rutaAproximada: rutaAproximada,
         ),

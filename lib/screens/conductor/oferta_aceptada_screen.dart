@@ -214,6 +214,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
       origenPos: MapaViaje.puntoDe(widget.trip['origen']),
       destinoPos: MapaViaje.puntoDe(widget.trip['destino']),
       vehiculoPos: MapaViaje.punto(DriverLocationService.instance.lastLat, DriverLocationService.instance.lastLng),
+      tipoVehiculo: (widget.trip['conductor'] as Map?)?['tipoVehiculo'] as String?,
       ruta: _ruta,
       rutaAproximada: _rutaAproximada,
     );

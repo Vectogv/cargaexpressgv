@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../../services/api/http_client.dart';
 import '../../services/map_config.dart';
 import '../../services/logger_service.dart';
+import '../../widgets/vehiculo_mapa.dart';
 import 'admin_common.dart';
 
 /// Mapa en vivo de conductores.
@@ -92,6 +93,7 @@ class _MapaVivoScreenState extends State<MapaVivoScreen> with VisiblePolling {
             name: name.isNotEmpty ? '$name · ${d['placa'] ?? ''}' : 'Conductor ${d['placa'] ?? ''}',
             status: trip?['estado']?.toString().replaceAll('_', ' ') ?? 'disponible',
             destination: trip?['destinoDireccion']?.toString() ?? '',
+            tipoVehiculo: d['tipoVehiculo']?.toString(),
           ),
         ));
       }
@@ -225,11 +227,13 @@ class _TripMarker extends StatelessWidget {
   final String name;
   final String status;
   final String destination;
+  final String? tipoVehiculo;
 
   const _TripMarker({
     required this.name,
     required this.status,
     required this.destination,
+    this.tipoVehiculo,
   });
 
   @override
@@ -302,10 +306,11 @@ class _TripMarker extends StatelessWidget {
           ),
         ),
 
-        const Icon(
-          Icons.location_on,
-          color: Color(0xFFE53935),
-          size: 28,
+        VehiculoMapa(
+          tipo: tipoVehiculoMapaDe(tipoVehiculo),
+          color: colorVehiculoAsignado,
+          tamano: 30,
+          halo: true,
         ),
       ],
     );
