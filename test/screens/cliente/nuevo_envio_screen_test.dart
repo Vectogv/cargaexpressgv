@@ -301,6 +301,7 @@ void main() {
         (tester) async {
       await http.runWithClient(() async {
         await llenarFormularioValido(tester);
+        await tester.ensureVisible(find.byKey(const Key('btn_solicitar')));
         await tester.tap(find.byKey(const Key('btn_solicitar')));
         await tester.pump();
         await tester.pumpAndSettle();
@@ -333,6 +334,7 @@ void main() {
         (tester) async {
       await http.runWithClient(() async {
         await llenarFormularioValido(tester);
+        await tester.ensureVisible(find.byKey(const Key('btn_solicitar')));
         await tester.tap(find.byKey(const Key('btn_solicitar')));
         await tester.pump();
         await tester.pumpAndSettle();
@@ -351,6 +353,7 @@ void main() {
         (tester) async {
       await http.runWithClient(() async {
         await llenarFormularioValido(tester);
+        await tester.ensureVisible(find.byKey(const Key('btn_solicitar')));
         await tester.tap(find.byKey(const Key('btn_solicitar')));
         await tester.pump();
         await tester.pumpAndSettle();
@@ -371,6 +374,7 @@ void main() {
         (tester) async {
       await http.runWithClient(() async {
         await llenarFormularioValido(tester);
+        await tester.ensureVisible(find.byKey(const Key('btn_solicitar')));
         await tester.tap(find.byKey(const Key('btn_solicitar')));
         await tester.pump();
         await tester.pumpAndSettle();

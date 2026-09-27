@@ -17,7 +17,7 @@ void main() {
   late List<Map<String, dynamic>> cercanos;
   late List<Map<String, dynamic>> ofertas;
 
-  Map<String, dynamic> viaje(String id, {int precio = 60000, String? origen}) => {
+  Map<String, dynamic> viaje(String id, {int precio = 60000, String? origen, String? tipoVehiculoRequerido}) => {
         'id': id,
         '_id': id,
         'estado': 'buscando_conductor',
@@ -30,6 +30,7 @@ void main() {
         'cliente': {'id': '2', 'nombre': 'Ana'},
         'origen': {'direccion': origen ?? 'Calle 10 #5-20', 'lat': 4.6, 'lng': -74.0},
         'destino': {'direccion': 'Carrera 7 #80-15', 'lat': 4.7, 'lng': -74.1},
+        if (tipoVehiculoRequerido != null) 'tipoVehiculoRequerido': tipoVehiculoRequerido,
       };
 
   Map<String, dynamic> oferta(String id, String viajeId, int segundos, {int monto = 70000}) => {
@@ -124,6 +125,26 @@ void main() {
       await avanzar(tester, 10);
       expect(tarjeta5, findsOneWidget);
       expect(find.text('Nueva solicitud'), findsNothing);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('si el cliente pidió un tipo de vehículo, la tarjeta lo muestra (a todos los conductores)', (tester) async {
+    cercanos = [viaje('5', tipoVehiculoRequerido: 'Furgón cerrado')];
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      await ignorarAviso(tester);
+      expect(find.text('Furgón cerrado'), findsOneWidget);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('sin tipo de vehículo pedido, la tarjeta no muestra ese chip', (tester) async {
+    cercanos = [viaje('5')];
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      await ignorarAviso(tester);
+      expect(find.byIcon(Icons.local_shipping_outlined), findsNothing);
       await cerrar(tester);
     });
   });

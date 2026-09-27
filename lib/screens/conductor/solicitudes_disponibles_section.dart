@@ -330,6 +330,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
     final km = kmHastaRecogida(v, DriverLocationService.instance.lastLat, DriverLocationService.instance.lastLng);
     final restante = segundosRestantesSolicitud(v, ahora);
     final programada = v['tipoProgramacion'] == 'programada';
+    final vehiculoRequerido = v['tipoVehiculoRequerido']?.toString().trim();
     final oferta = solicitud.oferta;
 
     return Container(
@@ -378,6 +379,8 @@ class SolicitudDisponibleCard extends StatelessWidget {
             children: [
               if (km != null) _chip(Icons.near_me_rounded, textoDistanciaRecogida(km)),
               if (minutos != null && minutos > 0) _chip(Icons.schedule_rounded, '$minutos min de viaje'),
+              if (vehiculoRequerido != null && vehiculoRequerido.isNotEmpty)
+                _chip(Icons.local_shipping_outlined, vehiculoRequerido, color: _primaryBlue),
             ],
           ),
           const SizedBox(height: 14),

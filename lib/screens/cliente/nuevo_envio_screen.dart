@@ -17,6 +17,7 @@ import '../../services/location_permission.dart';
 import '../../services/logger_service.dart';
 import '../shared/action_key.dart';
 import '../shared/cuenta_no_activa_dialog.dart';
+import '../../widgets/vehiculo_mapa.dart';
 import 'rastreo_screen.dart';
 
 const Color _kPrimary = Color(0xFF2563EB);
@@ -51,6 +52,16 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   final _precioCtrl = TextEditingController();
   final _receptorNombreCtrl = TextEditingController();
   final _receptorTelefonoCtrl = TextEditingController();
+  /// Vehículo pedido para el envío; informativo, no filtra a los conductores.
+  String? _tipoVehiculoRequerido;
+
+  static const List<String> _tiposVehiculoRequerido = ['Carro', 'Camioneta', 'Furgón cerrado', 'Estacas'];
+  static const Map<String, String> _keyVehiculoRequerido = {
+    'Carro': 'carro',
+    'Camioneta': 'camioneta',
+    'Furgón cerrado': 'furgon',
+    'Estacas': 'estacas',
+  };
   final _mapCtrl = MapController();
 
   LatLng? _origenLatLng;
@@ -652,6 +663,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       'precioCliente': precio,
       if (_receptorNombreCtrl.text.trim().isNotEmpty) 'receptorNombre': _receptorNombreCtrl.text.trim(),
       if (_receptorTelefonoCtrl.text.trim().isNotEmpty) 'receptorTelefono': _receptorTelefonoCtrl.text.trim(),
+      if (_tipoVehiculoRequerido != null) 'tipoVehiculoRequerido': _tipoVehiculoRequerido,
       if (programada != null) 'fechaProgramada': _formatFecha(programada),
       if (programada != null) 'horaProgramada': _formatHora(programada),
     };
@@ -936,7 +948,11 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                     const SizedBox(height: 8),
                     _buildReceptor(),
                     const SizedBox(height: 24),
-                    const _StepLabel(numero: 5, label: 'Tu oferta'),
+                    const _StepLabel(numero: 5, label: '¿Qué vehículo necesitas?', opcional: true),
+                    const SizedBox(height: 8),
+                    _buildVehiculo(),
+                    const SizedBox(height: 24),
+                    const _StepLabel(numero: 6, label: 'Tu oferta'),
                     const SizedBox(height: 8),
                     _buildPrecio(),
                     const SizedBox(height: 28),
@@ -1246,6 +1262,54 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVehiculo() {
+    return SizedBox(
+      height: 92,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _tiposVehiculoRequerido.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final tipo = _tiposVehiculoRequerido[i];
+          final seleccionado = _tipoVehiculoRequerido == tipo;
+          return GestureDetector(
+            key: Key('opcion_vehiculo_${_keyVehiculoRequerido[tipo]}'),
+            onTap: () => setState(() => _tipoVehiculoRequerido = seleccionado ? null : tipo),
+            child: Container(
+              width: 84,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: seleccionado ? const Color(0xFFEFF6FF) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: seleccionado ? _kPrimary : _kBorde, width: seleccionado ? 1.4 : 1),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  VehiculoMapa(
+                    tipo: tipoVehiculoMapaDe(tipo),
+                    color: seleccionado ? _kPrimary : const Color(0xFF9CA3AF),
+                    tamano: 34,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tipo,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: seleccionado ? FontWeight.w700 : FontWeight.w500,
+                      color: seleccionado ? _kPrimary : Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

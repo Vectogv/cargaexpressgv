@@ -10,9 +10,9 @@ import 'package:cargaexpress/screens/cliente/rastreo_screen.dart';
 
 import '../../helpers/fake_api.dart';
 
-/// "Quién recibe la carga": el cliente puede indicar nombre y teléfono de
-/// quien recibe (opcionales), el body los manda al backend
-/// (POST /api/trips/request / /api/trips/reserve) sólo si no están vacíos.
+/// "¿Qué vehículo necesitas?": el cliente puede pedir un tipo de vehículo
+/// (informativo, no filtra a los conductores); el body lo manda al backend
+/// sólo si eligió uno.
 void _prefsConRuta() {
   SharedPreferences.setMockInitialValues({
     'nuevo_envio_origen': 'Origen actual',
@@ -29,11 +29,11 @@ Future<void> _pump(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('con nombre y teléfono de quien recibe, el body los manda al pedir el viaje', (tester) async {
+  testWidgets('elegir "Furgón cerrado" manda tipoVehiculoRequerido al pedir el viaje', (tester) async {
     final log = <http.Request>[];
     await conApiFalsa((req) {
       if (req.method == 'POST' && req.url.path == '/api/trips/request') {
-        return jsonResp({'id': '80', 'estado': 'buscando_conductor'});
+        return jsonResp({'id': '82', 'estado': 'buscando_conductor'});
       }
       if (req.url.path == '/api/trips/active') return errorResp(404, 'Sin viaje');
       return jsonResp({'data': []});
@@ -41,8 +41,8 @@ void main() {
       _prefsConRuta();
       await _pump(tester);
 
-      await tester.enterText(find.byKey(const Key('campo_receptor_nombre')), 'Juan Pérez');
-      await tester.enterText(find.byKey(const Key('campo_receptor_telefono')), '3009998888');
+      await tester.tap(find.byKey(const Key('opcion_vehiculo_furgon')));
+      await avanzar(tester);
       await tester.enterText(find.byKey(const Key('campo_precio')), '50000');
       await tester.pump();
       await tester.ensureVisible(find.byKey(const Key('btn_solicitar')));
@@ -54,15 +54,44 @@ void main() {
 
     final peticion = log.singleWhere((r) => r.method == 'POST' && r.url.path == '/api/trips/request');
     final body = jsonDecode(peticion.body) as Map<String, dynamic>;
-    expect(body['receptorNombre'], 'Juan Pérez');
-    expect(body['receptorTelefono'], '3009998888');
+    expect(body['tipoVehiculoRequerido'], 'Furgón cerrado');
   });
 
-  testWidgets('sin nombre ni teléfono de quien recibe, el body no manda esas claves', (tester) async {
+  testWidgets('tocar la opción elegida otra vez la quita y el body no manda la clave', (tester) async {
     final log = <http.Request>[];
     await conApiFalsa((req) {
       if (req.method == 'POST' && req.url.path == '/api/trips/request') {
-        return jsonResp({'id': '81', 'estado': 'buscando_conductor'});
+        return jsonResp({'id': '83', 'estado': 'buscando_conductor'});
+      }
+      if (req.url.path == '/api/trips/active') return errorResp(404, 'Sin viaje');
+      return jsonResp({'data': []});
+    }, () async {
+      _prefsConRuta();
+      await _pump(tester);
+
+      await tester.tap(find.byKey(const Key('opcion_vehiculo_estacas')));
+      await avanzar(tester);
+      await tester.tap(find.byKey(const Key('opcion_vehiculo_estacas')));
+      await avanzar(tester);
+      await tester.enterText(find.byKey(const Key('campo_precio')), '50000');
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('btn_solicitar')));
+      await tester.tap(find.byKey(const Key('btn_solicitar')));
+      await avanzar(tester, 2);
+
+      expect(find.byType(RastreoScreen), findsOneWidget);
+    }, log: log);
+
+    final peticion = log.singleWhere((r) => r.method == 'POST' && r.url.path == '/api/trips/request');
+    final body = jsonDecode(peticion.body) as Map<String, dynamic>;
+    expect(body.containsKey('tipoVehiculoRequerido'), isFalse);
+  });
+
+  testWidgets('sin elegir vehículo, el body no manda esa clave', (tester) async {
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      if (req.method == 'POST' && req.url.path == '/api/trips/request') {
+        return jsonResp({'id': '84', 'estado': 'buscando_conductor'});
       }
       if (req.url.path == '/api/trips/active') return errorResp(404, 'Sin viaje');
       return jsonResp({'data': []});
@@ -81,7 +110,6 @@ void main() {
 
     final peticion = log.singleWhere((r) => r.method == 'POST' && r.url.path == '/api/trips/request');
     final body = jsonDecode(peticion.body) as Map<String, dynamic>;
-    expect(body.containsKey('receptorNombre'), isFalse);
-    expect(body.containsKey('receptorTelefono'), isFalse);
+    expect(body.containsKey('tipoVehiculoRequerido'), isFalse);
   });
 }

@@ -37,6 +37,9 @@ class Trip {
   /// Quién recibe la carga en el destino (opcionales, los llena el cliente).
   final String? receptorNombre;
   final String? receptorTelefono;
+  /// Vehículo que el cliente pidió para este envío (informativo: no oculta
+  /// el viaje a conductores con otro vehículo). null si no especificó.
+  final String? tipoVehiculoRequerido;
 
   Trip({
     required this.id,
@@ -61,6 +64,7 @@ class Trip {
     this.pinEntrega,
     this.receptorNombre,
     this.receptorTelefono,
+    this.tipoVehiculoRequerido,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {
