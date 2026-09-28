@@ -73,7 +73,10 @@ bool _buscando(String? estado) =>
 bool _enDisputa(String? estado) => estado == TripStatus.disputa || estado == TripStatus.enDisputa;
 
 String _rutaCorta(Map<String, dynamic> viaje) {
-  String dir(dynamic p) => (p is Map ? p['direccion']?.toString() : null)?.trim() ?? '';
+  // Solo el primer tramo ("Parque Caldas, Calle 5…" → "Parque Caldas"): la
+  // dirección completa ocupa las dos líneas y esconde el destino.
+  String dir(dynamic p) =>
+      ((p is Map ? p['direccion']?.toString() : null) ?? '').split(',').first.trim();
   final o = dir(viaje['origen']);
   final d = dir(viaje['destino']);
   return '${o.isEmpty ? '—' : o} → ${d.isEmpty ? '—' : d}';
@@ -239,7 +242,7 @@ class _TituloSeccion extends StatelessWidget {
             TextButton(
               onPressed: onAccion,
               style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 32), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              child: Text(accion!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              child: Text(accion!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.azul)),
             ),
         ],
       ),
@@ -404,27 +407,20 @@ class _ViajeActivoCard extends StatelessWidget {
               const SizedBox(height: 16),
               _AvisoConfirmacion(conductor: nombreConductor),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: BotonSecundario(
-                      key: const Key('btn_problema_entrega'),
-                      texto: 'Hay un problema',
-                      color: ColoresApp.rojo,
-                      alto: 48,
-                      onPressed: onProblema,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: BotonPrincipal(
-                      key: const Key('btn_confirmar_entrega_inicio'),
-                      texto: 'Confirmar entrega',
-                      alto: 48,
-                      onPressed: onConfirmar,
-                    ),
-                  ),
-                ],
+              // Uno debajo del otro: lado a lado, en 360 dp el texto se cortaba.
+              BotonPrincipal(
+                key: const Key('btn_confirmar_entrega_inicio'),
+                texto: 'Confirmar entrega',
+                alto: 48,
+                onPressed: onConfirmar,
+              ),
+              const SizedBox(height: 10),
+              BotonSecundario(
+                key: const Key('btn_problema_entrega'),
+                texto: 'Hay un problema',
+                color: ColoresApp.rojo,
+                alto: 48,
+                onPressed: onProblema,
               ),
             ] else if (mostrarPin) ...[
               const SizedBox(height: 16),
