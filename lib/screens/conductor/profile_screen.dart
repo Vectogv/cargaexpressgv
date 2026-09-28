@@ -3,7 +3,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
-import '../shared/tickets/mis_tickets_screen.dart';
 import 'documents_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -82,7 +81,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellido')),
               const SizedBox(height: 8),
-              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email'), keyboardType: TextInputType.emailAddress),
+              TextField(
+                controller: emailCtrl,
+                enabled: false,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  helperText: 'Para cambiarlo, escribe a soporte',
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
               const SizedBox(height: 8),
               TextField(controller: telefonoCtrl, decoration: const InputDecoration(labelText: 'Teléfono'), keyboardType: TextInputType.phone),
             ],
@@ -98,7 +105,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final body = {
       'nombre': nombreCtrl.text.trim(),
       'apellido': apellidoCtrl.text.trim(),
-      'email': emailCtrl.text.trim(),
       'telefono': telefonoCtrl.text.trim(),
     };
     // Liberar los controladores tras la animación de cierre del diálogo
@@ -297,11 +303,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
           _buildMenuItem(Icons.directions_car_outlined, 'Vehículos', _showVehicleInfo),
           _buildMenuItem(Icons.description_outlined, 'Documentos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()))),
-          _buildMenuItem(
-            Icons.confirmation_number_outlined,
-            'Mis tickets de soporte',
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisTicketsScreen())),
-          ),
         ],
       ),
     );

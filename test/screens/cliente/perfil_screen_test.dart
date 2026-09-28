@@ -33,11 +33,10 @@ void main() {
     });
   });
 
-  test('cuerpo de actualización: sin nombre/apellido/correo vacíos; vacíos opcionales -> null', () {
+  test('cuerpo de actualización: sin nombre vacío; vacíos opcionales -> null; sin email', () {
     final body = cuerpoActualizacionPerfil(
       nombre: '  ',
       apellido: 'Pérez',
-      email: '',
       telefono: '',
       contactoNombre: ' Luis ',
       contactoTelefono: '',
@@ -51,7 +50,7 @@ void main() {
     expect(body['contactoEmergenciaTelefono'], isNull);
   });
 
-  testWidgets('editar perfil: correo inválido no se envía; contacto de emergencia sí', (tester) async {
+  testWidgets('editar perfil: el email no se puede editar ni se envía; contacto de emergencia sí', (tester) async {
     pantallaAlta(tester);
     final log = <http.Request>[];
     await conApiFalsa((req) {
@@ -72,19 +71,15 @@ void main() {
       expect(find.widgetWithText(TextField, 'Contacto de emergencia'), findsOneWidget);
       expect(find.text('Luis'), findsOneWidget);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'ana@malo');
-      await tester.tap(find.text('Guardar'));
-      await avanzar(tester);
-      expect(find.text('Ingresa un correo electrónico válido'), findsOneWidget);
-      expect(log.where((r) => r.method == 'PUT'), isEmpty);
+      final emailField = tester.widget<TextField>(find.widgetWithText(TextField, 'Email'));
+      expect(emailField.enabled, isFalse);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Email'), 'ana@nuevo.com');
       await tester.enterText(find.widgetWithText(TextField, 'Teléfono del contacto'), '3109876543');
       await tester.tap(find.text('Guardar'));
       await avanzar(tester);
     }, log: log);
     final put = log.singleWhere((r) => r.method == 'PUT');
-    expect(put.body, contains('"email":"ana@nuevo.com"'));
+    expect(put.body, isNot(contains('"email"')));
     expect(put.body, contains('"contactoEmergenciaTelefono":"3109876543"'));
   });
 

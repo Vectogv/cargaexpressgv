@@ -5,16 +5,15 @@ import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
-import '../shared/tickets/mis_tickets_screen.dart';
 import '../user/auth_screen.dart';
 
-/// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre,
-/// apellido y correo vacíos no se envían (no se borran); teléfono y contacto
-/// de emergencia vacíos se envían como null (el backend los acepta nulos).
+/// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre y
+/// apellido vacíos no se envían (no se borran); teléfono y contacto de
+/// emergencia vacíos se envían como null (el backend los acepta nulos). El
+/// email no se envía: es el usuario de inicio de sesión y no se edita aquí.
 Map<String, dynamic> cuerpoActualizacionPerfil({
   required String nombre,
   required String apellido,
-  required String email,
   required String telefono,
   required String contactoNombre,
   required String contactoTelefono,
@@ -23,7 +22,6 @@ Map<String, dynamic> cuerpoActualizacionPerfil({
   return {
     if (nombre.trim().isNotEmpty) 'nombre': nombre.trim(),
     if (apellido.trim().isNotEmpty) 'apellido': apellido.trim(),
-    if (email.trim().isNotEmpty) 'email': email.trim(),
     'telefono': opcional(telefono),
     'contactoEmergenciaNombre': opcional(contactoNombre),
     'contactoEmergenciaTelefono': opcional(contactoTelefono),
@@ -222,11 +220,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
       child: Column(
         children: [
           _buildMenuItem(Icons.person_outline, 'Informaci\u00f3n personal', _editInfo),
-          _buildMenuItem(
-            Icons.confirmation_number_outlined,
-            'Mis tickets de soporte',
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisTicketsScreen())),
-          ),
           _buildMenuItem(Icons.logout, 'Cerrar sesi\u00f3n', _saliendo ? null : _logout),
         ],
       ),
@@ -273,7 +266,6 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
   late final _telefono = _ctrl('telefono');
   late final _contactoNombre = _ctrl('contactoEmergenciaNombre');
   late final _contactoTelefono = _ctrl('contactoEmergenciaTelefono');
-  String? _errorEmail;
 
   TextEditingController _ctrl(String campo) =>
       TextEditingController(text: widget.perfil[campo]?.toString() ?? '');
@@ -287,28 +279,21 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
   }
 
   Widget _campo(TextEditingController c, String label, int max,
-          {TextInputType tipo = TextInputType.text, String? error}) =>
+          {TextInputType tipo = TextInputType.text, String? error, bool enabled = true, String? helper}) =>
       TextField(
         controller: c,
         keyboardType: tipo,
+        enabled: enabled,
         inputFormatters: [LengthLimitingTextInputFormatter(max)],
-        decoration: InputDecoration(labelText: label, errorText: error),
+        decoration: InputDecoration(labelText: label, errorText: error, helperText: helper),
       );
 
   void _guardar() {
-    // Correo vacío: no se cambia. Con texto, debe ser válido.
-    final email = _email.text.trim();
-    final error = email.isEmpty ? null : validarEmail(email);
-    if (error != null) {
-      setState(() => _errorEmail = error);
-      return;
-    }
     Navigator.pop(
       context,
       cuerpoActualizacionPerfil(
         nombre: _nombre.text,
         apellido: _apellido.text,
-        email: _email.text,
         telefono: _telefono.text,
         contactoNombre: _contactoNombre.text,
         contactoTelefono: _contactoTelefono.text,
@@ -328,7 +313,8 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
             const SizedBox(height: 8),
             _campo(_apellido, 'Apellido', LimitesUsuario.apellido),
             const SizedBox(height: 8),
-            _campo(_email, 'Email', LimitesUsuario.email, tipo: TextInputType.emailAddress, error: _errorEmail),
+            _campo(_email, 'Email', LimitesUsuario.email,
+                tipo: TextInputType.emailAddress, enabled: false, helper: 'Para cambiarlo, escribe a soporte'),
             const SizedBox(height: 8),
             _campo(_telefono, 'Teléfono', LimitesUsuario.telefono, tipo: TextInputType.phone),
             const SizedBox(height: 16),
