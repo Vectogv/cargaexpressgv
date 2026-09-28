@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../contracts/calificacion.dart';
 import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
+import '../shared/ui_compartida.dart';
+import '../user/auth_estilos.dart';
 import '../user/auth_screen.dart';
+import 'ajustes_screen.dart';
 
 /// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre y
 /// apellido vacíos no se envían (no se borran); teléfono y contacto de
@@ -39,6 +43,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
   Map<String, dynamic>? _profile;
   bool _loading = true;
   String? _error;
+  int _totalViajes = 0;
+  int _completados = 0;
+  int _cancelados = 0;
 
   static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _textDark = Color(0xFF1A1A2E);
@@ -54,8 +61,23 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   Future<void> _loadProfile() async {
     try {
-      final data = await ApiClient.instance.getProfile();
-      if (mounted) setState(() { _profile = data; _loading = false; });
+      // Envíos/Completados/Cancelados salen de contar el historial: el
+      // servidor no expone esos totales por separado.
+      final resultados = await Future.wait([
+        ApiClient.instance.getProfile(),
+        ApiClient.instance.getTripHistory(limit: 100),
+      ]);
+      final data = resultados[0] as Map<String, dynamic>;
+      final viajes = resultados[1] as List<Map<String, dynamic>>;
+      if (mounted) {
+        setState(() {
+          _profile = data;
+          _totalViajes = viajes.length;
+          _completados = viajes.where((v) => v['estado'] == 'finalizado').length;
+          _cancelados = viajes.where((v) => v['estado'] == 'cancelado').length;
+          _loading = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
     }
@@ -120,136 +142,276 @@ class _PerfilScreenState extends State<PerfilScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgLight,
-      appBar: AppBar(
-        backgroundColor: _white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('Perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.edit_outlined, size: 22, color: _textDark),
-            onPressed: _editInfo,
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: Colors.grey.shade300),
-                        const SizedBox(height: 12),
-                        const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 16, color: Colors.black54)),
-                        const SizedBox(height: 6),
-                        Text(_error!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: _textGrey)),
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            setState(() { _error = null; _loading = true; });
-                            _loadProfile();
-                          },
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('Reintentar'),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? _buildError()
+                      : RefreshIndicator(
+                          onRefresh: _loadProfile,
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildStatsCard(),
+                                const SizedBox(height: 16),
+                                _seccionTitulo('Calificación'),
+                                _buildCalificacionCard(),
+                                const SizedBox(height: 16),
+                                _seccionTitulo('Preferencias'),
+                                _buildPreferenciasCard(),
+                                const SizedBox(height: 16),
+                                _seccionTitulo('Cuenta'),
+                                _buildCuentaCard(),
+                              ],
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
-                )
-              : SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildProfileCard(),
-                      const SizedBox(height: 12),
-                      _buildMenuItems(),
-                    ],
-                  ),
-                ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildProfileCard() {
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 16, color: Colors.black54)),
+            const SizedBox(height: 6),
+            Text(_error!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: _textGrey)),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() { _error = null; _loading = true; });
+                _loadProfile();
+              },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
     final nombre = '${_profile?['nombre'] ?? ApiClient.instance.nombre ?? ''} ${_profile?['apellido'] ?? ''}'.trim();
     final email = _profile?['email'] as String? ?? ApiClient.instance.email ?? '';
     final avatar = _profile?['avatar'] as String?;
     final telefono = _profile?['telefono'] as String?;
 
     return Container(
-      color: _white,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      child: Row(
+      color: _primaryDark,
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
         children: [
-          GestureDetector(
-            onTap: _pickAvatar,
-            child: Stack(
+          SizedBox(
+            height: 56,
+            child: Row(
               children: [
-                MediaAvatar(
-                  path: avatar,
-                  name: nombre,
-                  radius: 35,
-                  backgroundColor: _primaryDark,
-                  foregroundColor: Colors.white,
-                  fontSize: 22,
-                  border: Border.all(color: Colors.grey.shade200, width: 2),
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
                 ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: _primaryDark,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: _white, width: 2),
-                    ),
-                    child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
-                  ),
+                const Text('Mi perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20, color: Colors.white),
+                  onPressed: _editInfo,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: _pickAvatar,
+                  child: Stack(
+                    children: [
+                      MediaAvatar(
+                        path: avatar,
+                        name: nombre,
+                        radius: 32,
+                        backgroundColor: _white,
+                        foregroundColor: _primaryDark,
+                        fontSize: 20,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: _primaryDark,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: _white, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nombre.isNotEmpty ? nombre : 'Cliente',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(email, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.75))),
+                      if (telefono != null && telefono.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(telefono, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.75))),
+                      ],
+                    ],
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: MarcaCargaExpress(sobreOscuro: true, tamano: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _seccionTitulo(String texto) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 4),
+        child: Text(
+          texto.toUpperCase(),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textGrey, letterSpacing: 0.4),
+        ),
+      );
+
+  Widget _buildStatsCard() {
+    return TarjetaBlanca(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+      child: Row(
+        children: [
+          Expanded(child: _stat(Icons.inventory_2_outlined, ColoresApp.azul, '$_totalViajes', 'Envíos')),
+          Container(width: 1, height: 40, color: ColoresApp.borde),
+          Expanded(child: _stat(Icons.check_circle_outline, ColoresApp.verde, '$_completados', 'Completados')),
+          Container(width: 1, height: 40, color: ColoresApp.borde),
+          Expanded(child: _stat(Icons.close, ColoresApp.rojo, '$_cancelados', 'Cancelados')),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(IconData icon, Color color, String valor, String etiqueta) {
+    return Column(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+          child: Icon(icon, size: 16, color: color),
+        ),
+        const SizedBox(height: 6),
+        Text(valor, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _textDark)),
+        const SizedBox(height: 2),
+        Text(etiqueta, style: TextStyle(fontSize: 11, color: _textGrey)),
+      ],
+    );
+  }
+
+  /// Calificación real: promedio que el servidor calcula en cada viaje que
+  /// un conductor califica a este cliente (`perfil.calificacion`,
+  /// POST /api/trips/:id/rate). "Nuevo" mientras no tenga viajes calificados.
+  Widget _buildCalificacionCard() {
+    final etiqueta = etiquetaCalificacion(_profile?['calificacion'], totalViajes: _totalViajes);
+    final esNuevo = etiqueta == 'Nuevo';
+    return TarjetaBlanca(
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: const BoxDecoration(color: Color(0xFFFFF7E6), shape: BoxShape.circle),
+            child: const Icon(Icons.star_rounded, size: 18, color: Color(0xFFF59E0B)),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  nombre.isNotEmpty ? nombre : 'Cliente',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
-                ),
+                const Text('Calificación como cliente', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
                 const SizedBox(height: 2),
-                Text(email, style: TextStyle(fontSize: 12, color: _textGrey)),
-                if (telefono != null && telefono.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(telefono, style: TextStyle(fontSize: 12, color: _textGrey)),
-                ],
+                Text(
+                  esNuevo ? 'Aún sin calificaciones de conductores' : 'Promedio de tus viajes',
+                  style: TextStyle(fontSize: 12, color: _textGrey),
+                ),
               ],
             ),
           ),
+          Text(etiqueta, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: esNuevo ? _textGrey : _textDark)),
         ],
       ),
     );
   }
 
-  Widget _buildMenuItems() {
-    return Container(
-      color: _white,
+  Widget _buildPreferenciasCard() {
+    return TarjetaBlanca(
+      padding: EdgeInsets.zero,
+      child: _filaValor(Icons.language, 'Idioma de la app', 'Español'),
+    );
+  }
+
+  Widget _filaValor(IconData icon, String label, String valor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: _textDark),
+          const SizedBox(width: 14),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
+          Text(valor, style: TextStyle(fontSize: 14, color: _textGrey)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCuentaCard() {
+    return TarjetaBlanca(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _buildMenuItem(Icons.person_outline, 'Informaci\u00f3n personal', _editInfo),
-          _buildMenuItem(Icons.logout, 'Cerrar sesi\u00f3n', _saliendo ? null : _logout),
+          _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
+          _buildMenuItem(
+            Icons.tune,
+            'Ajustes',
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen())),
+          ),
+          _buildMenuItem(Icons.logout, 'Cerrar sesión', _saliendo ? null : _logout, divisor: false),
         ],
       ),
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap) {
+  Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap, {bool divisor = true}) {
     return Column(
       children: [
         InkWell(
@@ -266,7 +428,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
             ),
           ),
         ),
-        const Divider(height: 1, indent: 56, endIndent: 0),
+        if (divisor) const Divider(height: 1, indent: 56, endIndent: 0),
       ],
     );
   }
