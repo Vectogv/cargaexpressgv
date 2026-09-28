@@ -69,6 +69,10 @@ class ConfirmarEntregaScreen extends StatefulWidget {
   /// vuelve a la primera ruta.
   final VoidCallback? onVolverAlInicio;
 
+  /// Abre de una vez el diálogo de rechazo (botón "Hay un problema" del
+  /// inicio), sin esperar a que el cliente toque "Rechazar".
+  final bool rechazarAlAbrir;
+
   const ConfirmarEntregaScreen({
     super.key,
     required this.onConfirmar,
@@ -79,6 +83,7 @@ class ConfirmarEntregaScreen extends StatefulWidget {
     this.justificacionConductor,
     this.enDisputa = false,
     this.onVolverAlInicio,
+    this.rechazarAlAbrir = false,
   });
 
   @override
@@ -96,6 +101,14 @@ class _ConfirmarEntregaScreenState extends State<ConfirmarEntregaScreen> {
   bool _rechazada = false;
 
   bool get _enDisputa => _rechazada || widget.enDisputa;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.rechazarAlAbrir) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleRechazar());
+    }
+  }
 
   /// Ejecuta la acción con ambos botones bloqueados. Devuelve `true` si
   /// terminó sin error. Si falla, avisa en español y los botones vuelven a

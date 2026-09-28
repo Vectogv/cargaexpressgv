@@ -2,17 +2,21 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../contracts/cancelacion.dart';
-import '../../contracts/trip_status.dart';
 import '../../contracts/socket_events.dart';
+import '../../core/formato_dinero.dart';
 import '../../widgets/carga_express_bottom_nav.dart';
 import '../../services/api_client.dart';
 import '../../services/api/payment_service.dart';
 import '../../services/cache_service.dart';
+import '../../services/config_cliente_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
+import '../shared/action_key.dart';
+import '../shared/ui_compartida.dart';
 import '../user/auth_screen.dart';
 import '../conductor/notifications_screen.dart';
 import 'cliente_inicio_view.dart';
+import 'confirmar_entrega_screen.dart';
 import 'nuevo_envio_screen.dart';
 import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
@@ -21,6 +25,7 @@ import 'pagos_screen.dart';
 import 'soporte_screen.dart';
 import 'ajustes_screen.dart';
 import 'viaje_detalle_screen.dart';
+import 'viaje_finalizado.dart';
 
 class ClienteHomeScreen extends StatefulWidget {
   const ClienteHomeScreen({super.key});
@@ -33,9 +38,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   static const Color _primaryBlue = Color(0xFF2563EB);
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
-  static const Color _white = Colors.white;
-
-  int _selectedNavIndex = 0;
 
   Map<String, dynamic>? _activeTrip;
   bool _loading = true;
@@ -51,6 +53,11 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   // Resolución de disputa y verificación de pago cambian la deuda y el
   // estado de los envíos: se refresca sin esperar a que el cliente recargue.
   final List<StreamSubscription<Map<String, dynamic>>> _cuentaSubs = [];
+  // El socket muere en segundo plano: con un viaje activo en la tarjeta se
+  // relee su estado cada 20 s, como en el resto de la app.
+  Timer? _sondeo;
+  final ActionKey _confirmCloseKey = ActionKey();
+  final ActionKey _rejectCloseKey = ActionKey();
 
   @override
   void initState() {
@@ -60,6 +67,11 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     _loadRecientes();
     _loadDeuda();
     NotificationService.instance.refresh();
+    // Plazo de confirmación que muestra la tarjeta de entrega por confirmar.
+    ConfigClienteService.instance.cargar();
+    _sondeo = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (mounted && _activeTrip != null && ModalRoute.of(context)?.isCurrent == true) _loadActiveTrip();
+    });
 
     _socketSub = NotificationService.instance.onNotification.listen((event) {
       final tipo = event['__event'] as String?;
@@ -107,6 +119,7 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _sondeo?.cancel();
     _socketSub?.cancel();
     for (final s in _cuentaSubs) {
       s.cancel();
@@ -119,17 +132,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
       final trip = await ApiClient.instance.getActiveTrip();
       if (trip != null) {
         CacheService.instance.cacheActiveTrip(trip);
-        if (mounted) {
-          setState(() { _activeTrip = trip; _loading = false; _errorActivo = false; });
-          // Un viaje en disputa sigue "activo" en el backend, pero no hay nada
-          // que rastrear: no se fuerza la redireccion (evita que "Volver al
-          // inicio" rebote de nuevo al seguimiento). La tarjeta lo muestra.
-          final enDisputa = trip['estado'] == TripStatus.disputa ||
-              trip['estado'] == TripStatus.enDisputa;
-          if (!_redirected && !enDisputa) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => _redirectToTracking());
-          }
-        }
+        // El inicio muestra el viaje activo en su tarjeta (estado, progreso,
+        // PIN y confirmación de entrega): ya no se salta solo al rastreo.
+        if (mounted) setState(() { _activeTrip = trip; _loading = false; _errorActivo = false; });
       } else {
         CacheService.instance.clearActiveTrip();
         if (mounted) setState(() { _activeTrip = null; _loading = false; _errorActivo = false; });
@@ -202,10 +207,55 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     });
   }
 
+  /// Confirmar o rechazar la entrega desde la tarjeta del inicio, con la
+  /// misma pantalla y las mismas llamadas (POST /trips/:id/confirm-close)
+  /// que usa el rastreo.
+  void _confirmarEntrega({bool rechazar = false}) {
+    final viaje = _activeTrip;
+    if (viaje == null) return;
+    final tripId = (viaje['_id'] ?? viaje['id']).toString();
+    final precio = viaje['precioFinal'] ?? viaje['precioEstimado'];
+    final monto = precio is num ? precio : num.tryParse(precio?.toString() ?? '');
+    _abrir(
+      ConfirmarEntregaScreen(
+        montoFinal: monto == null ? null : 'Monto final: ${formatearPesos(monto)}',
+        rechazarAlAbrir: rechazar,
+        onConfirmar: () async {
+          try {
+            await ApiClient.instance.confirmClose(tripId, confirmar: true, idempotencyKey: _confirmCloseKey.keyFor(tripId));
+            _confirmCloseKey.settle();
+          } catch (e) {
+            _confirmCloseKey.settle(e);
+            rethrow;
+          }
+          if (!mounted) return;
+          CacheService.instance.clearActiveTrip();
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => ViajeFinalizado(trip: viaje, conductor: Map<String, dynamic>.from(viaje['conductor'] as Map? ?? {}))),
+            (r) => r.isFirst,
+          );
+        },
+        // ConfirmarEntregaScreen muestra "Disputa abierta" y al volver el
+        // inicio relee el viaje (queda en disputa).
+        onRechazar: (motivo) async {
+          try {
+            await ApiClient.instance.confirmClose(tripId, confirmar: false, motivo: motivo, idempotencyKey: _rejectCloseKey.keyFor('$tripId|$motivo'));
+            _rejectCloseKey.settle();
+          } catch (e) {
+            _rejectCloseKey.settle(e);
+            rethrow;
+          }
+        },
+      ),
+      recargar: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _white,
+      backgroundColor: ColoresApp.fondo,
       drawer: _buildDrawer(),
       body: SafeArea(
         child: Column(
@@ -225,8 +275,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
                 onVerSeguimiento: () => _abrir(const RastreoScreen(), recargar: true),
                 onVerViaje: (v) => _abrir(ViajeDetalleScreen(tripId: v['_id'] ?? v['id'])),
                 onHistorial: () => _abrir(const MisEnviosScreen()),
-                onPerfil: () => _abrir(const PerfilScreen()),
-                onSoporte: () => _abrir(const SoporteScreen()),
+                onConfirmarEntrega: _confirmarEntrega,
+                onReportarProblema: () => _confirmarEntrega(rechazar: true),
                 onReintentar: _refrescar,
                 onRefresh: _refrescar,
               ),
@@ -234,16 +284,15 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
           ],
         ),
       ),
+      // Las otras pestañas abren su pantalla encima del inicio; al volver se
+      // relee la deuda (el admin puede liberar la cuenta sin socket).
       bottomNavigationBar: CargaExpressBottomNav(
-        currentIndex: _selectedNavIndex,
+        currentIndex: 0,
         items: [
-          (icon: Icons.home_rounded, label: 'Inicio', onTap: () {
-            setState(() => _selectedNavIndex = 0);
-          }),
-          (icon: Icons.person_outline_rounded, label: 'Perfil', onTap: () {
-            setState(() => _selectedNavIndex = 1);
-            _onNavTap(1);
-          }),
+          (icon: Icons.home_rounded, label: 'Inicio', onTap: () {}),
+          (icon: Icons.inventory_2_outlined, label: 'Mis envíos', onTap: () => _abrir(const MisEnviosScreen())),
+          (icon: Icons.support_agent_rounded, label: 'Soporte', onTap: () => _abrir(const SoporteScreen())),
+          (icon: Icons.person_outline_rounded, label: 'Perfil', onTap: () => _abrir(const PerfilScreen())),
         ],
       ),
     );
@@ -276,14 +325,18 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
                     child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
                   ),
                   const SizedBox(width: 10),
-                  const Text(
-                    'CargaExpress',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black87,
-                      letterSpacing: -0.3,
-                    ),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text.rich(
+                        TextSpan(
+                          text: 'Carga',
+                          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _textDark, letterSpacing: -0.3),
+                          children: [TextSpan(text: 'Express', style: TextStyle(color: _primaryBlue))],
+                        ),
+                      ),
+                      Text('Tu carga, en buenas manos', style: TextStyle(fontSize: 11, color: _textGrey)),
+                    ],
                   ),
                 ],
               ),
@@ -371,16 +424,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
           ),
       ],
     );
-  }
-
-  void _onNavTap(int index) {
-    switch (index) {
-      case 0:
-        break;
-      case 1:
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen()));
-        break;
-    }
   }
 
   Widget _buildDrawer() {
