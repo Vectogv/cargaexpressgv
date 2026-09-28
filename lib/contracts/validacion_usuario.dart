@@ -20,6 +20,7 @@ class LimitesUsuario {
 }
 
 final RegExp _email = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
+final RegExp _telefono = RegExp(r'^\+?[0-9]{7,15}$');
 
 /// null si el correo es válido; si no, el mensaje para el usuario.
 String? validarEmail(String valor) {
@@ -27,6 +28,16 @@ String? validarEmail(String valor) {
   if (v.isEmpty || v.length > LimitesUsuario.email || !_email.hasMatch(v)) {
     return 'Ingresa un correo electrónico válido';
   }
+  return null;
+}
+
+/// Teléfono: solo dígitos (con "+" opcional al inicio), 7 a 15 dígitos.
+/// Con [opcional] en true, el campo vacío es válido (para el contacto de
+/// emergencia, que no siempre se conoce).
+String? validarTelefono(String valor, {bool opcional = false}) {
+  final v = valor.trim();
+  if (v.isEmpty) return opcional ? null : 'El teléfono es obligatorio';
+  if (!_telefono.hasMatch(v)) return 'Ingresa un teléfono válido';
   return null;
 }
 

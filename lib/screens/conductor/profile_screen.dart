@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
@@ -69,36 +70,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final emailCtrl = TextEditingController(text: _profile?['email'] as String? ?? '');
     final telefonoCtrl = TextEditingController(text: _profile?['telefono'] as String? ?? '');
 
+    String? errorTelefono;
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Editar perfil'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-              const SizedBox(height: 8),
-              TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellido')),
-              const SizedBox(height: 8),
-              TextField(
-                controller: emailCtrl,
-                enabled: false,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  helperText: 'Para cambiarlo, escribe a soporte',
-                ),
-                keyboardType: TextInputType.emailAddress,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Editar perfil'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+                  const SizedBox(height: 8),
+                  TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellido')),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: emailCtrl,
+                    enabled: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      helperText: 'Para cambiarlo, escribe a soporte',
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: telefonoCtrl,
+                    decoration: InputDecoration(labelText: 'Teléfono', errorText: errorTelefono),
+                    keyboardType: TextInputType.phone,
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              TextField(controller: telefonoCtrl, decoration: const InputDecoration(labelText: 'Teléfono'), keyboardType: TextInputType.phone),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+              ElevatedButton(
+                onPressed: () {
+                  final error = validarTelefono(telefonoCtrl.text);
+                  if (error != null) {
+                    setDialogState(() => errorTelefono = error);
+                    return;
+                  }
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text('Guardar'),
+              ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
-        ],
+          );
+        },
       ),
     );
 

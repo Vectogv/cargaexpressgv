@@ -138,7 +138,30 @@ class _PerfilScreenState extends State<PerfilScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 16, color: Colors.black54)),
+                        const SizedBox(height: 6),
+                        Text(_error!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: _textGrey)),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() { _error = null; _loading = true; });
+                            _loadProfile();
+                          },
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : SingleChildScrollView(
                   child: Column(
                     children: [
@@ -267,6 +290,9 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
   late final _contactoNombre = _ctrl('contactoEmergenciaNombre');
   late final _contactoTelefono = _ctrl('contactoEmergenciaTelefono');
 
+  String? _errorTelefono;
+  String? _errorContactoTelefono;
+
   TextEditingController _ctrl(String campo) =>
       TextEditingController(text: widget.perfil[campo]?.toString() ?? '');
 
@@ -289,6 +315,15 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
       );
 
   void _guardar() {
+    final errorTelefono = validarTelefono(_telefono.text);
+    final errorContacto = validarTelefono(_contactoTelefono.text, opcional: true);
+    if (errorTelefono != null || errorContacto != null) {
+      setState(() {
+        _errorTelefono = errorTelefono;
+        _errorContactoTelefono = errorContacto;
+      });
+      return;
+    }
     Navigator.pop(
       context,
       cuerpoActualizacionPerfil(
@@ -316,12 +351,13 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
             _campo(_email, 'Email', LimitesUsuario.email,
                 tipo: TextInputType.emailAddress, enabled: false, helper: 'Para cambiarlo, escribe a soporte'),
             const SizedBox(height: 8),
-            _campo(_telefono, 'Teléfono', LimitesUsuario.telefono, tipo: TextInputType.phone),
+            _campo(_telefono, 'Teléfono', LimitesUsuario.telefono,
+                tipo: TextInputType.phone, error: _errorTelefono),
             const SizedBox(height: 16),
             _campo(_contactoNombre, 'Contacto de emergencia', LimitesUsuario.contactoNombre),
             const SizedBox(height: 8),
             _campo(_contactoTelefono, 'Teléfono del contacto', LimitesUsuario.contactoTelefono,
-                tipo: TextInputType.phone),
+                tipo: TextInputType.phone, error: _errorContactoTelefono),
           ],
         ),
       ),

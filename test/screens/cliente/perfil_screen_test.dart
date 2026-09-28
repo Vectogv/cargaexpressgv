@@ -74,12 +74,20 @@ void main() {
       final emailField = tester.widget<TextField>(find.widgetWithText(TextField, 'Email'));
       expect(emailField.enabled, isFalse);
 
+      // El teléfono propio es obligatorio: sin él, Guardar no manda el PUT.
+      await tester.tap(find.text('Guardar'));
+      await avanzar(tester);
+      expect(find.text('El teléfono es obligatorio'), findsOneWidget);
+      expect(log.where((r) => r.method == 'PUT'), isEmpty);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Teléfono'), '3001112233');
       await tester.enterText(find.widgetWithText(TextField, 'Teléfono del contacto'), '3109876543');
       await tester.tap(find.text('Guardar'));
       await avanzar(tester);
     }, log: log);
     final put = log.singleWhere((r) => r.method == 'PUT');
     expect(put.body, isNot(contains('"email"')));
+    expect(put.body, contains('"telefono":"3001112233"'));
     expect(put.body, contains('"contactoEmergenciaTelefono":"3109876543"'));
   });
 

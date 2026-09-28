@@ -25,6 +25,16 @@ void main() {
       expect(validarPasswordRegistro('a' * 33), isNotNull);
     });
 
+    test('teléfono: obligatorio salvo opcional; solo dígitos, 7 a 15, "+" opcional', () {
+      expect(validarTelefono(''), 'El teléfono es obligatorio');
+      expect(validarTelefono('', opcional: true), isNull);
+      expect(validarTelefono('123456'), isNotNull); // < 7 dígitos
+      expect(validarTelefono('3001234567'), isNull);
+      expect(validarTelefono('+573001234567'), isNull);
+      expect(validarTelefono('300 123 4567'), isNotNull); // espacios no
+      expect(validarTelefono('abc1234567'), isNotNull);
+    });
+
     test('edad: 18 a 120', () {
       expect(validarEdad(''), 'La edad es obligatoria');
       expect(validarEdad('17'), isNotNull);
