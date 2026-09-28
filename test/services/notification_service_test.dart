@@ -183,6 +183,24 @@ void main() {
     expect(abiertos, ['12', '13']);
   });
 
+  test('tocar un push de viaje (estado / cancelado / disputa) abre el viaje', () {
+    final abiertos = <String>[];
+    service.abrirViaje = abiertos.add;
+    addTearDown(() => service.abrirViaje = null);
+
+    service.manejarToqueDePush({'tipo': 'viaje_estado', 'viajeId': '51'}, titulo: 'El conductor llegó');
+    service.manejarToqueDePush({'tipo': 'viaje_cancelado', 'viajeId': '52'});
+    service.manejarToqueDePush({'tipo': 'disputa_resuelta', 'viajeId': '53'});
+    expect(abiertos, ['51', '52', '53']);
+
+    // Sin viajeId, de otro tipo o sin sesión no abre nada.
+    service.manejarToqueDePush({'tipo': 'viaje_estado'});
+    service.manejarToqueDePush({'tipo': 'ticket_estado', 'viajeId': '54'});
+    sesion = false;
+    service.manejarToqueDePush({'tipo': 'viaje_estado', 'viajeId': '55'});
+    expect(abiertos, ['51', '52', '53']);
+  });
+
   test('normalizar saca el ticketId de la raíz o de data/datos (notification:new)', () {
     expect(NotificationService.normalizar({'id': 'n1', 'tipo': 'ticket_estado', 'ticketId': 12})['ticketId'], '12');
     expect(NotificationService.normalizar({'id': 'n2', 'tipo': 'ticket_mensaje', 'data': {'ticketId': '15'}})['ticketId'], '15');

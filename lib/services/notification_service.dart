@@ -48,6 +48,14 @@ class NotificationService {
   /// Tipos de push/notificación que llevan al detalle de un ticket.
   static bool esTipoTicket(String? tipo) => tipo == 'ticket_mensaje' || tipo == 'ticket_estado';
 
+  /// Qué hacer al tocar un push de un viaje (`tipo` = `viaje_estado`,
+  /// `viaje_cancelado` o `disputa_resuelta`, con `viajeId`): abrir el viaje.
+  /// Lo conecta `main.dart`.
+  void Function(String viajeId)? abrirViaje;
+
+  static bool esTipoViaje(String? tipo) =>
+      tipo == 'viaje_estado' || tipo == 'viaje_cancelado' || tipo == 'disputa_resuelta';
+
   final _controller = StreamController<Map<String, dynamic>>.broadcast();
   bool _initialized = false;
   String? _fcmToken;
@@ -461,6 +469,18 @@ class NotificationService {
           abrir(ticketId);
         } catch (e) {
           LoggerService.instance.error('NotificationService.abrirTicket error', e);
+        }
+      }
+    }
+    final viajeId = data['viajeId']?.toString();
+    if (esTipoViaje(data['tipo']?.toString()) && viajeId != null && viajeId.isNotEmpty) {
+      entry['__navigate'] = 'viaje';
+      final abrir = abrirViaje;
+      if (abrir != null && hasSession()) {
+        try {
+          abrir(viajeId);
+        } catch (e) {
+          LoggerService.instance.error('NotificationService.abrirViaje error', e);
         }
       }
     }

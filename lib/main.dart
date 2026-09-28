@@ -24,6 +24,7 @@ import 'screens/user/auth_screen.dart';
 import 'screens/shared/cuenta_no_activa_dialog.dart' show mostrarCuentaSuspendidaDialog;
 import 'screens/shared/tickets/tickets_navegacion.dart' show abrirTicketSoporteGlobal;
 import 'screens/home_by_role.dart';
+import 'screens/cliente/viaje_navegacion.dart' show abrirViajeGlobal;
 
 final GlobalKey<NavigatorState> _navigatorKey = navegadorGlobal;
 
@@ -61,6 +62,8 @@ void main() {
       // Tocar un push de ticket de soporte abre su detalle (también cuando
       // la app estaba cerrada: getInitialMessage corre en init()).
       NotificationService.instance.abrirTicket = abrirTicketSoporteGlobal;
+      // Igual con los push de un viaje (estado, cancelación, disputa).
+      NotificationService.instance.abrirViaje = abrirViajeGlobal;
 
       // 3. Servicios críticos (await — bloqueantes antes del runApp).
       await _initServices();
