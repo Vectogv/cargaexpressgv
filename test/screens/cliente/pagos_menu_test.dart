@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/screens/cliente/home_screen.dart';
 import 'package:cargaexpress/screens/cliente/pagos_screen.dart';
+import 'package:cargaexpress/screens/cliente/perfil_screen.dart';
 import 'package:cargaexpress/screens/cliente/soporte_screen.dart';
 
 import '../../helpers/fake_api.dart';
@@ -15,11 +16,6 @@ http.Response _base(http.Request req, Object? pagos) {
     return pagos is http.Response ? pagos : jsonResp(pagos);
   }
   return jsonResp({'data': []});
-}
-
-Future<void> _abrirMenu(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Menú'));
-  await avanzar(tester);
 }
 
 void main() {
@@ -44,41 +40,43 @@ void main() {
     });
   });
 
-  testWidgets('sin deuda: Pagos no aparece en el menú ni hay aviso', (tester) async {
+  testWidgets('sin deuda: sin aviso en el inicio ni Pagos en el perfil', (tester) async {
     pantallaAlta(tester);
     await conApiFalsa((req) => _base(req, {'estadoCuenta': 'activa', 'montoDeuda': null}), () async {
       await tester.pumpWidget(const MaterialApp(home: ClienteHomeScreen()));
       await avanzar(tester);
       expect(find.byKey(const Key('aviso_pago_pendiente')), findsNothing);
-      await _abrirMenu(tester);
-      expect(find.text('Mis viajes'), findsOneWidget);
+
+      await tester.pumpWidget(const MaterialApp(home: PerfilScreen()));
+      await avanzar(tester);
       expect(find.text('Pagos'), findsNothing);
     });
   });
 
-  testWidgets('si /api/payments falla, Pagos queda oculto', (tester) async {
+  testWidgets('si /api/payments falla, Pagos queda oculto en el perfil', (tester) async {
     pantallaAlta(tester);
     await conApiFalsa((req) => _base(req, errorResp(500)), () async {
-      await tester.pumpWidget(const MaterialApp(home: ClienteHomeScreen()));
+      await tester.pumpWidget(const MaterialApp(home: PerfilScreen()));
       await avanzar(tester);
-      await _abrirMenu(tester);
       expect(find.text('Pagos'), findsNothing);
     });
   });
 
-  testWidgets('deuda tras disputa sin suspensión: Pagos en el menú, sin aviso', (tester) async {
+  testWidgets('deuda tras disputa sin suspensión: Pagos en el perfil, sin aviso ni "Pendiente"', (tester) async {
     pantallaAlta(tester);
     await conApiFalsa((req) => _base(req, {'estadoCuenta': 'activa', 'montoDeuda': '20000.00'}), () async {
       await tester.pumpWidget(const MaterialApp(home: ClienteHomeScreen()));
       await avanzar(tester);
       expect(find.byKey(const Key('aviso_pago_pendiente')), findsNothing);
-      await _abrirMenu(tester);
+
+      await tester.pumpWidget(const MaterialApp(home: PerfilScreen()));
+      await avanzar(tester);
       expect(find.text('Pagos'), findsOneWidget);
       expect(find.text('Pendiente'), findsNothing);
     });
   });
 
-  testWidgets('suspendido por pago: aviso en el inicio que abre Pagos y Pagos destacado en el menú',
+  testWidgets('suspendido por pago: aviso en el inicio que abre Pagos y Pagos destacado en el perfil',
       (tester) async {
     pantallaAlta(tester);
     await conApiFalsa(
@@ -88,16 +86,17 @@ void main() {
       await avanzar(tester);
       expect(find.text('Tienes un pago pendiente'), findsOneWidget);
 
-      await _abrirMenu(tester);
+      await tester.tap(find.byKey(const Key('aviso_pago_pendiente')));
+      await avanzar(tester);
+      expect(find.byType(PagosScreen), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+      await avanzar(tester);
+
+      await tester.pumpWidget(const MaterialApp(home: PerfilScreen()));
+      await avanzar(tester);
       expect(find.text('Pagos'), findsOneWidget);
       expect(find.text('Pendiente'), findsOneWidget);
       await tester.tap(find.text('Pagos'));
-      await avanzar(tester);
-      expect(find.byType(PagosScreen), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
-      await avanzar(tester);
-      await tester.tap(find.byKey(const Key('aviso_pago_pendiente')));
       await avanzar(tester);
       expect(find.byType(PagosScreen), findsOneWidget);
     });

@@ -13,7 +13,6 @@ import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
 import '../shared/action_key.dart';
 import '../shared/ui_compartida.dart';
-import '../user/auth_screen.dart';
 import '../conductor/notifications_screen.dart';
 import 'cliente_inicio_view.dart';
 import 'confirmar_entrega_screen.dart';
@@ -23,7 +22,6 @@ import 'rastreo_screen.dart';
 import 'perfil_screen.dart';
 import 'pagos_screen.dart';
 import 'soporte_screen.dart';
-import 'ajustes_screen.dart';
 import 'viaje_detalle_screen.dart';
 import 'viaje_finalizado.dart';
 
@@ -46,8 +44,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   bool _cargandoRecientes = true;
   bool _errorRecientes = false;
   bool _redirected = false;
-  // Pagos sólo aparece si hay deuda (GET /api/payments).
-  bool _tieneDeuda = false;
   bool _suspendidoPorPago = false;
   StreamSubscription<Map<String, dynamic>>? _socketSub;
   // Resolución de disputa y verificación de pago cambian la deuda y el
@@ -166,7 +162,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
       final info = await PaymentService.getDebtInfo();
       if (mounted) {
         setState(() {
-          _tieneDeuda = tieneDeudaPendiente(info);
           _suspendidoPorPago = cuentaSuspendidaPorPago(info);
         });
       }
@@ -256,7 +251,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ColoresApp.fondo,
-      drawer: _buildDrawer(),
       body: SafeArea(
         child: Column(
           children: [
@@ -300,48 +294,32 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
       child: Row(
         children: [
-          Builder(builder: (ctx) {
-            return IconButton(
-              tooltip: 'Menú',
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
-              icon: const Icon(Icons.menu_rounded, color: _textDark),
-            );
-          }),
-          Builder(builder: (ctx) {
-            return GestureDetector(
-              onTap: () => Scaffold.of(ctx).openDrawer(),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: _primaryBlue,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text.rich(
-                        TextSpan(
-                          text: 'Carga',
-                          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _textDark, letterSpacing: -0.3),
-                          children: [TextSpan(text: 'Express', style: TextStyle(color: _primaryBlue))],
-                        ),
-                      ),
-                      Text('Tu carga, en buenas manos', style: TextStyle(fontSize: 11, color: _textGrey)),
-                    ],
-                  ),
-                ],
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _primaryBlue,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
+                TextSpan(
+                  text: 'Carga',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: _textDark, letterSpacing: -0.3),
+                  children: [TextSpan(text: 'Express', style: TextStyle(color: _primaryBlue))],
+                ),
               ),
-            );
-          }),
+              Text('Tu carga, en buenas manos', style: TextStyle(fontSize: 11, color: _textGrey)),
+            ],
+          ),
           const Spacer(),
           // Misma fuente que la pantalla de notificaciones.
           ValueListenableBuilder<int>(
@@ -426,74 +404,5 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildDrawer() {
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-              color: _primaryBlue,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Colors.white24,
-                    child: const Icon(Icons.person, color: Colors.white, size: 30),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(ApiClient.instance.nombreCompleto, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(ApiClient.instance.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                ],
-              ),
-            ),
-            _buildDrawerItem(Icons.person_outline, 'Perfil', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PerfilScreen()))),
-            _buildDrawerItem(Icons.route_outlined, 'Mis viajes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisEnviosScreen()))),
-            if (_tieneDeuda)
-              _buildDrawerItem(Icons.payments_outlined, 'Pagos', _abrirPagos,
-                  destacado: _suspendidoPorPago ? 'Pendiente' : null),
-            _buildDrawerItem(Icons.support_agent, 'Soporte', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SoporteScreen()))),
-            _buildDrawerItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen()))),
-            const Spacer(),
-            const Divider(),
-            _buildDrawerItem(Icons.logout, 'Cerrar sesi\u00f3n', _logout, isDestructive: true),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem(IconData icon, String label, VoidCallback? onTap,
-      {bool isDestructive = false, String? destacado}) {
-    return ListTile(
-      leading: Icon(icon, color: isDestructive ? Colors.red : (destacado != null ? const Color(0xFFB91C1C) : _textGrey)),
-      title: Text(label, style: TextStyle(color: isDestructive ? Colors.red : _textDark)),
-      trailing: destacado == null
-          ? null
-          : Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(20)),
-              child: Text(destacado,
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFB91C1C))),
-            ),
-      onTap: () {
-        Navigator.pop(context);
-        if (onTap != null) onTap();
-      },
-    );
-  }
-
-  Future<void> _logout() async {
-    await ApiClient.instance.logout();
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
-    });
-  }
 }
 

@@ -5,11 +5,13 @@ import '../../contracts/calificacion.dart';
 import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
+import '../../services/api/payment_service.dart';
 import '../../widgets/media_image.dart';
 import '../shared/ui_compartida.dart';
 import '../user/auth_estilos.dart';
 import '../user/auth_screen.dart';
 import 'ajustes_screen.dart';
+import 'pagos_screen.dart';
 
 /// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre y
 /// apellido vacíos no se envían (no se borran); teléfono y contacto de
@@ -46,8 +48,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
   int _totalViajes = 0;
   int _completados = 0;
   int _cancelados = 0;
+  // Pagos sólo aparece si hay deuda (GET /api/payments), igual que en el inicio.
+  bool _tieneDeuda = false;
+  bool _suspendidoPorPago = false;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
   static const Color _bgLight = Color(0xFFF5F7FA);
@@ -57,6 +61,26 @@ class _PerfilScreenState extends State<PerfilScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+    _loadDeuda();
+  }
+
+  /// Si falla, Pagos queda oculto (no se bloquea el perfil).
+  Future<void> _loadDeuda() async {
+    try {
+      final info = await PaymentService.getDebtInfo();
+      if (mounted) {
+        setState(() {
+          _tieneDeuda = tieneDeudaPendiente(info);
+          _suspendidoPorPago = cuentaSuspendidaPorPago(info);
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _abrirPagos() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const PagosScreen())).then((_) {
+      if (mounted) _loadDeuda();
+    });
   }
 
   Future<void> _loadProfile() async {
@@ -152,7 +176,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   : _error != null
                       ? _buildError()
                       : RefreshIndicator(
-                          onRefresh: _loadProfile,
+                          onRefresh: () => Future.wait([_loadProfile(), _loadDeuda()]),
                           child: SingleChildScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.all(16),
@@ -214,7 +238,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final telefono = _profile?['telefono'] as String?;
 
     return Container(
-      color: _primaryDark,
+      color: _white,
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
         children: [
@@ -223,13 +247,13 @@ class _PerfilScreenState extends State<PerfilScreen> {
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
                   onPressed: () => Navigator.pop(context),
                 ),
-                const Text('Mi perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+                const Text('Mi perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 20, color: Colors.white),
+                  icon: const Icon(Icons.edit_outlined, size: 20, color: _textDark),
                   onPressed: _editInfo,
                 ),
               ],
@@ -248,8 +272,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         path: avatar,
                         name: nombre,
                         radius: 32,
-                        backgroundColor: _white,
-                        foregroundColor: _primaryDark,
+                        backgroundColor: ColoresApp.azul,
+                        foregroundColor: _white,
                         fontSize: 20,
                       ),
                       Positioned(
@@ -258,7 +282,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: _primaryDark,
+                            color: ColoresApp.azul,
                             shape: BoxShape.circle,
                             border: Border.all(color: _white, width: 2),
                           ),
@@ -275,20 +299,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     children: [
                       Text(
                         nombre.isNotEmpty ? nombre : 'Cliente',
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white),
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textDark),
                       ),
                       const SizedBox(height: 3),
-                      Text(email, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.75))),
+                      Text(email, style: TextStyle(fontSize: 12, color: _textGrey)),
                       if (telefono != null && telefono.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(telefono, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.75))),
+                        Text(telefono, style: TextStyle(fontSize: 12, color: _textGrey)),
                       ],
                     ],
                   ),
                 ),
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
-                  child: MarcaCargaExpress(sobreOscuro: true, tamano: 13),
+                  child: MarcaCargaExpress(tamano: 13),
                 ),
               ],
             ),
@@ -400,6 +424,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
       child: Column(
         children: [
           _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
+          if (_tieneDeuda)
+            _buildMenuItem(Icons.payments_outlined, 'Pagos', _abrirPagos,
+                destacado: _suspendidoPorPago ? 'Pendiente' : null),
           _buildMenuItem(
             Icons.tune,
             'Ajustes',
@@ -411,7 +438,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap, {bool divisor = true}) {
+  Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap,
+      {bool divisor = true, String? destacado}) {
     return Column(
       children: [
         InkWell(
@@ -420,9 +448,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
-                Icon(icon, size: 22, color: _textDark),
+                Icon(icon, size: 22, color: destacado != null ? const Color(0xFFB91C1C) : _textDark),
                 const SizedBox(width: 14),
                 Expanded(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
+                if (destacado != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(20)),
+                    child: Text(destacado,
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFB91C1C))),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Icon(Icons.chevron_right, color: Colors.grey.shade400),
               ],
             ),
