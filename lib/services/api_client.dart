@@ -221,6 +221,8 @@ class ApiClient {
 
   Future<String> uploadAvatar(Uint8List bytes, String filename) => ProfileService.uploadAvatar(bytes, filename);
 
+  Future<void> changePassword(String actual, String nueva) => ProfileService.changePassword(actual, nueva);
+
   // --- Documents ---
 
   Future<String> uploadDocumentCedula(Uint8List bytes, String filename) => DriverService.uploadDocumentCedula(bytes, filename);
@@ -315,8 +317,6 @@ class ApiClient {
 
   Future<List<Map<String, dynamic>>> getNotifications() => ProfileService.getNotifications();
   Future<void> markNotificationRead(dynamic id) => ProfileService.markNotificationRead(id);
-  Future<List<Map<String, dynamic>>> getForumPosts() => ProfileService.getForumPosts();
-  Future<Map<String, dynamic>> createForumPost(Map<String, dynamic> data) => ProfileService.createForumPost(data);
   Future<Map<String, dynamic>> getSurveyResults(dynamic id) => ProfileService.getSurveyResults(id);
   Future<void> answerSurvey(dynamic id, dynamic opcionId) => ProfileService.answerSurvey(id, opcionId);
   Future<Map<String, dynamic>> getHelp() => ProfileService.getHelp();

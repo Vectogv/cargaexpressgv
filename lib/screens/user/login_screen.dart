@@ -3,6 +3,7 @@ import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../home_by_role.dart';
+import '../shared/cambiar_password.dart';
 import 'auth_estilos.dart';
 import 'register_screen.dart';
 
@@ -155,11 +156,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                key: const Key('link_olvide_password'),
+                                onPressed: () => mostrarAyudaPasswordOlvidada(context),
+                                style: TextButton.styleFrom(foregroundColor: AuthColores.primario, padding: EdgeInsets.zero),
+                                child: const Text('¿Olvidaste tu contraseña?', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                              ),
+                            ),
                             if (_error != null) ...[
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 4),
                               AvisoErrorAuth(mensaje: _error!),
                             ],
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 12),
                             BotonPrincipalAuth(
                               key: const Key('btn_login'),
                               texto: 'Iniciar sesión',

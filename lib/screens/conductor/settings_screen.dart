@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
+import '../shared/cambiar_password.dart';
 import '../shared/ui_compartida.dart' show TarjetaBlanca;
 
 class SettingsScreen extends StatefulWidget {
@@ -100,6 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSwitchItem('Visible para clientes', _visible, (v) => setState(() { _visible = v; _save(); })),
           ]),
           const SizedBox(height: 12),
+          _buildSection('Cuenta', [
+            _buildLinkItem(Icons.lock_outline, 'Cambiar contraseña', () => mostrarDialogoCambiarPassword(context)),
+          ]),
+          const SizedBox(height: 12),
           _buildSection('General', [
             _buildInfoItem('Versión de la app', '1.0.0'),
           ]),
@@ -140,6 +145,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListTile(
       title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
       trailing: Text(value, style: TextStyle(fontSize: 14, color: _textGrey)),
+      dense: true,
+    );
+  }
+
+  Widget _buildLinkItem(IconData icon, String label, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, size: 22, color: _textGrey),
+      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+      onTap: onTap,
       dense: true,
     );
   }

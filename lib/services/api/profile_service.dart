@@ -16,6 +16,13 @@ class ProfileService {
     return data['avatar'] as String? ?? '';
   }
 
+  /// El admin resetea la contraseña por soporte; este es el único cambio que
+  /// puede hacer el propio usuario. 422 con `{message}` si la actual no
+  /// coincide (ver `_DialogoCambiarPassword` en shared/cambiar_password.dart).
+  static Future<void> changePassword(String actual, String nueva) async {
+    await HttpClient.put('/api/users/password', body: {'actual': actual, 'nueva': nueva}, auth: true);
+  }
+
   static Future<List<Map<String, dynamic>>> getNotifications({
     int page = 1,
     int limit = 20,
@@ -26,16 +33,6 @@ class ProfileService {
 
   static Future<void> markNotificationRead(dynamic id) async {
     await HttpClient.put('/api/notifications/$id/read', auth: true);
-  }
-
-  static Future<List<Map<String, dynamic>>> getForumPosts() async {
-    // Contrato backend: los avisos/foro viven en /api/avisos.
-    final list = await HttpClient.getList('/api/avisos', auth: true);
-    return list.cast<Map<String, dynamic>>();
-  }
-
-  static Future<Map<String, dynamic>> createForumPost(Map<String, dynamic> data) async {
-    return HttpClient.post('/api/avisos', body: data, auth: true);
   }
 
   static Future<Map<String, dynamic>> getSurveyResults(dynamic id) async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/cambiar_password.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
 import 'soporte_screen.dart';
 
@@ -43,6 +44,10 @@ class _AjustesScreenState extends State<AjustesScreen> {
           const SizedBox(height: 16),
           _buildSection('Idioma', [
             _buildInfoItem('Idioma de la app', 'Espa\u00f1ol'),
+          ]),
+          const SizedBox(height: 16),
+          _buildSection('Cuenta', [
+            _buildLinkItem(Icons.lock_outline, 'Cambiar contrase\u00f1a', () => mostrarDialogoCambiarPassword(context)),
           ]),
           const SizedBox(height: 16),
           _buildSection('Soporte', [
