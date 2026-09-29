@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,17 +16,15 @@ import '../user/auth_screen.dart';
 import 'ajustes_screen.dart';
 import 'pagos_screen.dart';
 
-/// Color de acento del avatar, elegido por el cliente en "Editar perfil" y
-/// guardado solo en el celular (no hay campo para esto en el servidor).
-const _claveColorPerfil = 'color_perfil_cliente';
-const List<Color> coloresPerfilDisponibles = [
-  ColoresApp.azul,
-  ColoresApp.verde,
-  ColoresApp.naranja,
-  ColoresApp.rojo,
-  ColoresApp.ambar,
-  ColoresApp.azulMarino,
-];
+/// Portada del perfil, elegida en "Editar perfil" y guardada solo en el
+/// celular (no hay campo para esto en el servidor).
+const _clavePortada = 'portada_perfil_cliente';
+const Map<String, String> portadasPerfil = {
+  'ruta': 'Ruta',
+  'ciudad': 'Ciudad Blanca',
+  'volcan': 'Puracé',
+  'liso': 'Azul',
+};
 
 /// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre y
 /// apellido vacíos no se envían (no se borran); teléfono y contacto de
@@ -64,27 +64,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
   // Pagos sólo aparece si hay deuda (GET /api/payments), igual que en el inicio.
   bool _tieneDeuda = false;
   bool _suspendidoPorPago = false;
-  Color _colorPerfil = ColoresApp.azul;
-
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
+  String _portada = 'ruta';
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
     _loadDeuda();
-    _cargarColorPerfil();
+    _cargarPortada();
   }
 
-  Future<void> _cargarColorPerfil() async {
+  Future<void> _cargarPortada() async {
     final prefs = await SharedPreferences.getInstance();
-    final valor = prefs.getInt(_claveColorPerfil);
-    if (mounted && valor != null) {
-      setState(() => _colorPerfil = Color(valor));
-    }
+    final valor = prefs.getString(_clavePortada);
+    if (mounted && portadasPerfil.containsKey(valor)) setState(() => _portada = valor!);
   }
 
   /// Si falla, Pagos queda oculto (no se bloquea el perfil).
@@ -142,7 +135,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
   }
 
-  Future<void> _pickAvatar() async {
+  /// Devuelve la URL nueva, o null si se canceló o falló.
+  Future<String?> _pickAvatar() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -150,7 +144,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       maxHeight: 1600,
       imageQuality: 75,
     );
-    if (picked == null || !mounted) return;
+    if (picked == null || !mounted) return null;
     final messenger = ScaffoldMessenger.of(context);
     try {
       final bytes = await picked.readAsBytes();
@@ -158,25 +152,33 @@ class _PerfilScreenState extends State<PerfilScreen> {
       final url = await ApiClient.instance.uploadAvatar(bytes, 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg');
       if (mounted && url.isNotEmpty) {
         setState(() { _profile?['avatar'] = url; });
-        messenger.showSnackBar(const SnackBar(content: Text('Avatar actualizado')));
+        messenger.showSnackBar(const SnackBar(content: Text('Foto actualizada')));
+        return url;
       }
     } on ApiException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
     }
+    return null;
   }
 
-  /// El diálogo guarda por su cuenta (así puede mostrar "Guardando..." y un
-  /// error sin perder lo escrito) y devuelve el color elegido si tuvo éxito,
-  /// o null si se canceló o falló.
+  /// La pantalla de edición guarda por su cuenta (así puede mostrar
+  /// "Guardando..." y un error sin perder lo escrito) y devuelve la portada
+  /// elegida si tuvo éxito, o null si se canceló.
   Future<void> _editInfo() async {
-    final color = await showDialog<Color>(
-      context: context,
-      builder: (_) => _EditarPerfilDialog(perfil: _profile ?? const {}, colorInicial: _colorPerfil),
+    final portada = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _EditarPerfilScreen(
+          perfil: _profile ?? const {},
+          portadaInicial: _portada,
+          cambiarFoto: _pickAvatar,
+        ),
+      ),
     );
-    if (color == null || !mounted) return;
-    setState(() => _colorPerfil = color);
+    if (portada == null || !mounted) return;
+    setState(() => _portada = portada);
     await _loadProfile();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
@@ -186,42 +188,45 @@ class _PerfilScreenState extends State<PerfilScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? _buildError()
-                      : RefreshIndicator(
-                          onRefresh: () => Future.wait([_loadProfile(), _loadDeuda()]),
-                          child: SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildStatsCard(),
-                                const SizedBox(height: 16),
-                                _seccionTitulo('Calificación'),
-                                _buildCalificacionCard(),
-                                const SizedBox(height: 16),
-                                _seccionTitulo('Preferencias'),
-                                _buildPreferenciasCard(),
-                                const SizedBox(height: 16),
-                                _seccionTitulo('Cuenta'),
-                                _buildCuentaCard(),
-                              ],
+      backgroundColor: ColoresApp.fondo,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? SafeArea(child: _buildError())
+              : RefreshIndicator(
+                  onRefresh: () => Future.wait([_loadProfile(), _loadDeuda()]),
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      _buildHeader(),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildStatsCard(),
+                            const SizedBox(height: 16),
+                            _buildListaCard(),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 48,
+                              child: TextButton(
+                                onPressed: _saliendo ? null : _logout,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: ColoresApp.rojoSesion,
+                                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: const Text('Cerrar sesión'),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-            ),
-          ],
-        ),
-      ),
+                      ),
+                    ],
+                  ),
+                ),
     );
   }
 
@@ -232,11 +237,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.grey.shade300),
+            const Icon(Icons.error_outline, size: 56, color: ColoresApp.chevron),
             const SizedBox(height: 12),
-            const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 16, color: Colors.black54)),
+            const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
             const SizedBox(height: 6),
-            Text(_error!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: _textGrey)),
+            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: () {
@@ -255,252 +260,336 @@ class _PerfilScreenState extends State<PerfilScreen> {
   Widget _buildHeader() {
     final nombre = '${_profile?['nombre'] ?? ApiClient.instance.nombre ?? ''} ${_profile?['apellido'] ?? ''}'.trim();
     final email = _profile?['email'] as String? ?? ApiClient.instance.email ?? '';
-    final avatar = _profile?['avatar'] as String?;
     final telefono = _profile?['telefono'] as String?;
+    const secundario = TextStyle(fontSize: 14, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares);
 
     return Container(
-      color: _white,
-      padding: const EdgeInsets.only(bottom: 20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: ColoresApp.borde)),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: 56,
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
-                  onPressed: () => Navigator.pop(context),
+          Stack(
+            children: [
+              SizedBox(height: 112 + MediaQuery.paddingOf(context).top, width: double.infinity, child: PortadaPerfil(id: _portada)),
+              if (Navigator.canPop(context))
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + 4,
+                  left: 4,
+                  child: IconButton(
+                    tooltip: 'Volver',
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ),
-                const Text('Mi perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 20, color: _textDark),
-                  onPressed: _editInfo,
-                ),
-              ],
-            ),
+            ],
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GestureDetector(
-                  onTap: _pickAvatar,
-                  child: Stack(
-                    children: [
-                      MediaAvatar(
-                        path: avatar,
-                        name: nombre,
-                        radius: 32,
-                        backgroundColor: _colorPerfil,
-                        foregroundColor: _white,
-                        fontSize: 20,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: _colorPerfil,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: _white, width: 2),
-                          ),
-                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        nombre.isNotEmpty ? nombre : 'Cliente',
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textDark),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(email, style: TextStyle(fontSize: 12, color: _textGrey)),
-                      if (telefono != null && telefono.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(telefono, style: TextStyle(fontSize: 12, color: _textGrey)),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _seccionTitulo(String texto) => Padding(
-        padding: const EdgeInsets.only(bottom: 8, left: 4),
-        child: Text(
-          texto.toUpperCase(),
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textGrey, letterSpacing: 0.4),
-        ),
-      );
-
-  Widget _buildStatsCard() {
-    return TarjetaBlanca(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
-      child: Row(
-        children: [
-          Expanded(child: _stat(Icons.inventory_2_outlined, ColoresApp.azul, '$_totalViajes', 'Envíos')),
-          Container(width: 1, height: 40, color: ColoresApp.borde),
-          Expanded(child: _stat(Icons.check_circle_outline, ColoresApp.verde, '$_completados', 'Completados')),
-          Container(width: 1, height: 40, color: ColoresApp.borde),
-          Expanded(child: _stat(Icons.close, ColoresApp.rojo, '$_cancelados', 'Cancelados')),
-        ],
-      ),
-    );
-  }
-
-  Widget _stat(IconData icon, Color color, String valor, String etiqueta) {
-    return Column(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
-          child: Icon(icon, size: 16, color: color),
-        ),
-        const SizedBox(height: 6),
-        Text(valor, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _textDark)),
-        const SizedBox(height: 2),
-        Text(etiqueta, style: TextStyle(fontSize: 11, color: _textGrey)),
-      ],
-    );
-  }
-
-  /// Calificación real: promedio que el servidor calcula en cada viaje que
-  /// un conductor califica a este cliente (`perfil.calificacion`,
-  /// POST /api/trips/:id/rate). "Nuevo" mientras no tenga viajes calificados.
-  Widget _buildCalificacionCard() {
-    final etiqueta = etiquetaCalificacion(_profile?['calificacion'], totalViajes: _totalViajes);
-    final esNuevo = etiqueta == 'Nuevo';
-    return TarjetaBlanca(
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: const BoxDecoration(color: Color(0xFFFFF7E6), shape: BoxShape.circle),
-            child: const Icon(Icons.star_rounded, size: 18, color: Color(0xFFF59E0B)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Calificación como cliente', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark)),
-                const SizedBox(height: 2),
-                Text(
-                  esNuevo ? 'Aún sin calificaciones de conductores' : 'Promedio de tus viajes',
-                  style: TextStyle(fontSize: 12, color: _textGrey),
+                SizedBox(
+                  height: 56,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        left: 0,
+                        top: -36,
+                        child: GestureDetector(onTap: _pickAvatar, child: _AvatarConBorde(perfil: _profile, nombre: nombre)),
+                      ),
+                      Positioned(right: 0, top: 4, child: OutlinedButton.icon(
+                      onPressed: _editInfo,
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text('Editar perfil'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ColoresApp.textoOscuro,
+                        minimumSize: const Size(0, 40),
+                        side: const BorderSide(color: ColoresApp.bordeCampo),
+                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    )),
+                    ],
+                  ),
                 ),
+                Text(
+                  nombre.isNotEmpty ? nombre : 'Cliente',
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro, letterSpacing: -0.2),
+                ),
+                const SizedBox(height: 4),
+                Text(email, style: secundario),
+                if (telefono != null && telefono.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(telefono, style: secundario),
+                ],
               ],
             ),
           ),
-          Text(etiqueta, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: esNuevo ? _textGrey : _textDark)),
         ],
       ),
     );
   }
 
-  Widget _buildPreferenciasCard() {
+  /// Total, calificación real (promedio que calcula el servidor en
+  /// POST /api/trips/:id/rate; "Nuevo" sin viajes calificados) y una barra
+  /// proporcional de completados/cancelados.
+  Widget _buildStatsCard() {
+    final calificacion = etiquetaCalificacion(_profile?['calificacion'], totalViajes: _totalViajes).replaceAll('.', ',');
+    const cifra = TextStyle(fontFeatures: cifrasTabulares);
     return TarjetaBlanca(
-      padding: EdgeInsets.zero,
-      child: _filaValor(Icons.language, 'Idioma de la app', 'Español'),
-    );
-  }
-
-  Widget _filaValor(IconData icon, String label, String valor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Row(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(icon, size: 20, color: _textDark),
-          const SizedBox(width: 14),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
-          Text(valor, style: TextStyle(fontSize: 14, color: _textGrey)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text('$_totalViajes',
+                  style: cifra.copyWith(fontSize: 32, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro, letterSpacing: -0.5)),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('envíos en total', style: TextStyle(fontSize: 15, color: ColoresApp.textoSecundario))),
+              const Icon(Icons.star_rounded, size: 18, color: ColoresApp.estrella),
+              const SizedBox(width: 4),
+              Text(calificacion, style: cifra.copyWith(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+              const SizedBox(width: 4),
+              const Text('calificación', style: TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Semantics(
+            label: '$_completados completados y $_cancelados cancelados de $_totalViajes envíos',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 8,
+                child: _completados + _cancelados == 0
+                    ? const ColoredBox(color: ColoresApp.divisor)
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_completados > 0) Expanded(flex: _completados, child: const ColoredBox(color: ColoresApp.azul)),
+                          if (_completados > 0 && _cancelados > 0) const SizedBox(width: 2),
+                          if (_cancelados > 0) Expanded(flex: _cancelados, child: const ColoredBox(color: ColoresApp.naranja)),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _leyenda(ColoresApp.azul, _completados, 'completados'),
+              const SizedBox(width: 20),
+              _leyenda(ColoresApp.naranja, _cancelados, 'cancelados'),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCuentaCard() {
+  Widget _leyenda(Color color, int valor, String texto) => Row(
+        children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 6),
+          Text.rich(TextSpan(
+            style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario),
+            children: [
+              TextSpan(
+                  text: '$valor',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+              TextSpan(text: ' $texto'),
+            ],
+          )),
+        ],
+      );
+
+  Widget _buildListaCard() {
+    final filas = <Widget>[
+      if (_tieneDeuda)
+        _fila(Icons.credit_card, 'Pagos', _abrirPagos, destacado: _suspendidoPorPago ? 'Pendiente' : null),
+      _fila(Icons.settings_outlined, 'Ajustes',
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen()))),
+    ];
     return TarjetaBlanca(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
-          if (_tieneDeuda)
-            _buildMenuItem(Icons.payments_outlined, 'Pagos', _abrirPagos,
-                destacado: _suspendidoPorPago ? 'Pendiente' : null),
-          _buildMenuItem(
-            Icons.tune,
-            'Ajustes',
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen())),
-          ),
-          _buildMenuItem(Icons.logout, 'Cerrar sesión', _saliendo ? null : _logout, divisor: false),
+          for (var i = 0; i < filas.length; i++) ...[
+            if (i > 0) const Divider(height: 1, thickness: 1, color: ColoresApp.divisor),
+            filas[i],
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap,
-      {bool divisor = true, String? destacado}) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              children: [
-                Icon(icon, size: 22, color: destacado != null ? const Color(0xFFB91C1C) : _textDark),
-                const SizedBox(width: 14),
-                Expanded(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
-                if (destacado != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(20)),
-                    child: Text(destacado,
-                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFB91C1C))),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Icon(Icons.chevron_right, color: Colors.grey.shade400),
-              ],
-            ),
+  Widget _fila(IconData icon, String label, VoidCallback onTap, {String? destacado}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: ColoresApp.textoSecundario),
+              const SizedBox(width: 14),
+              Expanded(
+                  child: Text(label,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: ColoresApp.textoOscuro))),
+              if (destacado != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: ColoresApp.naranjaFondo, borderRadius: BorderRadius.circular(8)),
+                  child: Text(destacado,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.naranjaTexto)),
+                )
+              else
+                const Icon(Icons.chevron_right, size: 20, color: ColoresApp.chevron),
+            ],
           ),
         ),
-        if (divisor) const Divider(height: 1, indent: 56, endIndent: 0),
-      ],
+      ),
     );
   }
 }
 
-/// Formulario de edición del perfil. Guarda por su cuenta (PUT
-/// /api/users/profile) y devuelve el color de acento elegido si tuvo éxito,
-/// o null si se canceló.
-class _EditarPerfilDialog extends StatefulWidget {
-  final Map<String, dynamic> perfil;
-  final Color colorInicial;
-  const _EditarPerfilDialog({required this.perfil, required this.colorInicial});
+class _AvatarConBorde extends StatelessWidget {
+  final Map<String, dynamic>? perfil;
+  final String nombre;
+  final double radio;
+  const _AvatarConBorde({required this.perfil, required this.nombre, this.radio = 40});
 
   @override
-  State<_EditarPerfilDialog> createState() => _EditarPerfilDialogState();
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
+      child: MediaAvatar(
+        path: perfil?['avatar'] as String?,
+        name: nombre,
+        radius: radio - 4,
+        backgroundColor: ColoresApp.textoOscuro,
+        foregroundColor: Colors.white,
+        fontSize: radio * 0.6,
+      ),
+    );
+  }
 }
 
-class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
+/// Dibujo de la portada (viewBox 390x120 de la maqueta, recortado para
+/// cubrir, como `preserveAspectRatio="xMidYMid slice"`).
+class PortadaPerfil extends StatelessWidget {
+  final String id;
+  const PortadaPerfil({super.key, required this.id});
+
+  @override
+  Widget build(BuildContext context) =>
+      ClipRect(child: CustomPaint(painter: _PortadaPainter(id), size: Size.infinite));
+}
+
+class _PortadaPainter extends CustomPainter {
+  final String id;
+  _PortadaPainter(this.id);
+
+  static const _fondos = {
+    'ruta': Color(0xFF16325C),
+    'ciudad': Color(0xFF23487A),
+    'volcan': Color(0xFF2F5585),
+    'liso': ColoresApp.azul,
+  };
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fondo = _fondos[id] ?? _fondos['ruta']!;
+    canvas.drawRect(Offset.zero & size, Paint()..color = fondo);
+    final s = math.max(size.width / 390, size.height / 120);
+    canvas.save();
+    canvas.translate((size.width - 390 * s) / 2, (size.height - 120 * s) / 2);
+    canvas.scale(s);
+    Paint blanco(double a) => Paint()..color = Colors.white.withValues(alpha: a);
+    Paint trazo(double a, double w) => blanco(a)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w
+      ..strokeCap = StrokeCap.round;
+    Path poli(List<double> p) {
+      final path = Path()..moveTo(p[0], p[1]);
+      for (var i = 2; i < p.length; i += 2) {
+        path.lineTo(p[i], p[i + 1]);
+      }
+      return path..close();
+    }
+
+    switch (id) {
+      case 'ciudad':
+        final arcos = Path();
+        for (final x in <double>[0, 48, 96, 144, 252, 300, 348]) {
+          arcos
+            ..moveTo(x, 120)
+            ..lineTo(x, 84)
+            ..arcToPoint(Offset(x + 36, 84), radius: const Radius.circular(18))
+            ..lineTo(x + 36, 120)
+            ..close();
+        }
+        canvas.drawPath(arcos, blanco(0.16));
+        canvas.drawPath(poli([196, 120, 196, 44, 216, 26, 236, 44, 236, 120]), blanco(0.24));
+        canvas.drawCircle(const Offset(216, 56), 7, trazo(0.5, 2));
+      case 'volcan':
+        canvas.drawPath(poli([0, 120, 90, 72, 150, 94, 232, 36, 300, 88, 390, 62, 390, 120]), Paint()..color = const Color(0xFF1E3D66));
+        canvas.drawPath(poli([218, 46, 232, 36, 246, 46]), blanco(0.7));
+        canvas.drawPath(poli([0, 120, 120, 96, 200, 110, 290, 86, 390, 104, 390, 120]), Paint()..color = const Color(0xFF132B4B));
+      case 'liso':
+        break;
+      default:
+        final rejilla = trazo(0.07, 10)..strokeCap = StrokeCap.butt;
+        for (final y in <double>[30, 75]) {
+          canvas.drawLine(Offset(0, y), Offset(390, y), rejilla);
+        }
+        for (final x in <double>[70, 185, 300]) {
+          canvas.drawLine(Offset(x, 0), Offset(x, 120), rejilla);
+        }
+        final curva = Path()
+          ..moveTo(30, 92)
+          ..cubicTo(80, 92, 95, 40, 160, 44)
+          ..cubicTo(225, 48, 255, 98, 315, 62)
+          ..cubicTo(375, 26, 370, 28, 392, 30);
+        final punteada = Path();
+        for (final m in curva.computeMetrics()) {
+          for (double d = 0; d < m.length; d += 14) {
+            punteada.addPath(m.extractPath(d, math.min(d + 7, m.length)), Offset.zero);
+          }
+        }
+        canvas.drawPath(punteada, trazo(0.6, 2.5));
+        canvas.drawCircle(const Offset(30, 92), 6, Paint()..color = fondo);
+        canvas.drawCircle(const Offset(30, 92), 6, trazo(1, 2.5));
+        canvas.drawCircle(const Offset(330, 52), 6, blanco(1));
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_PortadaPainter old) => old.id != id;
+}
+
+/// Pantalla de edición del perfil. Guarda por su cuenta (PUT
+/// /api/users/profile) y devuelve la portada elegida si tuvo éxito, o null
+/// si se canceló.
+class _EditarPerfilScreen extends StatefulWidget {
+  final Map<String, dynamic> perfil;
+  final String portadaInicial;
+  final Future<String?> Function() cambiarFoto;
+  const _EditarPerfilScreen({required this.perfil, required this.portadaInicial, required this.cambiarFoto});
+
+  @override
+  State<_EditarPerfilScreen> createState() => _EditarPerfilScreenState();
+}
+
+class _EditarPerfilScreenState extends State<_EditarPerfilScreen> {
   late final _nombre = _ctrl('nombre');
   late final _apellido = _ctrl('apellido');
   late final _email = _ctrl('email');
@@ -508,7 +597,8 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
   late final _contactoNombre = _ctrl('contactoEmergenciaNombre');
   late final _contactoTelefono = _ctrl('contactoEmergenciaTelefono');
 
-  late Color _color = widget.colorInicial;
+  late String _portada = widget.portadaInicial;
+  late final Map<String, dynamic> _perfil = Map.of(widget.perfil);
   String? _errorTelefono;
   String? _errorContactoTelefono;
   String? _errorGeneral;
@@ -525,70 +615,157 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
     super.dispose();
   }
 
-  Widget _tituloSeccion(String texto) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(
-          texto.toUpperCase(),
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AuthColores.gris, letterSpacing: 0.4),
+  Widget _seccion(String titulo, {String? detalle, required List<Widget> hijos}) => Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(titulo, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+            if (detalle != null) ...[
+              const SizedBox(height: 2),
+              Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+            ],
+            const SizedBox(height: 12),
+            ...hijos,
+          ],
         ),
       );
 
-  Widget _selectorColor() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AuthColores.campo,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AuthColores.borde),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          MediaAvatar(path: null, name: '${_nombre.text} ${_apellido.text}', radius: 22, backgroundColor: _color, foregroundColor: Colors.white),
-          const SizedBox(width: 12),
-          Expanded(
+  Widget _campo(TextEditingController c, String label, int max,
+      {TextInputType tipo = TextInputType.text, String? error, bool enabled = true, String? ayuda}) {
+    OutlineInputBorder borde(Color color, [double ancho = 1]) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: color, width: ancho));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: ColoresApp.etiquetaCampo)),
+        const SizedBox(height: 6),
+        TextField(
+          key: ValueKey('campo_$label'),
+          controller: c,
+          keyboardType: tipo,
+          enabled: enabled && !_guardando,
+          inputFormatters: [LengthLimitingTextInputFormatter(max)],
+          style: TextStyle(fontSize: 15, color: enabled ? ColoresApp.textoOscuro : ColoresApp.textoSecundario),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: enabled ? Colors.white : ColoresApp.fondo,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            enabledBorder: borde(ColoresApp.bordeCampo),
+            disabledBorder: borde(ColoresApp.borde),
+            focusedBorder: borde(ColoresApp.azul, 2),
+            errorBorder: borde(ColoresApp.rojoSesion),
+            focusedErrorBorder: borde(ColoresApp.rojoSesion, 2),
+            errorText: error,
+            helperText: ayuda,
+            helperStyle: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _selectorPortada() {
+    final nombre = '${_nombre.text} ${_apellido.text}'.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: ColoresApp.borde),
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Elige tu estilo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AuthColores.texto)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: coloresPerfilDisponibles.map((c) {
-                    final seleccionado = c.toARGB32() == _color.toARGB32();
-                    return GestureDetector(
-                      onTap: _guardando ? null : () => setState(() => _color = c),
-                      child: Container(
-                        width: 26,
-                        height: 26,
-                        decoration: BoxDecoration(
-                          color: c,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: seleccionado ? AuthColores.texto : Colors.transparent, width: 2),
-                        ),
-                        child: seleccionado ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                SizedBox(height: 88, width: double.infinity, child: PortadaPerfil(id: _portada)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 8, 0),
+                  child: SizedBox(
+                    height: 48,
+                    child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        left: 0,
+                        top: -28,
+                        child: _AvatarConBorde(perfil: _perfil, nombre: nombre, radio: 32),
                       ),
-                    );
-                  }).toList(),
+                      Positioned(right: 0, top: 4, child: TextButton.icon(
+                        onPressed: _guardando
+                            ? null
+                            : () async {
+                                final url = await widget.cambiarFoto();
+                                if (url != null && mounted) setState(() => _perfil['avatar'] = url);
+                              },
+                        icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                        label: const Text('Cambiar foto'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: ColoresApp.azul,
+                          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      )),
+                    ],
+                  ),
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            for (final e in portadasPerfil.entries) ...[
+              if (e.key != portadasPerfil.keys.first) const SizedBox(width: 8),
+              Expanded(child: _miniatura(e.key, e.value)),
+            ],
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _campo(TextEditingController c, String label, int max, IconData icono,
-          {TextInputType tipo = TextInputType.text, String? error, bool enabled = true, String? ayuda}) =>
-      TextField(
-        controller: c,
-        keyboardType: tipo,
-        enabled: enabled && !_guardando,
-        inputFormatters: [LengthLimitingTextInputFormatter(max)],
-        decoration: decoracionCampoAuth(label: label, icono: icono, ayuda: ayuda).copyWith(errorText: error),
-      );
+  Widget _miniatura(String id, String etiqueta) {
+    final elegida = id == _portada;
+    return Semantics(
+      button: true,
+      selected: elegida,
+      label: 'Portada $etiqueta',
+      child: GestureDetector(
+        key: ValueKey('portada_$id'),
+        onTap: _guardando ? null : () => setState(() => _portada = id),
+        child: Column(
+          children: [
+            Container(
+              height: 52,
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: elegida ? ColoresApp.azul : Colors.transparent, width: 2),
+              ),
+              child: ClipRRect(borderRadius: BorderRadius.circular(7), child: PortadaPerfil(id: id)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              etiqueta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: elegida ? FontWeight.w600 : FontWeight.w500,
+                color: elegida ? ColoresApp.azul : ColoresApp.textoSecundario,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _guardar() async {
     final errorTelefono = validarTelefono(_telefono.text);
@@ -603,6 +780,8 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
     setState(() {
       _guardando = true;
       _errorGeneral = null;
+      _errorTelefono = null;
+      _errorContactoTelefono = null;
     });
     try {
       await ApiClient.instance.updateProfile(cuerpoActualizacionPerfil(
@@ -613,9 +792,9 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
         contactoTelefono: _contactoTelefono.text,
       ));
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_claveColorPerfil, _color.toARGB32());
+      await prefs.setString(_clavePortada, _portada);
       if (!mounted) return;
-      Navigator.pop(context, _color);
+      Navigator.pop(context, _portada);
     } on ApiException catch (e) {
       setState(() {
         _guardando = false;
@@ -633,55 +812,72 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: !_guardando,
-      child: AlertDialog(
-        title: const Text('Editar perfil'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _selectorColor(),
-              const SizedBox(height: 18),
-              _tituloSeccion('Datos personales'),
-              _campo(_nombre, 'Nombre', LimitesUsuario.nombre, Icons.badge_outlined),
-              const SizedBox(height: 10),
-              _campo(_apellido, 'Apellido', LimitesUsuario.apellido, Icons.badge_outlined),
-              const SizedBox(height: 18),
-              _tituloSeccion('Contacto'),
-              _campo(_email, 'Email', LimitesUsuario.email, Icons.email_outlined,
-                  tipo: TextInputType.emailAddress, enabled: false, ayuda: 'Para cambiarlo, escribe a soporte'),
-              const SizedBox(height: 10),
-              _campo(_telefono, 'Teléfono', LimitesUsuario.telefono, Icons.phone_outlined,
-                  tipo: TextInputType.phone, error: _errorTelefono),
-              const SizedBox(height: 18),
-              _tituloSeccion('Contacto de emergencia'),
-              _campo(_contactoNombre, 'Contacto de emergencia', LimitesUsuario.contactoNombre, Icons.contact_phone_outlined),
-              const SizedBox(height: 10),
-              _campo(_contactoTelefono, 'Teléfono del contacto', LimitesUsuario.contactoTelefono, Icons.phone_outlined,
+      child: Scaffold(
+        backgroundColor: ColoresApp.fondo,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          foregroundColor: ColoresApp.textoOscuro,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          shape: const Border(bottom: BorderSide(color: ColoresApp.borde)),
+          title: const Text('Editar perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+          children: [
+            _seccion('Portada', hijos: [_selectorPortada()]),
+            _seccion('Datos personales', hijos: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _campo(_nombre, 'Nombre', LimitesUsuario.nombre)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _campo(_apellido, 'Apellido', LimitesUsuario.apellido)),
+                ],
+              ),
+            ]),
+            _seccion('Contacto', hijos: [
+              _campo(_email, 'Correo', LimitesUsuario.email,
+                  tipo: TextInputType.emailAddress, enabled: false, ayuda: 'Para cambiarlo, escribe a soporte.'),
+              const SizedBox(height: 14),
+              _campo(_telefono, 'Teléfono', LimitesUsuario.telefono, tipo: TextInputType.phone, error: _errorTelefono),
+            ]),
+            _seccion('Contacto de emergencia', detalle: 'Opcional. Lo llamamos solo si activas el SOS.', hijos: [
+              _campo(_contactoNombre, 'Nombre del contacto', LimitesUsuario.contactoNombre),
+              const SizedBox(height: 14),
+              _campo(_contactoTelefono, 'Teléfono del contacto', LimitesUsuario.contactoTelefono,
                   tipo: TextInputType.phone, error: _errorContactoTelefono),
-              if (_errorGeneral != null) ...[
-                const SizedBox(height: 14),
-                AvisoErrorAuth(mensaje: _errorGeneral!),
-              ],
-            ],
+            ]),
+          ],
+        ),
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: ColoresApp.borde)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_errorGeneral != null) ...[
+                    AvisoErrorAuth(mensaje: _errorGeneral!),
+                    const SizedBox(height: 10),
+                  ],
+                  BotonPrincipal(
+                    texto: _guardando ? 'Guardando…' : 'Guardar cambios',
+                    onPressed: _guardando ? null : _guardar,
+                    color: ColoresApp.azul,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        actions: [
-          TextButton(onPressed: _guardando ? null : () => Navigator.pop(context), child: const Text('Cancelar')),
-          FilledButton(
-            onPressed: _guardando ? null : _guardar,
-            child: _guardando
-                ? const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                      SizedBox(width: 10),
-                      Text('Guardando...'),
-                    ],
-                  )
-                : const Text('Guardar'),
-          ),
-        ],
       ),
     );
   }

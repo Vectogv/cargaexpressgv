@@ -6,11 +6,11 @@ import '../../services/config_cliente_service.dart';
 import '../shared/ui_compartida.dart';
 import 'confirmar_entrega_screen.dart' show avisoConfirmacionPendiente;
 
-const Color _kPrimary = Color(0xFF2563EB);
-const Color _kTexto = Color(0xFF1A1A2E);
-const Color _kGris = Color(0xFF6B7280);
-const Color _kBorde = Color(0xFFE5E7EB);
-const Color _kAmbar = Color(0xFFF59E0B);
+const Color _kPrimary = ColoresApp.azul;
+const Color _kTexto = ColoresApp.textoOscuro;
+const Color _kGris = ColoresApp.textoSecundario;
+const Color _kBorde = ColoresApp.borde;
+const Color _kAmbar = ColoresApp.naranja;
 
 /// Color del estado de un viaje para chips y tarjetas.
 Color colorEstadoViaje(String? estado) {
@@ -64,19 +64,16 @@ int? pasoProgresoViaje(String? estado) {
   }
 }
 
-bool _esperaConfirmacion(String? estado) =>
-    estado == TripStatus.pendienteConfirmacion || estado == TripStatus.esperaConfirmacion;
+bool _esperaConfirmacion(String? estado) => estado == TripStatus.pendienteConfirmacion || estado == TripStatus.esperaConfirmacion;
 
-bool _buscando(String? estado) =>
-    estado == TripStatus.buscando || estado == TripStatus.creado || estado == TripStatus.pendiente;
+bool _buscando(String? estado) => estado == TripStatus.buscando || estado == TripStatus.creado || estado == TripStatus.pendiente;
 
 bool _enDisputa(String? estado) => estado == TripStatus.disputa || estado == TripStatus.enDisputa;
 
 String _rutaCorta(Map<String, dynamic> viaje) {
   // Solo el primer tramo ("Parque Caldas, Calle 5…" → "Parque Caldas"): la
   // dirección completa ocupa las dos líneas y esconde el destino.
-  String dir(dynamic p) =>
-      ((p is Map ? p['direccion']?.toString() : null) ?? '').split(',').first.trim();
+  String dir(dynamic p) => ((p is Map ? p['direccion']?.toString() : null) ?? '').split(',').first.trim();
   final o = dir(viaje['origen']);
   final d = dir(viaje['destino']);
   return '${o.isEmpty ? '—' : o} → ${d.isEmpty ? '—' : d}';
@@ -177,18 +174,12 @@ class ClienteInicioView extends StatelessWidget {
             const _CargandoCard()
           else ...[
             if (errorActivo) ...[
-              _AvisoError(
-                texto: 'No pudimos verificar si tienes un viaje activo. Revisa tu conexión.',
-                onReintentar: onReintentar,
-              ),
+              _AvisoError(texto: 'No pudimos verificar si tienes un viaje activo. Revisa tu conexión.', onReintentar: onReintentar),
               const SizedBox(height: 16),
             ],
             // El servidor no permite dos viajes activos (409): con uno en
             // marcha no se ofrece "Nuevo envío".
-            if (activo == null) ...[
-              _NuevoEnvioCard(onTap: onNuevoEnvio),
-              const SizedBox(height: 24),
-            ],
+            if (activo == null) ...[_NuevoEnvioCard(onTap: onNuevoEnvio), const SizedBox(height: 24)],
             _TituloSeccion(
               _tituloSeccion(estado),
               accion: activo != null && !_buscando(estado) && !_enDisputa(estado) ? 'Ver detalle ›' : null,
@@ -197,12 +188,7 @@ class ClienteInicioView extends StatelessWidget {
             if (activo == null)
               const _SinEnvioActivo()
             else
-              _ViajeActivoCard(
-                viaje: activo,
-                onTap: onVerSeguimiento,
-                onConfirmar: onConfirmarEntrega,
-                onProblema: onReportarProblema,
-              ),
+              _ViajeActivoCard(viaje: activo, onTap: onVerSeguimiento, onConfirmar: onConfirmarEntrega, onProblema: onReportarProblema),
           ],
           const SizedBox(height: 28),
           _TituloSeccion('Último envío', accion: recientes.isNotEmpty ? 'Ver todos' : null, onAccion: onHistorial),
@@ -236,13 +222,19 @@ class _TituloSeccion extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(titulo, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _kTexto)),
+            child: Text(
+              titulo,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _kTexto),
+            ),
           ),
           if (accion != null)
             TextButton(
               onPressed: onAccion,
               style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 32), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              child: Text(accion!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.azul)),
+              child: Text(
+                accion!,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.azul),
+              ),
             ),
         ],
       ),
@@ -257,7 +249,7 @@ class _CargandoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 120,
-      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(18)),
       alignment: Alignment.center,
       child: const SizedBox(width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 2.5)),
     );
@@ -270,47 +262,47 @@ class _NuevoEnvioCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FondoDegradado(
-      colores: const [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-      radio: BorderRadius.circular(18),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          key: const Key('btn_nuevo_envio'),
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(14)),
-                  child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 28),
+    return Material(
+      color: ColoresApp.azul,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: const Key('btn_nuevo_envio'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 28),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Nuevo envío',
+                      style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Indica origen, destino y tu oferta. Te conectamos con conductores cercanos.',
+                      style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 13, height: 1.3),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Nuevo envío', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700)),
-                      SizedBox(height: 4),
-                      Text(
-                        'Indica origen, destino y tu oferta. Te conectamos con conductores cercanos.',
-                        style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 13, height: 1.3),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.arrow_forward_rounded, color: _kPrimary),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              const CircleAvatar(
+                radius: 22,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.arrow_forward_rounded, color: _kPrimary),
+              ),
+            ],
           ),
         ),
       ),
@@ -330,11 +322,14 @@ class _SinEnvioActivo extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 30,
-            backgroundColor: Color(0xFFEFF4FF),
+            backgroundColor: ColoresApp.azulTenue,
             child: Icon(Icons.inventory_2_outlined, size: 30, color: _kPrimary),
           ),
           SizedBox(height: 14),
-          Text('No tienes envíos en curso', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kTexto)),
+          Text(
+            'No tienes envíos en curso',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _kTexto),
+          ),
           SizedBox(height: 4),
           Text(
             'Cuando publiques un envío, aquí verás las ofertas y el seguimiento en vivo.',
@@ -395,33 +390,16 @@ class _ViajeActivoCard extends StatelessWidget {
                   _Dato(Icons.calendar_today_outlined, _fecha(viaje['createdAt']?.toString())),
               ],
             ),
-            if (nombreConductor.isNotEmpty && !espera) ...[
-              const SizedBox(height: 14),
-              _ConductorRow(conductor: Map<String, dynamic>.from(conductor as Map)),
-            ],
-            if (paso != null) ...[
-              const SizedBox(height: 18),
-              _Progreso(actual: paso),
-            ],
+            if (nombreConductor.isNotEmpty && !espera) ...[const SizedBox(height: 14), _ConductorRow(conductor: Map<String, dynamic>.from(conductor as Map))],
+            if (paso != null) ...[const SizedBox(height: 18), _Progreso(actual: paso)],
             if (espera) ...[
               const SizedBox(height: 16),
               _AvisoConfirmacion(conductor: nombreConductor),
               const SizedBox(height: 14),
               // Uno debajo del otro: lado a lado, en 360 dp el texto se cortaba.
-              BotonPrincipal(
-                key: const Key('btn_confirmar_entrega_inicio'),
-                texto: 'Confirmar entrega',
-                alto: 48,
-                onPressed: onConfirmar,
-              ),
+              BotonPrincipal(key: const Key('btn_confirmar_entrega_inicio'), texto: 'Confirmar entrega', alto: 48, onPressed: onConfirmar),
               const SizedBox(height: 10),
-              BotonSecundario(
-                key: const Key('btn_problema_entrega'),
-                texto: 'Hay un problema',
-                color: ColoresApp.rojo,
-                alto: 48,
-                onPressed: onProblema,
-              ),
+              BotonSecundario(key: const Key('btn_problema_entrega'), texto: 'Hay un problema', color: ColoresApp.rojo, alto: 48, onPressed: onProblema),
             ] else if (mostrarPin) ...[
               const SizedBox(height: 16),
               _PinEntrega(pin: pin),
@@ -456,7 +434,12 @@ class _Dato extends StatelessWidget {
         const SizedBox(width: 5),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 180),
-          child: Text(texto, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: _kGris)),
+          child: Text(
+            texto,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, color: _kGris),
+          ),
         ),
       ],
     );
@@ -478,13 +461,16 @@ class _ConductorRow extends StatelessWidget {
     final placa = conductor['placa']?.toString() ?? '';
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: ColoresApp.fondoPin, borderRadius: BorderRadius.circular(14)),
       child: Row(
         children: [
           CircleAvatar(
             radius: 20,
             backgroundColor: ColoresApp.azulMarino,
-            child: Text(_iniciales(nombre), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+            child: Text(
+              _iniciales(nombre),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -498,7 +484,12 @@ class _ConductorRow extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _kTexto),
                 ),
                 if (linea2.isNotEmpty)
-                  Text(linea2, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: _kGris)),
+                  Text(
+                    linea2,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: _kGris),
+                  ),
               ],
             ),
           ),
@@ -528,9 +519,13 @@ class _Progreso extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(child: _linea(visible: i > 0, activa: i <= actual)),
+                    Expanded(
+                      child: _linea(visible: i > 0, activa: i <= actual),
+                    ),
                     _circulo(i),
-                    Expanded(child: _linea(visible: i < _pasos.length - 1, activa: i < actual)),
+                    Expanded(
+                      child: _linea(visible: i < _pasos.length - 1, activa: i < actual),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -552,12 +547,15 @@ class _Progreso extends StatelessWidget {
     );
   }
 
-  Widget _linea({required bool visible, required bool activa}) =>
-      Container(height: 3, color: !visible ? Colors.transparent : (activa ? _kPrimary : _kBorde));
+  Widget _linea({required bool visible, required bool activa}) => Container(height: 3, color: !visible ? Colors.transparent : (activa ? _kPrimary : _kBorde));
 
   Widget _circulo(int i) {
     if (i < actual) {
-      return const CircleAvatar(radius: 12, backgroundColor: _kPrimary, child: Icon(Icons.check_rounded, size: 15, color: Colors.white));
+      return const CircleAvatar(
+        radius: 12,
+        backgroundColor: _kPrimary,
+        child: Icon(Icons.check_rounded, size: 15, color: Colors.white),
+      );
     }
     if (i == actual) {
       return Container(
@@ -565,13 +563,20 @@ class _Progreso extends StatelessWidget {
         height: 24,
         decoration: const BoxDecoration(color: _kPrimary, shape: BoxShape.circle),
         alignment: Alignment.center,
-        child: Container(width: 9, height: 9, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+        child: Container(
+          width: 9,
+          height: 9,
+          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+        ),
       );
     }
     return Container(
       width: 24,
       height: 24,
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _kBorde, width: 3)),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: _kBorde, width: 3),
+      ),
     );
   }
 }
@@ -586,14 +591,17 @@ class _PinEntrega extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(14)),
       child: Row(
         children: [
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('PIN de entrega', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kTexto)),
+                Text(
+                  'PIN de entrega',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kTexto),
+                ),
                 SizedBox(height: 2),
                 Text('Dáselo al conductor cuando recibas todo', style: TextStyle(fontSize: 12, color: _kGris, height: 1.3)),
               ],
@@ -625,14 +633,14 @@ class _AvisoConfirmacion extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFFBEB),
+          color: ColoresApp.naranjaFondo,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFFDE68A)),
+          border: Border.all(color: ColoresApp.naranjaBorde),
         ),
         child: Text(
           '${conductor.isEmpty ? 'El conductor' : conductor} marcó la entrega. Revisa tu carga y confirma. '
           '${avisoConfirmacionPendiente(reglas.confirmacionTimeoutMin)}',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF78350F), height: 1.4),
+          style: const TextStyle(fontSize: 13, color: ColoresApp.naranjaAviso, height: 1.4),
         ),
       ),
     );
@@ -668,10 +676,7 @@ class _ViajeRecienteTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final estado = viaje['estado'] as String?;
     final monto = _precio(viaje);
-    final detalle = [
-      _fecha(viaje['createdAt']?.toString()),
-      if (monto != null) formatearPesos(monto),
-    ].where((s) => s.isNotEmpty).join(' · ');
+    final detalle = [_fecha(viaje['createdAt']?.toString()), if (monto != null) formatearPesos(monto)].where((s) => s.isNotEmpty).join(' · ');
     return GestureDetector(
       key: const Key('tile_ultimo_envio'),
       onTap: onTap,
@@ -680,7 +685,7 @@ class _ViajeRecienteTile extends StatelessWidget {
           children: [
             const CircleAvatar(
               radius: 22,
-              backgroundColor: Color(0xFFF3F4F6),
+              backgroundColor: ColoresApp.fondo,
               child: Icon(Icons.inventory_2_outlined, color: _kGris, size: 22),
             ),
             const SizedBox(width: 12),
@@ -694,10 +699,7 @@ class _ViajeRecienteTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _kTexto, height: 1.3),
                   ),
-                  if (detalle.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(detalle, style: const TextStyle(fontSize: 12, color: _kGris)),
-                  ],
+                  if (detalle.isNotEmpty) ...[const SizedBox(height: 3), Text(detalle, style: const TextStyle(fontSize: 12, color: _kGris))],
                 ],
               ),
             ),
@@ -727,15 +729,18 @@ class _SinEnvios extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: ColoresApp.fondoPin,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _kBorde),
       ),
       child: const Column(
         children: [
-          Icon(Icons.inventory_2_outlined, size: 40, color: Color(0xFFBFC5CD)),
+          Icon(Icons.inventory_2_outlined, size: 40, color: ColoresApp.chevron),
           SizedBox(height: 10),
-          Text('Aún no tienes envíos', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTexto)),
+          Text(
+            'Aún no tienes envíos',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTexto),
+          ),
           SizedBox(height: 4),
           Text(
             'Cuando solicites uno, aparecerá aquí.',
@@ -758,15 +763,17 @@ class _AvisoError extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
+        color: ColoresApp.naranjaFondo,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFED7AA)),
+        border: Border.all(color: ColoresApp.naranjaBorde),
       ),
       child: Row(
         children: [
-          const Icon(Icons.wifi_off_rounded, size: 18, color: Color(0xFFC2410C)),
+          const Icon(Icons.wifi_off_rounded, size: 18, color: ColoresApp.naranjaTexto),
           const SizedBox(width: 10),
-          Expanded(child: Text(texto, style: const TextStyle(fontSize: 13, color: Color(0xFF7C2D12)))),
+          Expanded(
+            child: Text(texto, style: const TextStyle(fontSize: 13, color: ColoresApp.naranjaAviso)),
+          ),
           TextButton(onPressed: onReintentar, child: const Text('Reintentar')),
         ],
       ),

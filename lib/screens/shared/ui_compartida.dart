@@ -7,20 +7,38 @@ import 'package:flutter/material.dart';
 class ColoresApp {
   ColoresApp._();
 
-  static const Color azul = Color(0xFF2563EB);
+  static const Color azul = Color(0xFF1F5FD6);
+  static const Color azulTenue = Color(0xFFEAF1FC);
   static const Color azulOscuro = Color(0xFF1A3C6E);
   static const Color azulMarino = Color(0xFF1E3A8A);
   static const Color verde = Color(0xFF16A34A);
   static const Color rojo = Color(0xFFDC2626);
-  static const Color naranja = Color(0xFFEA580C);
+  /// Solo para "Cerrar sesión".
+  static const Color rojoSesion = Color(0xFFB42318);
+  static const Color naranja = Color(0xFFE07A1F);
+  static const Color naranjaTexto = Color(0xFFA8560F);
+  static const Color naranjaFondo = Color(0xFFFFF4EA);
+  static const Color naranjaBorde = Color(0xFFF6D3B3);
+  static const Color naranjaAviso = Color(0xFF7A3E0A);
   static const Color ambar = Color(0xFFF59E0B);
-  static const Color textoOscuro = Color(0xFF111827);
-  static const Color textoSecundario = Color(0xFF6B7280);
-  static const Color fondo = Color(0xFFF5F7FA);
-  static const Color borde = Color(0xFFE5E7EB);
+  static const Color estrella = Color(0xFFE0A21F);
+  static const Color placaFondo = Color(0xFFF4C430);
+  static const Color placaTexto = Color(0xFF111111);
+  static const Color textoOscuro = Color(0xFF0F1B2D);
+  static const Color textoSecundario = Color(0xFF5B6576);
+  static const Color etiquetaCampo = Color(0xFF3A4556);
+  static const Color chevron = Color(0xFF8A93A3);
+  static const Color fondo = Color(0xFFF4F6F8);
+  static const Color fondoPin = Color(0xFFFAFBFC);
+  static const Color borde = Color(0xFFE3E6EB);
+  static const Color divisor = Color(0xFFEEF0F3);
+  static const Color bordeCampo = Color(0xFFD5DAE1);
 }
 
-/// Tarjeta blanca con esquinas redondeadas y sombra suave.
+/// Cifras alineadas (`font-variant-numeric: tabular-nums`).
+const List<FontFeature> cifrasTabulares = [FontFeature.tabularFigures()];
+
+/// Tarjeta blanca con esquinas redondeadas y borde de 1 px, sin sombra.
 class TarjetaBlanca extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -43,8 +61,7 @@ class TarjetaBlanca extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(radio),
-        border: colorBorde != null ? Border.all(color: colorBorde!) : null,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: colorBorde ?? ColoresApp.borde),
       ),
       child: child,
     );
@@ -77,8 +94,8 @@ class BotonPrincipal extends StatelessWidget {
       foregroundColor: Colors.white,
       disabledBackgroundColor: color.withValues(alpha: 0.4),
       disabledForegroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
     );
     final habilitado = cargando ? null : onPressed;
     final Widget contenido = cargando
@@ -118,8 +135,8 @@ class BotonSecundario extends StatelessWidget {
     final estilo = OutlinedButton.styleFrom(
       foregroundColor: color,
       side: BorderSide(color: color, width: 1.5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
     );
     final habilitado = cargando ? null : onPressed;
     final Widget contenido = cargando

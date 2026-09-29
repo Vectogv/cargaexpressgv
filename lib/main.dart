@@ -336,6 +336,7 @@ class MainApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
         useMaterial3: true,
+        fontFamily: 'InstrumentSans',
       ),
       home: ApiClient.instance.token != null
           ? _homeScreenByRole()
