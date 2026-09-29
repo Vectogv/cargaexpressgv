@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../contracts/calificacion.dart';
 import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
@@ -12,6 +13,18 @@ import '../user/auth_estilos.dart';
 import '../user/auth_screen.dart';
 import 'ajustes_screen.dart';
 import 'pagos_screen.dart';
+
+/// Color de acento del avatar, elegido por el cliente en "Editar perfil" y
+/// guardado solo en el celular (no hay campo para esto en el servidor).
+const _claveColorPerfil = 'color_perfil_cliente';
+const List<Color> coloresPerfilDisponibles = [
+  ColoresApp.azul,
+  ColoresApp.verde,
+  ColoresApp.naranja,
+  ColoresApp.rojo,
+  ColoresApp.ambar,
+  ColoresApp.azulMarino,
+];
 
 /// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre y
 /// apellido vacíos no se envían (no se borran); teléfono y contacto de
@@ -51,6 +64,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
   // Pagos sólo aparece si hay deuda (GET /api/payments), igual que en el inicio.
   bool _tieneDeuda = false;
   bool _suspendidoPorPago = false;
+  Color _colorPerfil = ColoresApp.azul;
 
   static const Color _textDark = Color(0xFF1A1A2E);
   static const Color _textGrey = Color(0xFF757575);
@@ -62,6 +76,15 @@ class _PerfilScreenState extends State<PerfilScreen> {
     super.initState();
     _loadProfile();
     _loadDeuda();
+    _cargarColorPerfil();
+  }
+
+  Future<void> _cargarColorPerfil() async {
+    final prefs = await SharedPreferences.getInstance();
+    final valor = prefs.getInt(_claveColorPerfil);
+    if (mounted && valor != null) {
+      setState(() => _colorPerfil = Color(valor));
+    }
   }
 
   /// Si falla, Pagos queda oculto (no se bloquea el perfil).
@@ -144,21 +167,19 @@ class _PerfilScreenState extends State<PerfilScreen> {
     }
   }
 
+  /// El diálogo guarda por su cuenta (así puede mostrar "Guardando..." y un
+  /// error sin perder lo escrito) y devuelve el color elegido si tuvo éxito,
+  /// o null si se canceló o falló.
   Future<void> _editInfo() async {
-    // El diálogo es dueño de sus controladores: se liberan cuando termina su
-    // animación de salida (antes se liberaban aquí mientras aún se dibujaba).
-    final body = await showDialog<Map<String, dynamic>>(
+    final color = await showDialog<Color>(
       context: context,
-      builder: (_) => _EditarPerfilDialog(perfil: _profile ?? const {}),
+      builder: (_) => _EditarPerfilDialog(perfil: _profile ?? const {}, colorInicial: _colorPerfil),
     );
-    if (body == null || !mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ApiClient.instance.updateProfile(body);
-      await _loadProfile();
-      messenger.showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
+    if (color == null || !mounted) return;
+    setState(() => _colorPerfil = color);
+    await _loadProfile();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
     }
   }
 
@@ -272,7 +293,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         path: avatar,
                         name: nombre,
                         radius: 32,
-                        backgroundColor: ColoresApp.azul,
+                        backgroundColor: _colorPerfil,
                         foregroundColor: _white,
                         fontSize: 20,
                       ),
@@ -282,7 +303,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: ColoresApp.azul,
+                            color: _colorPerfil,
                             shape: BoxShape.circle,
                             border: Border.all(color: _white, width: 2),
                           ),
@@ -309,10 +330,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       ],
                     ],
                   ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: MarcaCargaExpress(tamano: 13),
                 ),
               ],
             ),
@@ -471,11 +488,13 @@ class _PerfilScreenState extends State<PerfilScreen> {
   }
 }
 
-/// Formulario de edición del perfil. Devuelve el cuerpo para
-/// PUT /api/users/profile, o null si se cancela.
+/// Formulario de edición del perfil. Guarda por su cuenta (PUT
+/// /api/users/profile) y devuelve el color de acento elegido si tuvo éxito,
+/// o null si se canceló.
 class _EditarPerfilDialog extends StatefulWidget {
   final Map<String, dynamic> perfil;
-  const _EditarPerfilDialog({required this.perfil});
+  final Color colorInicial;
+  const _EditarPerfilDialog({required this.perfil, required this.colorInicial});
 
   @override
   State<_EditarPerfilDialog> createState() => _EditarPerfilDialogState();
@@ -489,8 +508,11 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
   late final _contactoNombre = _ctrl('contactoEmergenciaNombre');
   late final _contactoTelefono = _ctrl('contactoEmergenciaTelefono');
 
+  late Color _color = widget.colorInicial;
   String? _errorTelefono;
   String? _errorContactoTelefono;
+  String? _errorGeneral;
+  bool _guardando = false;
 
   TextEditingController _ctrl(String campo) =>
       TextEditingController(text: widget.perfil[campo]?.toString() ?? '');
@@ -503,17 +525,72 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
     super.dispose();
   }
 
-  Widget _campo(TextEditingController c, String label, int max,
-          {TextInputType tipo = TextInputType.text, String? error, bool enabled = true, String? helper}) =>
+  Widget _tituloSeccion(String texto) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          texto.toUpperCase(),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AuthColores.gris, letterSpacing: 0.4),
+        ),
+      );
+
+  Widget _selectorColor() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AuthColores.campo,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AuthColores.borde),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MediaAvatar(path: null, name: '${_nombre.text} ${_apellido.text}', radius: 22, backgroundColor: _color, foregroundColor: Colors.white),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Elige tu estilo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AuthColores.texto)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: coloresPerfilDisponibles.map((c) {
+                    final seleccionado = c.toARGB32() == _color.toARGB32();
+                    return GestureDetector(
+                      onTap: _guardando ? null : () => setState(() => _color = c),
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: c,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: seleccionado ? AuthColores.texto : Colors.transparent, width: 2),
+                        ),
+                        child: seleccionado ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _campo(TextEditingController c, String label, int max, IconData icono,
+          {TextInputType tipo = TextInputType.text, String? error, bool enabled = true, String? ayuda}) =>
       TextField(
         controller: c,
         keyboardType: tipo,
-        enabled: enabled,
+        enabled: enabled && !_guardando,
         inputFormatters: [LengthLimitingTextInputFormatter(max)],
-        decoration: InputDecoration(labelText: label, errorText: error, helperText: helper),
+        decoration: decoracionCampoAuth(label: label, icono: icono, ayuda: ayuda).copyWith(errorText: error),
       );
 
-  void _guardar() {
+  Future<void> _guardar() async {
     final errorTelefono = validarTelefono(_telefono.text);
     final errorContacto = validarTelefono(_contactoTelefono.text, opcional: true);
     if (errorTelefono != null || errorContacto != null) {
@@ -523,47 +600,89 @@ class _EditarPerfilDialogState extends State<_EditarPerfilDialog> {
       });
       return;
     }
-    Navigator.pop(
-      context,
-      cuerpoActualizacionPerfil(
+    setState(() {
+      _guardando = true;
+      _errorGeneral = null;
+    });
+    try {
+      await ApiClient.instance.updateProfile(cuerpoActualizacionPerfil(
         nombre: _nombre.text,
         apellido: _apellido.text,
         telefono: _telefono.text,
         contactoNombre: _contactoNombre.text,
         contactoTelefono: _contactoTelefono.text,
-      ),
-    );
+      ));
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_claveColorPerfil, _color.toARGB32());
+      if (!mounted) return;
+      Navigator.pop(context, _color);
+    } on ApiException catch (e) {
+      setState(() {
+        _guardando = false;
+        _errorGeneral = e.message;
+      });
+    } catch (e) {
+      setState(() {
+        _guardando = false;
+        _errorGeneral = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Editar perfil'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _campo(_nombre, 'Nombre', LimitesUsuario.nombre),
-            const SizedBox(height: 8),
-            _campo(_apellido, 'Apellido', LimitesUsuario.apellido),
-            const SizedBox(height: 8),
-            _campo(_email, 'Email', LimitesUsuario.email,
-                tipo: TextInputType.emailAddress, enabled: false, helper: 'Para cambiarlo, escribe a soporte'),
-            const SizedBox(height: 8),
-            _campo(_telefono, 'Teléfono', LimitesUsuario.telefono,
-                tipo: TextInputType.phone, error: _errorTelefono),
-            const SizedBox(height: 16),
-            _campo(_contactoNombre, 'Contacto de emergencia', LimitesUsuario.contactoNombre),
-            const SizedBox(height: 8),
-            _campo(_contactoTelefono, 'Teléfono del contacto', LimitesUsuario.contactoTelefono,
-                tipo: TextInputType.phone, error: _errorContactoTelefono),
-          ],
+    return PopScope(
+      canPop: !_guardando,
+      child: AlertDialog(
+        title: const Text('Editar perfil'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _selectorColor(),
+              const SizedBox(height: 18),
+              _tituloSeccion('Datos personales'),
+              _campo(_nombre, 'Nombre', LimitesUsuario.nombre, Icons.badge_outlined),
+              const SizedBox(height: 10),
+              _campo(_apellido, 'Apellido', LimitesUsuario.apellido, Icons.badge_outlined),
+              const SizedBox(height: 18),
+              _tituloSeccion('Contacto'),
+              _campo(_email, 'Email', LimitesUsuario.email, Icons.email_outlined,
+                  tipo: TextInputType.emailAddress, enabled: false, ayuda: 'Para cambiarlo, escribe a soporte'),
+              const SizedBox(height: 10),
+              _campo(_telefono, 'Teléfono', LimitesUsuario.telefono, Icons.phone_outlined,
+                  tipo: TextInputType.phone, error: _errorTelefono),
+              const SizedBox(height: 18),
+              _tituloSeccion('Contacto de emergencia'),
+              _campo(_contactoNombre, 'Contacto de emergencia', LimitesUsuario.contactoNombre, Icons.contact_phone_outlined),
+              const SizedBox(height: 10),
+              _campo(_contactoTelefono, 'Teléfono del contacto', LimitesUsuario.contactoTelefono, Icons.phone_outlined,
+                  tipo: TextInputType.phone, error: _errorContactoTelefono),
+              if (_errorGeneral != null) ...[
+                const SizedBox(height: 14),
+                AvisoErrorAuth(mensaje: _errorGeneral!),
+              ],
+            ],
+          ),
         ),
+        actions: [
+          TextButton(onPressed: _guardando ? null : () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: _guardando ? null : _guardar,
+            child: _guardando
+                ? const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                      SizedBox(width: 10),
+                      Text('Guardando...'),
+                    ],
+                  )
+                : const Text('Guardar'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-        ElevatedButton(onPressed: _guardar, child: const Text('Guardar')),
-      ],
     );
   }
 }

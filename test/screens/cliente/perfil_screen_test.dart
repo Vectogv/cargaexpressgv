@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/screens/cliente/perfil_screen.dart';
+import 'package:cargaexpress/screens/shared/ui_compartida.dart';
 import 'package:cargaexpress/screens/user/auth_screen.dart';
+import 'package:cargaexpress/widgets/media_image.dart';
 
 import '../../helpers/fake_api.dart';
 
@@ -89,6 +91,42 @@ void main() {
     expect(put.body, isNot(contains('"email"')));
     expect(put.body, contains('"telefono":"3001112233"'));
     expect(put.body, contains('"contactoEmergenciaTelefono":"3109876543"'));
+  });
+
+  testWidgets('guardar perfil: error del servidor no cierra el diálogo; reintentar con el color elegido sí', (tester) async {
+    pantallaAlta(tester);
+    var intentosPut = 0;
+    await conApiFalsa((req) {
+      if (req.method == 'PUT') {
+        intentosPut++;
+        return intentosPut == 1 ? errorResp(500, 'Error del servidor') : jsonResp({'ok': true});
+      }
+      return jsonResp({'nombre': 'Ana', 'apellido': 'Pérez', 'email': 'ana@test.com'});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: PerfilScreen()));
+      await avanzar(tester);
+      await tester.tap(find.text('Información personal'));
+      await avanzar(tester);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Teléfono'), '3001112233');
+      await tester.tap(find.byWidgetPredicate(
+        (w) => w is Container && (w.decoration as BoxDecoration?)?.color == ColoresApp.verde,
+      ));
+      await tester.tap(find.text('Guardar'));
+      await avanzar(tester);
+
+      // Falla el servidor: el diálogo sigue abierto con el error, no se pierde lo escrito.
+      expect(find.textContaining('Error del servidor'), findsOneWidget);
+      expect(find.text('Editar perfil'), findsOneWidget);
+
+      await tester.tap(find.text('Guardar'));
+      await avanzar(tester);
+
+      // Reintento exitoso: el diálogo se cierra y el avatar usa el color elegido.
+      expect(find.text('Editar perfil'), findsNothing);
+      final avatar = tester.widget<MediaAvatar>(find.byType(MediaAvatar));
+      expect(avatar.backgroundColor, ColoresApp.verde);
+    });
   });
 
   testWidgets('si el perfil no carga se muestra el error', (tester) async {
