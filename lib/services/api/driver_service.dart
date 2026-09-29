@@ -57,11 +57,6 @@ class DriverService {
     return data['fotoVehiculo'] as String? ?? '';
   }
 
-  static Future<String> uploadVehiclePhoto(Uint8List bytes, String filename) async {
-    final data = await HttpClient.uploadFile('/api/drivers/vehicle-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
-    return data['fotoVehiculo'] as String? ?? '';
-  }
-
   static Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) async {
     final data = await HttpClient.uploadFile('/api/drivers/driver-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
     return data['fotoConductor'] as String? ?? '';

@@ -72,10 +72,6 @@ class TripService {
     return (data['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
   }
 
-  static Future<void> declineTrip(dynamic id) async {
-    await HttpClient.post('/api/trips/$id/decline', auth: true);
-  }
-
   static Future<void> confirmPickup(dynamic id) async {
     await HttpClient.post('/api/trips/$id/confirm-pickup', auth: true);
   }

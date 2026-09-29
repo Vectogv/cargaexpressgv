@@ -229,7 +229,6 @@ class ApiClient {
   Future<String> uploadDocumentLicencia(Uint8List bytes, String filename) => DriverService.uploadDocumentLicencia(bytes, filename);
   Future<String> uploadDocumentVehiculo(Uint8List bytes, String filename) => DriverService.uploadDocumentVehiculo(bytes, filename);
   Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) => DriverService.uploadDocumentDriverPhoto(bytes, filename);
-  Future<String> uploadVehiclePhoto(Uint8List bytes, String filename) => DriverService.uploadVehiclePhoto(bytes, filename);
 
   // --- Trips ---
 
@@ -243,7 +242,6 @@ class ApiClient {
   Future<void> confirmPickup(dynamic id) => TripService.confirmPickup(id);
   Future<Map<String, dynamic>> reserveTrip(Map<String, dynamic> data, {String? idempotencyKey}) => TripService.reserveTrip(data, idempotencyKey: idempotencyKey);
   Future<List<Map<String, dynamic>>> getReservations({int page = 1, int limit = 20, String? estado}) => TripService.getReservations(page: page, limit: limit, estado: estado);
-  Future<void> declineTrip(dynamic id) => TripService.declineTrip(id);
   Future<Map<String, dynamic>> disputeAppeal(dynamic id, {required String motivo, String? descripcion}) => TripService.disputeAppeal(id, motivo: motivo, descripcion: descripcion);
   Future<void> completeTrip(dynamic id, {num? montoFinal, String? justificacion, String? pin, String? idempotencyKey}) => TripService.completeTrip(id, montoFinal: montoFinal, justificacion: justificacion, pin: pin, idempotencyKey: idempotencyKey);
   Future<void> finalizeTrip(dynamic id, {num? montoFinal, String? justificacion, String? pin, String? idempotencyKey}) => TripService.finalizeTrip(id, montoFinal: montoFinal, justificacion: justificacion, pin: pin, idempotencyKey: idempotencyKey);
@@ -317,8 +315,6 @@ class ApiClient {
 
   Future<List<Map<String, dynamic>>> getNotifications() => ProfileService.getNotifications();
   Future<void> markNotificationRead(dynamic id) => ProfileService.markNotificationRead(id);
-  Future<Map<String, dynamic>> getSurveyResults(dynamic id) => ProfileService.getSurveyResults(id);
-  Future<void> answerSurvey(dynamic id, dynamic opcionId) => ProfileService.answerSurvey(id, opcionId);
   Future<Map<String, dynamic>> getHelp() => ProfileService.getHelp();
   Future<Map<String, dynamic>> getEmergencyNumbers() => ProfileService.getEmergencyNumbers();
   Future<String> fetchMapboxToken() => ProfileService.fetchMapboxToken();

@@ -35,16 +35,6 @@ class ProfileService {
     await HttpClient.put('/api/notifications/$id/read', auth: true);
   }
 
-  static Future<Map<String, dynamic>> getSurveyResults(dynamic id) async {
-    return HttpClient.get('/api/moderator/encuestas/$id/results', auth: true);
-  }
-
-  static Future<void> answerSurvey(dynamic id, dynamic opcionElegida) async {
-    // Contrato backend: el campo se llama `opcionElegida` y debe ser el texto
-    // de la opción (no su id).
-    await HttpClient.post('/api/moderator/encuestas/$id/answer', body: {'opcionElegida': opcionElegida}, auth: true);
-  }
-
   static Future<Map<String, dynamic>> getSettings() async {
     return HttpClient.get('/api/settings', auth: true);
   }
