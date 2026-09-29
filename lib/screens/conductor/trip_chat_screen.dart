@@ -4,6 +4,7 @@ import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/socket_service_client.dart';
+import '../shared/ui_compartida.dart';
 
 class TripChatScreen extends StatefulWidget {
   final Map<String, dynamic>? trip;
@@ -31,12 +32,6 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
   StreamSubscription<bool>? _connectionSub;
   StreamSubscription<Map<String, dynamic>>? _tripStateSub;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
-  static const Color _bubbleSent = Color(0xFF1565C0);
   static const Color _bubbleReceived = Color(0xFFFFFFFF);
 
   @override
@@ -311,7 +306,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       body: Column(
         children: [
           _buildHeader(context),
@@ -371,7 +366,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      color: _white,
+      color: Colors.white,
       padding: const EdgeInsets.only(top: 44, left: 16, right: 16, bottom: 14),
       child: Row(
         children: [
@@ -386,7 +381,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
               children: [
                 const Text('Chat del viaje', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                 if (_activeTrip != null)
-                  Text('Viaje #$_tripId', style: TextStyle(fontSize: 12, color: _textGrey)),
+                  Text('Viaje #$_tripId', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
               ],
             ),
           ),
@@ -416,7 +411,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
           if (!isSent) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor: _primaryDark.withValues(alpha: 0.2),
+              backgroundColor: ColoresApp.azulOscuro.withValues(alpha: 0.2),
               child: Text(
                 _initials(_activeTrip?['cliente']?['nombre'] as String? ?? '?'),
                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
@@ -431,7 +426,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                 constraints: const BoxConstraints(maxWidth: 230),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSent ? _bubbleSent : _bubbleReceived,
+                  color: isSent ? ColoresApp.azul : _bubbleReceived,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(16),
                     topRight: const Radius.circular(16),
@@ -442,7 +437,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                 ),
                 child: Text(
                   msg['text'] as String? ?? msg['mensaje'] as String? ?? '',
-                  style: TextStyle(color: isSent ? _white : _textDark, fontSize: 14, height: 1.4),
+                  style: TextStyle(color: isSent ? Colors.white : ColoresApp.textoOscuro, fontSize: 14, height: 1.4),
                 ),
               ),
               const SizedBox(height: 4),
@@ -450,7 +445,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Los del backend traen `createdAt`; los locales, `time`.
-                  Text(msg['time'] as String? ?? _formatTime(msg['createdAt']), style: TextStyle(fontSize: 10, color: _textGrey)),
+                  Text(msg['time'] as String? ?? _formatTime(msg['createdAt']), style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario)),
                   const SizedBox(width: 4),
                   if (isSent)
                     Icon(
@@ -460,7 +455,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                       Icons.done_all,
                       size: 14,
                       color: status == 'failed' ? Colors.red :
-                             status == 'sending' ? _textGrey :
+                             status == 'sending' ? ColoresApp.textoSecundario :
                              status == 'read' ? const Color(0xFF1A3C6E) :
                              const Color(0xFF1A3C6E).withValues(alpha: 0.5),
                     ),
@@ -482,7 +477,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundColor: _primaryDark.withValues(alpha: 0.2),
+            backgroundColor: ColoresApp.azulOscuro.withValues(alpha: 0.2),
             child: Text(
               _initials(_activeTrip?['cliente']?['nombre'] as String? ?? '?'),
               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
@@ -509,25 +504,25 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     return AnimatedContainer(
       duration: Duration(milliseconds: 600 + i * 200),
       width: 8, height: 8,
-      decoration: BoxDecoration(color: _textGrey, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: ColoresApp.textoSecundario, shape: BoxShape.circle),
     );
   }
 
   Widget _buildInputBar() {
     return Container(
-      color: _white,
+      color: Colors.white,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Row(
         children: [
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-              decoration: BoxDecoration(color: _bgLight, borderRadius: BorderRadius.circular(24)),
+              decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(24)),
               child: TextField(
                 controller: _messageController,
                 decoration: InputDecoration(
                   hintText: 'Escribe un mensaje...',
-                  hintStyle: TextStyle(color: _textGrey, fontSize: 14),
+                  hintStyle: TextStyle(color: ColoresApp.textoSecundario, fontSize: 14),
                   isDense: true,
                   border: InputBorder.none,
                 ),

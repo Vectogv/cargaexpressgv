@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 
 class EnDisputaScreen extends StatelessWidget {
   final VoidCallback? onEnviarMiVersion;
@@ -10,10 +11,6 @@ class EnDisputaScreen extends StatelessWidget {
     this.onVerDetalles,
   });
 
-  static const Color _textPrimary = Color(0xFF111111);
-  static const Color _textSecondary = Color(0xFF555555);
-  static const Color _divider = Color(0xFFE5E7EB);
-  static const Color _blue = Color(0xFF1565C0);
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +30,7 @@ class EnDisputaScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: _textPrimary,
+                  color: ColoresApp.textoOscuro,
                 ),
               ),
               const SizedBox(height: 14),
@@ -42,7 +39,7 @@ class EnDisputaScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
-                  color: _textSecondary,
+                  color: ColoresApp.textoSecundario,
                   height: 1.55,
                 ),
               ),
@@ -52,7 +49,7 @@ class EnDisputaScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
-                  color: _textSecondary,
+                  color: ColoresApp.textoSecundario,
                   height: 1.55,
                 ),
               ),
@@ -63,8 +60,8 @@ class EnDisputaScreen extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onEnviarMiVersion,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _blue,
-                    disabledBackgroundColor: _divider,
+                    backgroundColor: ColoresApp.azul,
+                    disabledBackgroundColor: ColoresApp.divisor,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -88,11 +85,11 @@ class EnDisputaScreen extends StatelessWidget {
                 onPressed: onVerDetalles,
                 style: ButtonStyle(
                   foregroundColor: WidgetStateProperty.resolveWith(
-                    (states) => states.contains(WidgetState.disabled) ? _divider : _blue,
+                    (states) => states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
                   ),
                   side: WidgetStateProperty.resolveWith(
                     (states) => BorderSide(
-                      color: states.contains(WidgetState.disabled) ? _divider : _blue,
+                      color: states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
                       width: 1.5,
                     ),
                   ),

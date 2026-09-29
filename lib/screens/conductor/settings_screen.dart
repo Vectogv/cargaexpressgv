@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../shared/cambiar_password.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca;
+import '../shared/ui_compartida.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -19,10 +19,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _visible = true;
   bool _loading = true;
 
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -80,9 +76,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       appBar: AppBar(
-        backgroundColor: _white, foregroundColor: _textDark, elevation: 0,
+        backgroundColor: Colors.white, foregroundColor: ColoresApp.textoOscuro, elevation: 0,
         title: const Text('Ajustes', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
       ),
       body: _loading
@@ -119,7 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textGrey)),
+          child: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: ColoresApp.textoSecundario)),
         ),
         TarjetaBlanca(
           radio: 14,
@@ -144,14 +140,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildInfoItem(String label, String value) {
     return ListTile(
       title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-      trailing: Text(value, style: TextStyle(fontSize: 14, color: _textGrey)),
+      trailing: Text(value, style: TextStyle(fontSize: 14, color: ColoresApp.textoSecundario)),
       dense: true,
     );
   }
 
   Widget _buildLinkItem(IconData icon, String label, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, size: 22, color: _textGrey),
+      leading: Icon(icon, size: 22, color: ColoresApp.textoSecundario),
       title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: onTap,

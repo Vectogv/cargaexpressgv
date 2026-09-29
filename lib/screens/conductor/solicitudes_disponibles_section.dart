@@ -12,6 +12,7 @@ import '../../services/solicitudes_disponibles_service.dart';
 import 'conductor_trip_detail_screen.dart';
 import 'offers_screen.dart';
 import '../../core/formato_dinero.dart';
+import '../shared/ui_compartida.dart';
 
 /// Abre el detalle de la solicitud para ofertar, confirmando antes con el
 /// backend que sigue abierta (GET /api/trips/:id).
@@ -72,11 +73,6 @@ class SolicitudesDisponiblesSection extends StatefulWidget {
 }
 
 class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSection> {
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _accentGreen = Color(0xFF4CAF50);
 
   StreamSubscription<List<SolicitudDisponible>>? _sub;
   Timer? _reloj;
@@ -127,7 +123,7 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
         if (!widget.online)
           _tarjetaEstado(
             icono: Icons.power_settings_new_rounded,
-            color: _textGrey,
+            color: ColoresApp.textoSecundario,
             titulo: 'Estás desconectado',
             detalle: 'Conéctate para empezar a recibir envíos.',
             accion: widget.onConectar == null
@@ -135,7 +131,7 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
                 : ElevatedButton(
                     onPressed: widget.cargandoConexion ? null : widget.onConectar,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _accentGreen,
+                      backgroundColor: ColoresApp.verde,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -146,7 +142,7 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
           _tarjetaEstado(
             key: const Key('esperando_solicitudes'),
             icono: Icons.radar_rounded,
-            color: _accentBlue,
+            color: ColoresApp.azul,
             titulo: 'Esperando solicitudes',
             detalle: 'Te avisaremos al instante cuando haya un envío cerca de ti. '
                 'Las solicitudes abiertas aparecerán aquí aunque cierres el aviso.',
@@ -169,8 +165,8 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
           OutlinedButton(
             onPressed: widget.onVerTodas,
             style: OutlinedButton.styleFrom(
-              foregroundColor: _accentBlue,
-              side: BorderSide(color: _accentBlue.withValues(alpha: 0.4)),
+              foregroundColor: ColoresApp.azul,
+              side: BorderSide(color: ColoresApp.azul.withValues(alpha: 0.4)),
               minimumSize: const Size.fromHeight(46),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
@@ -188,14 +184,14 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
     // el ancho a medias y el título salía cortado: "Solicitudes dispon…").
     return Row(
       children: [
-        const Icon(Icons.inbox_rounded, color: _accentBlue, size: 20),
+        const Icon(Icons.inbox_rounded, color: ColoresApp.azul, size: 20),
         const SizedBox(width: 8),
         Expanded(
           child: Row(
             children: [
               const Flexible(
                 child: Text('Solicitudes disponibles',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ),
@@ -203,7 +199,7 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: _accentBlue, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(12)),
                   child: Text('$total',
                       key: const Key('solicitudes_total'),
                       style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
@@ -220,7 +216,7 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
             onPressed: _refrescando ? null : _refrescar,
             icon: _refrescando
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.refresh_rounded, color: _textSecondary),
+                : const Icon(Icons.refresh_rounded, color: ColoresApp.textoSecundario),
           ),
       ],
     );
@@ -256,9 +252,9 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textDark)),
+                Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
                 const SizedBox(height: 4),
-                Text(detalle, style: const TextStyle(fontSize: 13, color: _textSecondary, height: 1.4)),
+                Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario, height: 1.4)),
               ],
             ),
           ),
@@ -282,14 +278,6 @@ class SolicitudDisponibleCard extends StatelessWidget {
     required this.onVerOferta,
   });
 
-  static const Color _primaryBlue = Color(0xFF1A3C6E);
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _lightBlue = Color(0xFFEFF6FF);
-  static const Color _green = Color(0xFF16A34A);
-  static const Color _orange = Color(0xFFEA580C);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _bgLight = Color(0xFFF5F7FA);
 
   static num? _num(dynamic v) => v == null ? null : num.tryParse(v.toString());
 
@@ -339,7 +327,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: oferta != null ? Border.all(color: _accentBlue.withValues(alpha: 0.35)) : null,
+        border: oferta != null ? Border.all(color: ColoresApp.azul.withValues(alpha: 0.35)) : null,
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Column(
@@ -353,20 +341,20 @@ class SolicitudDisponibleCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Precio propuesto por el cliente',
-                        style: TextStyle(fontSize: 11, color: _textSecondary)),
+                        style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
                     Text(dinero(precio),
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: _green, letterSpacing: -0.5)),
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: ColoresApp.verde, letterSpacing: -0.5)),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               if (programada)
-                _chip(Icons.event_rounded, 'Reserva', color: _primaryBlue)
+                _chip(Icons.event_rounded, 'Reserva', color: ColoresApp.azulOscuro)
               else if (restante > 0)
                 _chip(
                   Icons.timer_outlined,
                   formatoCuentaRegresiva(Duration(seconds: restante)),
-                  color: restante <= 60 ? Colors.red : _orange,
+                  color: restante <= 60 ? Colors.red : ColoresApp.naranja,
                 )
               else
                 _chip(Icons.timer_off_outlined, 'Por vencer', color: Colors.red),
@@ -380,11 +368,11 @@ class SolicitudDisponibleCard extends StatelessWidget {
               if (km != null) _chip(Icons.near_me_rounded, textoDistanciaRecogida(km)),
               if (minutos != null && minutos > 0) _chip(Icons.schedule_rounded, '$minutos min de viaje'),
               if (vehiculoRequerido != null && vehiculoRequerido.isNotEmpty)
-                _chip(Icons.local_shipping_outlined, vehiculoRequerido, color: _primaryBlue),
+                _chip(Icons.local_shipping_outlined, vehiculoRequerido, color: ColoresApp.azulOscuro),
             ],
           ),
           const SizedBox(height: 14),
-          _parada(Icons.circle, _green, 'Recogida', origen.isEmpty ? 'Cerca de ti' : origen),
+          _parada(Icons.circle, ColoresApp.verde, 'Recogida', origen.isEmpty ? 'Cerca de ti' : origen),
           Padding(
             padding: const EdgeInsets.only(left: 8),
             child: Align(
@@ -397,13 +385,13 @@ class SolicitudDisponibleCard extends StatelessWidget {
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: _bgLight, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(12)),
               child: Row(children: [
-                const Icon(Icons.inventory_2_outlined, size: 18, color: _textSecondary),
+                const Icon(Icons.inventory_2_outlined, size: 18, color: ColoresApp.textoSecundario),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(carga,
-                      style: const TextStyle(color: _textDark, fontSize: 13),
+                      style: const TextStyle(color: ColoresApp.textoOscuro, fontSize: 13),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                 ),
@@ -415,14 +403,14 @@ class SolicitudDisponibleCard extends StatelessWidget {
             Container(
               key: const Key('oferta_enviada'),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(color: _lightBlue, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: ColoresApp.azulTenue, borderRadius: BorderRadius.circular(12)),
               child: Row(children: [
-                const Icon(Icons.send_rounded, size: 18, color: _accentBlue),
+                const Icon(Icons.send_rounded, size: 18, color: ColoresApp.azul),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _textoOferta(oferta.monto, oferta.restante(ahora)),
-                    style: const TextStyle(color: _accentBlue, fontSize: 13, fontWeight: FontWeight.w700),
+                    style: const TextStyle(color: ColoresApp.azul, fontSize: 13, fontWeight: FontWeight.w700),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -432,8 +420,8 @@ class SolicitudDisponibleCard extends StatelessWidget {
             OutlinedButton(
               onPressed: onVerOferta,
               style: OutlinedButton.styleFrom(
-                foregroundColor: _accentBlue,
-                side: BorderSide(color: _accentBlue.withValues(alpha: 0.5)),
+                foregroundColor: ColoresApp.azul,
+                side: BorderSide(color: ColoresApp.azul.withValues(alpha: 0.5)),
                 minimumSize: const Size.fromHeight(46),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
@@ -444,11 +432,11 @@ class SolicitudDisponibleCard extends StatelessWidget {
               Row(
                 key: const Key('oferta_rechazada'),
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: _orange),
+                  const Icon(Icons.info_outline_rounded, size: 16, color: ColoresApp.naranja),
                   const SizedBox(width: 6),
                   const Expanded(
                     child: Text('El cliente rechazó tu oferta anterior. Puedes enviar una nueva.',
-                        style: TextStyle(fontSize: 12, color: _orange, fontWeight: FontWeight.w600)),
+                        style: TextStyle(fontSize: 12, color: ColoresApp.naranja, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -457,7 +445,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
             ElevatedButton(
               onPressed: onVer,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentBlue,
+                backgroundColor: ColoresApp.azul,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(48),
                 elevation: 0,
@@ -477,7 +465,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
     return '$base · vence en ${formatoCuentaRegresiva(restante)}';
   }
 
-  Widget _chip(IconData icon, String texto, {Color color = _accentBlue}) => Container(
+  Widget _chip(IconData icon, String texto, {Color color = ColoresApp.azul}) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -497,9 +485,9 @@ class SolicitudDisponibleCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(titulo, style: const TextStyle(fontSize: 11, color: _textSecondary)),
+              Text(titulo, style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
               Text(texto,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textDark),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
             ]),

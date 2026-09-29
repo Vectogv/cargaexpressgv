@@ -4,6 +4,7 @@ import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
+import '../shared/ui_compartida.dart' show ColoresApp;
 import 'documents_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -18,11 +19,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   String? _error;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -190,18 +186,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       appBar: AppBar(
-        backgroundColor: _white,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
+          icon: Icon(Icons.arrow_back_ios_new, size: 20, color: ColoresApp.textoOscuro),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
+        title: Text('Perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
         actions: [
           IconButton(
-            icon: Icon(Icons.edit_outlined, size: 22, color: _textDark),
+            icon: Icon(Icons.edit_outlined, size: 22, color: ColoresApp.textoOscuro),
             onPressed: _editInfo,
           ),
         ],
@@ -219,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 12),
                         const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 16, color: Colors.black54)),
                         const SizedBox(height: 6),
-                        Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: _textGrey)),
+                        Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
                         const SizedBox(height: 16),
                         OutlinedButton.icon(
                           onPressed: () {
@@ -253,7 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final viajes = _conductor?['totalViajes'] ?? 129;
 
     return Container(
-      color: _white,
+      color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Row(
         children: [
@@ -266,7 +262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   path: avatar,
                   name: nombre,
                   radius: 35,
-                  backgroundColor: _primaryDark,
+                  backgroundColor: ColoresApp.azulOscuro,
                   foregroundColor: Colors.white,
                   fontSize: 22,
                   border: Border.all(color: Colors.grey.shade200, width: 2),
@@ -277,9 +273,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: _primaryDark,
+                      color: ColoresApp.azulOscuro,
                       shape: BoxShape.circle,
-                      border: Border.all(color: _white, width: 2),
+                      border: Border.all(color: Colors.white, width: 2),
                     ),
                     child: const Icon(Icons.camera_alt, color: Colors.white, size: 14),
                   ),
@@ -297,14 +293,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
                   ),
                 const SizedBox(height: 2),
-                Text(email, style: TextStyle(fontSize: 12, color: _textGrey)),
+                Text(email, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
                 const SizedBox(height: 4),
                 Row(
                   children: [
                     const Icon(Icons.star_rounded, color: Color(0xFFFFC107), size: 18),
                     const SizedBox(width: 4),
-                    Text(rating, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textDark)),
-                    Text(' ($viajes viajes)', style: TextStyle(fontSize: 13, color: _textGrey)),
+                    Text(rating, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
+                    Text(' ($viajes viajes)', style: TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
                   ],
                 ),
               ],
@@ -317,7 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildMenuItems() {
     return Container(
-      color: _white,
+      color: Colors.white,
       child: Column(
         children: [
           _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
@@ -337,7 +333,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
-                Icon(icon, size: 22, color: _textDark),
+                Icon(icon, size: 22, color: ColoresApp.textoOscuro),
                 const SizedBox(width: 14),
                 Expanded(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
                 Icon(Icons.chevron_right, color: Colors.grey.shade400),

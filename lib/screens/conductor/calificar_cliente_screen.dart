@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/media_image.dart';
+import '../shared/ui_compartida.dart';
 
 class CalificarClienteScreen extends StatefulWidget {
   final String nombreCliente;
@@ -23,12 +24,6 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
   int _estrellas = 5;
   final TextEditingController _comentarioCtrl = TextEditingController();
 
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _star = Color(0xFFF59E0B);
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
-  static const Color _inputBorder = Color(0xFFD1D5DB);
   static const Color _greenDark = Color(0xFF15803D);
 
   static const List<String> _labels = [
@@ -98,7 +93,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _divider),
+        border: Border.all(color: ColoresApp.divisor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -126,17 +121,17 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
                     style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: _textPrimary)),
+                        color: ColoresApp.textoOscuro)),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.star_rounded, color: _star, size: 17),
+                    const Icon(Icons.star_rounded, color: ColoresApp.ambar, size: 17),
                     const SizedBox(width: 4),
                     Text(widget.ratingActual.toStringAsFixed(1),
                         style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: _textPrimary)),
+                            color: ColoresApp.textoOscuro)),
                   ],
                 ),
               ],
@@ -155,7 +150,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
           style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: _textPrimary),
+              color: ColoresApp.textoOscuro),
         ),
         const SizedBox(height: 16),
         Row(
@@ -168,7 +163,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Icon(
                   filled ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: filled ? _star : const Color(0xFFD1D5DB),
+                  color: filled ? ColoresApp.ambar : const Color(0xFFD1D5DB),
                   size: 44,
                 ),
               ),
@@ -184,7 +179,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
             style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: _textSecondary),
+                color: ColoresApp.textoSecundario),
           ),
         ),
       ],
@@ -196,18 +191,18 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
       controller: _comentarioCtrl,
       maxLines: 4,
       minLines: 3,
-      style: const TextStyle(fontSize: 14, color: _textPrimary),
+      style: const TextStyle(fontSize: 14, color: ColoresApp.textoOscuro),
       decoration: InputDecoration(
         hintText: 'Escribe un comentario (opcional)',
-        hintStyle: const TextStyle(color: _textSecondary, fontSize: 14),
+        hintStyle: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 14),
         contentPadding: const EdgeInsets.all(14),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _inputBorder),
+          borderSide: const BorderSide(color: ColoresApp.bordeCampo),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _accentBlue, width: 1.5),
+          borderSide: const BorderSide(color: ColoresApp.azul, width: 1.5),
         ),
       ),
     );
@@ -220,7 +215,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
       padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: _divider)),
+        border: Border(top: BorderSide(color: ColoresApp.divisor)),
       ),
       child: SizedBox(
         width: double.infinity,
@@ -229,8 +224,8 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
               ? null
               : () => widget.onEnviar!(_estrellas, _comentarioCtrl.text.trim()),
           style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
-            backgroundColor: _accentBlue,
-            disabledBackgroundColor: _divider,
+            backgroundColor: ColoresApp.azul,
+            disabledBackgroundColor: ColoresApp.divisor,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),

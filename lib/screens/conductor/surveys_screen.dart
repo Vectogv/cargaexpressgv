@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 
 class SurveysScreen extends StatefulWidget {
   const SurveysScreen({super.key});
@@ -8,8 +9,6 @@ class SurveysScreen extends StatefulWidget {
 }
 
 class _SurveysScreenState extends State<SurveysScreen> {
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -19,7 +18,7 @@ class _SurveysScreenState extends State<SurveysScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       body: Column(
         children: [
           _buildHeader(context),
@@ -44,7 +43,7 @@ class _SurveysScreenState extends State<SurveysScreen> {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      color: _white,
+      color: Colors.white,
       padding: const EdgeInsets.only(top: 44, left: 16, right: 16, bottom: 14),
       child: Row(
         children: [

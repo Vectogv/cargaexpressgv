@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 
 class ResumenViajeData {
   final String origen;
@@ -44,11 +45,6 @@ class ResumenViajeScreen extends StatelessWidget {
     this.onVolverInicio,
   });
 
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _green = Color(0xFF16A34A);
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
 
   @override
   Widget build(BuildContext context) {
@@ -99,12 +95,12 @@ class ResumenViajeScreen extends StatelessWidget {
       _RowData(
           label: 'Comisión (${data.porcentajeComision})',
           value: data.comision,
-          valueColor: _textSecondary),
+          valueColor: ColoresApp.textoSecundario),
       _RowData(
           label: 'Ganancia total',
           value: data.gananciaTotal,
-          labelColor: _green,
-          valueColor: _green,
+          labelColor: ColoresApp.verde,
+          valueColor: ColoresApp.verde,
           bold: true),
       _RowData(label: 'Pago recibido', value: data.pagoRecibido),
     ];
@@ -113,7 +109,7 @@ class ResumenViajeScreen extends StatelessWidget {
       children: List.generate(rows.length * 2 - 1, (i) {
         if (i.isOdd) {
           return const Divider(
-              color: _divider, height: 1, indent: 20, endIndent: 20);
+              color: ColoresApp.divisor, height: 1, indent: 20, endIndent: 20);
         }
         return _buildRow(rows[i ~/ 2]);
       }),
@@ -131,7 +127,7 @@ class ResumenViajeScreen extends StatelessWidget {
             row.label,
             style: TextStyle(
               fontSize: 14,
-              color: row.labelColor ?? _textSecondary,
+              color: row.labelColor ?? ColoresApp.textoSecundario,
               fontWeight:
                   row.bold ? FontWeight.w700 : FontWeight.w400,
             ),
@@ -143,7 +139,7 @@ class ResumenViajeScreen extends StatelessWidget {
               textAlign: TextAlign.right,
               style: TextStyle(
                 fontSize: 14,
-                color: row.valueColor ?? _textPrimary,
+                color: row.valueColor ?? ColoresApp.textoOscuro,
                 fontWeight:
                     row.bold ? FontWeight.w800 : FontWeight.w500,
               ),
@@ -158,7 +154,7 @@ class ResumenViajeScreen extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: _divider)),
+        border: Border(top: BorderSide(color: ColoresApp.divisor)),
       ),
       // SafeArea: el botón quedaba bajo la barra de navegación.
       child: SafeArea(
@@ -173,7 +169,7 @@ class ResumenViajeScreen extends StatelessWidget {
               // por defecto vuelve al inicio (primera ruta).
               onPressed: onVolverInicio ?? () => Navigator.of(context).popUntil((r) => r.isFirst),
               style: FilledButton.styleFrom(
-                backgroundColor: _accentBlue,
+                backgroundColor: ColoresApp.azul,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text(

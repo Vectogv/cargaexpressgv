@@ -2,23 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../../services/solicitudes_disponibles_service.dart';
 import 'solicitudes_disponibles_section.dart';
+import '../shared/ui_compartida.dart';
 
 /// Pantalla propia con todas las solicitudes disponibles (la del inicio
 /// muestra sólo las primeras). Tirar hacia abajo vuelve a consultar.
 class SolicitudesDisponiblesScreen extends StatelessWidget {
   const SolicitudesDisponiblesScreen({super.key});
 
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _bgLight = Color(0xFFF5F7FA);
 
   @override
   Widget build(BuildContext context) {
     final servicio = SolicitudesDisponiblesService.instance;
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: _textDark,
+        foregroundColor: ColoresApp.textoOscuro,
         elevation: 0,
         title: const Text('Solicitudes disponibles', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
       ),

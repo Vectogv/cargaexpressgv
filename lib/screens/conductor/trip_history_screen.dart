@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../core/formato_dinero.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca;
+import '../shared/ui_compartida.dart';
 
 class TripHistoryScreen extends StatefulWidget {
   const TripHistoryScreen({super.key});
@@ -19,12 +19,6 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   bool _hasMore = true;
   static const int _pageSize = 10;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _accentGreen = Color(0xFF4CAF50);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -71,9 +65,9 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       appBar: AppBar(
-        backgroundColor: _white, foregroundColor: _textDark, elevation: 0,
+        backgroundColor: Colors.white, foregroundColor: ColoresApp.textoOscuro, elevation: 0,
         title: const Text('Historial de viajes', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
       ),
       body: _loading
@@ -127,11 +121,11 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
             ),
             const SizedBox(height: 8),
             Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13)),
-            Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13, color: _textGrey)),
+            Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
             const SizedBox(height: 6),
             Row(
               children: [
-                Text(_formatDate(t['createdAt'] as String?), style: TextStyle(fontSize: 11, color: _textGrey)),
+                Text(_formatDate(t['createdAt'] as String?), style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
                 const Spacer(),
                 Text('Comisión: ${formatearPesos(t['comision'] as num?)}',
                     style: TextStyle(fontSize: 11, color: Colors.red.shade400)),
@@ -147,11 +141,11 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
     Color c;
     String label;
     switch (estado) {
-      case 'finalizado': c = _accentGreen; label = 'Finalizado'; break;
-      case 'esperando_confirmacion': c = _primaryDark; label = 'Esperando confirmación'; break;
-      case 'reservado': c = _textGrey; label = 'Reservado'; break;
+      case 'finalizado': c = ColoresApp.verde; label = 'Finalizado'; break;
+      case 'esperando_confirmacion': c = ColoresApp.azulOscuro; label = 'Esperando confirmación'; break;
+      case 'reservado': c = ColoresApp.textoSecundario; label = 'Reservado'; break;
       case 'cancelado': c = Colors.red; label = 'Cancelado'; break;
-      default: c = _textGrey; label = estado; break;
+      default: c = ColoresApp.textoSecundario; label = estado; break;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

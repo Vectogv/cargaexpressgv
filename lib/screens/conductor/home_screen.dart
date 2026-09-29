@@ -32,7 +32,7 @@ import 'solicitudes_disponibles_screen.dart';
 import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
-import '../shared/ui_compartida.dart' show FondoDegradado, TarjetaBlanca;
+import '../shared/ui_compartida.dart' show FondoDegradado, TarjetaBlanca, ColoresApp, cifrasTabulares;
 import '../shared/cuenta_no_activa_dialog.dart' show CuentaNoActivaDialog;
 import '../../core/formato_dinero.dart';
 
@@ -78,14 +78,6 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Cuántas solicitudes mostrar en el inicio; el resto en la pantalla propia.
   static const int _maxSolicitudesInicio = 5;
 
-  static const Color _primaryBlue = Color(0xFF1A3C6E);
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _white = Colors.white;
-  static const Color _accentGreen = Color(0xFF4CAF50);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
 
   @override
   void initState() {
@@ -545,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final estado = _verificacionEstado;
     if (estado == 'rechazado' || estado == 'pendiente') return Colors.orange;
     if (!_online) return Colors.grey;
-    return _accentGreen;
+    return ColoresApp.verde;
   }
 
   void _navigate(int index) {
@@ -579,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       drawer: _buildDrawer(),
       body: Column(
         children: [
@@ -629,7 +621,7 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.fromLTRB(20, 48, 20, 20),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF1A3C6E), Color(0xFF1565C0)],
+                colors: [ColoresApp.azulOscuro, ColoresApp.azul],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -638,10 +630,10 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundColor: _white.withValues(alpha: 0.2),
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
                   child: Text(
                     _initials(ApiClient.instance.nombreCompleto),
-                    style: TextStyle(color: _white, fontWeight: FontWeight.w700, fontSize: 18),
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -705,11 +697,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDrawerItem(IconData icon, String label, int index, {bool isDestructive = false}) {
     return ListTile(
-      leading: Icon(icon, color: isDestructive ? Colors.red : _textGrey),
+      leading: Icon(icon, color: isDestructive ? ColoresApp.rojoSesion : ColoresApp.textoSecundario),
       title: Text(
         label,
         style: TextStyle(
-          color: isDestructive ? Colors.red : _textDark,
+          color: isDestructive ? ColoresApp.rojoSesion : ColoresApp.textoOscuro,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -728,7 +720,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final nombre = (_profile?['nombre'] as String?)?.trim();
     final saludo = (nombre == null || nombre.isEmpty) ? 'Hola, conductor' : 'Hola, ${nombre.split(' ').first}';
     return FondoDegradado(
-      colores: const [_primaryBlue, _accentBlue],
+      colores: const [ColoresApp.azulOscuro, ColoresApp.azul],
       radio: const BorderRadius.vertical(bottom: Radius.circular(24)),
       child: SafeArea(
         bottom: false,
@@ -767,7 +759,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: _accentGreen.withValues(alpha: 0.9),
+                        color: ColoresApp.verde.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text('Viaje activo',
@@ -839,7 +831,7 @@ class _HomeScreenState extends State<HomeScreen> {
               value: _online,
               onChanged: bloqueado ? null : (_) => _toggleStatus(),
               activeThumbColor: Colors.white,
-              activeTrackColor: _accentGreen,
+              activeTrackColor: ColoresApp.verde,
               inactiveThumbColor: Colors.white,
               inactiveTrackColor: Colors.white24,
             ),
@@ -876,7 +868,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF1A3C6E), Color(0xFF1565C0)]),
+              gradient: const LinearGradient(colors: [ColoresApp.azulOscuro, ColoresApp.azul]),
               borderRadius: BorderRadius.circular(20),
                   boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 6))],
             ),
@@ -886,7 +878,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
+                    decoration: BoxDecoration(color: ColoresApp.verde.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       const Icon(Icons.trip_origin, size: 14, color: Colors.white),
                       const SizedBox(width: 4),
@@ -915,7 +907,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: const Text('Ver viaje en el mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: _primaryBlue,
+                      foregroundColor: ColoresApp.azulOscuro,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 0,
                     ),
@@ -1011,7 +1003,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return _AvisoRegistro(
         key: const Key('aviso_registro_incompleto'),
         icono: Icons.person_add_alt_1,
-        color: const Color(0xFF1D4ED8),
+        color: ColoresApp.azul,
         titulo: 'Completa tu registro como conductor',
         detalle: 'Sube tus documentos para empezar a recibir viajes.',
         onTap: () => _navigate(10),
@@ -1022,7 +1014,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return _AvisoRegistro(
         key: const Key('aviso_verificacion'),
         icono: Icons.verified_outlined,
-        color: const Color(0xFFEA580C),
+        color: ColoresApp.naranja,
         titulo: estado == 'rechazado' ? 'Tu verificación fue rechazada' : 'Verificación pendiente',
         detalle: estado == 'rechazado'
             ? 'Revisa tus documentos y vuelve a enviarlos.'
@@ -1047,12 +1039,12 @@ class _HomeScreenState extends State<HomeScreen> {
       child: IntrinsicHeight(
         child: Row(
           children: [
-            _statCompacta(Icons.payments_rounded, _money(_num(_stats?['netaHoy'])), 'Hoy', const Color(0xFF16A34A)),
-            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE5E7EB)),
-            _statCompacta(Icons.local_shipping_rounded, '${_num(_stats?['viajesHoy'])?.toInt() ?? 0}', 'Viajes', _accentBlue),
-            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+            _statCompacta(Icons.payments_rounded, _money(_num(_stats?['netaHoy'])), 'Hoy', ColoresApp.verde),
+            const VerticalDivider(width: 1, thickness: 1, color: ColoresApp.divisor),
+            _statCompacta(Icons.local_shipping_rounded, '${_num(_stats?['viajesHoy'])?.toInt() ?? 0}', 'Viajes', ColoresApp.azul),
+            const VerticalDivider(width: 1, thickness: 1, color: ColoresApp.divisor),
             _statCompacta(Icons.star_rounded, rating == null || rating == 0 ? '—' : rating.toStringAsFixed(1),
-                'Calificación', const Color(0xFFF59E0B)),
+                'Calificación', ColoresApp.ambar),
           ],
         ),
       ),
@@ -1074,13 +1066,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _textDark)),
+                    child: Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 11, color: _textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(label, style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -1139,7 +1131,7 @@ class _AvisoRegistro extends StatelessWidget {
                     children: [
                       Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
                       const SizedBox(height: 3),
-                      Text(detalle, style: const TextStyle(fontSize: 12.5, color: Color(0xFF374151), height: 1.35)),
+                      Text(detalle, style: const TextStyle(fontSize: 12.5, color: ColoresApp.textoSecundario, height: 1.35)),
                       const SizedBox(height: 4),
                       Text('Ir a Documentación', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color)),
                     ],
@@ -1190,13 +1182,13 @@ class _MapaPlegableState extends State<_MapaPlegable> {
               padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
               child: Row(
                 children: [
-                  const Icon(Icons.map_outlined, size: 18, color: Color(0xFF2563EB)),
+                  const Icon(Icons.map_outlined, size: 18, color: ColoresApp.azul),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text('Tu ubicación en el mapa',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
                   ),
-                  Icon(_plegado ? Icons.expand_more_rounded : Icons.expand_less_rounded, color: const Color(0xFF6B7280)),
+                  Icon(_plegado ? Icons.expand_more_rounded : Icons.expand_less_rounded, color: ColoresApp.chevron),
                 ],
               ),
             ),
@@ -1225,8 +1217,6 @@ class _DriverMiniMap extends StatefulWidget {
 }
 
 class _DriverMiniMapState extends State<_DriverMiniMap> {
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _textDark = Color(0xFF1A1A2E);
   static const _interaction = InteractionOptions(flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag);
 
   final MapController _mapController = MapController();
@@ -1286,7 +1276,7 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
               Positioned.fill(
                 key: const Key('mini_mapa_sin_posicion'),
                 child: Container(
-                  color: const Color(0xFFE5E7EB),
+                  color: ColoresApp.divisor,
                   alignment: Alignment.center,
                   child: Icon(Icons.map_outlined, size: 48, color: Colors.grey.shade400),
                 ),
@@ -1304,10 +1294,10 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
                       height: 44,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: _accentBlue,
+                          color: ColoresApp.azul,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [BoxShadow(color: _accentBlue.withValues(alpha: 0.45), blurRadius: 12, spreadRadius: 3)],
+                          boxShadow: [BoxShadow(color: ColoresApp.azul.withValues(alpha: 0.45), blurRadius: 12, spreadRadius: 3)],
                         ),
                         child: const Icon(Icons.local_shipping, color: Colors.white, size: 20),
                       ),
@@ -1321,7 +1311,7 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
                   color: Colors.white.withValues(alpha: 0.65),
                   alignment: Alignment.center,
                   child: const Text('Conéctate para recibir viajes cerca de ti',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: _textDark)),
+                      style: TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
                 ),
               ),
             Positioned(
@@ -1335,10 +1325,10 @@ class _DriverMiniMapState extends State<_DriverMiniMap> {
                   boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)],
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(tienePosicion ? Icons.my_location : Icons.location_searching, size: 14, color: _accentBlue),
+                  Icon(tienePosicion ? Icons.my_location : Icons.location_searching, size: 14, color: ColoresApp.azul),
                   const SizedBox(width: 6),
                   Text(tienePosicion ? 'Tu ubicación' : 'Buscando tu ubicación...',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
                 ]),
               ),
             ),

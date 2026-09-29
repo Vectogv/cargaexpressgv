@@ -5,7 +5,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
 import '../../services/socket_service_client.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca;
+import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -20,12 +20,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   String? _uploadingDoc;
   StreamSubscription<Map<String, dynamic>>? _verificationSub;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _accentGreen = Color(0xFF4CAF50);
-  static const Color _accentOrange = Color(0xFFFF9800);
-  static const Color _accentRed = Color(0xFFE53935);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   final List<_DocItem> _docs = [
     _DocItem('cedula', 'Cédula de ciudadanía', Icons.badge_outlined),
@@ -250,9 +244,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       appBar: AppBar(
-        backgroundColor: _white,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1A1A2E)),
@@ -281,11 +275,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (estado == 'aprobado') {
       return Container(
         width: double.infinity,
-        color: _accentGreen.withValues(alpha: 0.12),
+        color: ColoresApp.verde.withValues(alpha: 0.12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
-            Icon(Icons.verified, color: _accentGreen, size: 20),
+            Icon(Icons.verified, color: ColoresApp.verde, size: 20),
             const SizedBox(width: 8),
             const Text('Documentos aprobados', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
           ],
@@ -297,19 +291,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         onTap: _showRejectionNote,
         child: Container(
           width: double.infinity,
-          color: _accentRed.withValues(alpha: 0.08),
+          color: ColoresApp.rojo.withValues(alpha: 0.08),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              Icon(Icons.cancel, color: _accentRed, size: 20),
+              Icon(Icons.cancel, color: ColoresApp.rojo, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Documentos rechazados. Toca para ver motivo.',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: _accentRed),
+                  style: TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.rojo),
                 ),
               ),
-              Icon(Icons.chevron_right, color: _accentRed, size: 20),
+              Icon(Icons.chevron_right, color: ColoresApp.rojo, size: 20),
             ],
           ),
         ),
@@ -334,10 +328,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: _primaryDark.withValues(alpha: 0.08),
+                color: ColoresApp.azulOscuro.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(doc.icon, color: _primaryDark, size: 22),
+              child: Icon(doc.icon, color: ColoresApp.azulOscuro, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -348,7 +342,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   if (estado == 'rechazado' && nota != null && nota.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(nota, style: TextStyle(fontSize: 11, color: _accentRed.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      child: Text(nota, style: TextStyle(fontSize: 11, color: ColoresApp.rojo.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ),
                   if (estado != 'no_subido') ...[
                     const SizedBox(height: 6),
@@ -388,13 +382,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       case 'aprobado':
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: _accentGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(color: ColoresApp.verde.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle, size: 14, color: _accentGreen),
+              Icon(Icons.check_circle, size: 14, color: ColoresApp.verde),
               const SizedBox(width: 4),
-              Text('Aprobado', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _accentGreen)),
+              Text('Aprobado', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ColoresApp.verde)),
             ],
           ),
         );
@@ -404,13 +398,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: _accentRed.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: ColoresApp.rojo.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20)),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.cancel, size: 14, color: _accentRed),
+                  Icon(Icons.cancel, size: 14, color: ColoresApp.rojo),
                   const SizedBox(width: 4),
-                  Text('Rechazado', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _accentRed)),
+                  Text('Rechazado', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ColoresApp.rojo)),
                 ],
               ),
             ),
@@ -420,8 +414,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               child: ElevatedButton(
                 onPressed: () => _confirmAndUpload(docType),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _accentRed,
-                  foregroundColor: _white,
+                  backgroundColor: ColoresApp.rojo,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
@@ -435,13 +429,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       case 'pendiente':
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: _accentOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(color: ColoresApp.naranja.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.schedule, size: 14, color: _accentOrange),
+              Icon(Icons.schedule, size: 14, color: ColoresApp.naranja),
               const SizedBox(width: 4),
-              Text('En revisión', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _accentOrange)),
+              Text('En revisión', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ColoresApp.naranja)),
             ],
           ),
         );
@@ -451,8 +445,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           child: ElevatedButton(
             onPressed: () => _confirmAndUpload(docType),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _primaryDark,
-              foregroundColor: _white,
+              backgroundColor: ColoresApp.azulOscuro,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 4),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               elevation: 0,

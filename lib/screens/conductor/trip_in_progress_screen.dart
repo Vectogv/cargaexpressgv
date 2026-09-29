@@ -39,7 +39,7 @@ import 'resumen_viaje_screen.dart';
 import 'calificar_cliente_screen.dart';
 import 'sos_alert_screen.dart';
 import '../shared/action_key.dart';
-import '../shared/ui_compartida.dart' show BarraInferiorFija;
+import '../shared/ui_compartida.dart';
 import '../shared/dispute_screen.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
 import 'disputa_iniciada_wrapper.dart';
@@ -134,13 +134,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   int _locationFailCount = 0;
   DateTime? _lastLocationSent;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _primaryBlue = Color(0xFF1565C0);
-  static const Color _accentGreen = Color(0xFF4CAF50);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -1010,7 +1003,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                     builder: (_, timeoutSec, _) => Text('Tiempo restante: $timeoutSec s',
                       style: TextStyle(
                         fontSize: 24, fontWeight: FontWeight.w700,
-                        color: timeoutSec < 10 ? Colors.red : _primaryDark,
+                        color: timeoutSec < 10 ? Colors.red : ColoresApp.azulOscuro,
                       ),
                     ),
                   ),
@@ -1674,12 +1667,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(backgroundColor: _bgLight, body: const Center(child: CircularProgressIndicator()));
+      return Scaffold(backgroundColor: ColoresApp.fondo, body: const Center(child: CircularProgressIndicator()));
     }
     if (_trip == null) {
       return Scaffold(
-        backgroundColor: _bgLight,
-        appBar: AppBar(backgroundColor: _white, foregroundColor: _textDark, elevation: 0, title: const Text('Viaje en curso')),
+        backgroundColor: ColoresApp.fondo,
+        appBar: AppBar(backgroundColor: Colors.white, foregroundColor: ColoresApp.textoOscuro, elevation: 0, title: const Text('Viaje en curso')),
         body: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.local_shipping, size: 64, color: Colors.grey.shade300),
@@ -1712,7 +1705,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         }
       },
       child: Scaffold(
-        backgroundColor: _bgLight,
+        backgroundColor: ColoresApp.fondo,
         body: Column(
           children: [
             _buildHeader(context, estado),
@@ -1740,7 +1733,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   Widget _buildHeader(BuildContext context, String estado) {
     return Container(
-      color: _white,
+      color: Colors.white,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -1755,11 +1748,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                     _salirDelViaje();
                   }
                 },
-                child: const Icon(Icons.arrow_back_ios_new, size: 20, color: _textDark),
+                child: const Icon(Icons.arrow_back_ios_new, size: 20, color: ColoresApp.textoOscuro),
               ),
               const SizedBox(width: 12),
               const Expanded(
-                child: Text('Viaje en curso', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textDark)),
+                child: Text('Viaje en curso', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
               ),
               const SizedBox(width: 8),
               ConstrainedBox(
@@ -1767,15 +1760,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _accentGreen.withValues(alpha: 0.12),
+                    color: ColoresApp.verde.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _accentGreen.withValues(alpha: 0.4)),
+                    border: Border.all(color: ColoresApp.verde.withValues(alpha: 0.4)),
                   ),
                   child: Text(
                     _etiquetaEstado(estado),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _accentGreen, fontSize: 11, fontWeight: FontWeight.w700),
+                    style: const TextStyle(color: ColoresApp.verde, fontSize: 11, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -1884,7 +1877,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   Widget _mapFab(IconData icon, String tooltip, VoidCallback onTap, {bool activo = false}) {
     return Material(
-      color: activo ? _primaryBlue : _white,
+      color: activo ? ColoresApp.azul : Colors.white,
       shape: const CircleBorder(),
       elevation: 3,
       child: InkWell(
@@ -1892,7 +1885,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         onTap: onTap,
         child: Tooltip(
           message: tooltip,
-          child: SizedBox(width: 42, height: 42, child: Icon(icon, size: 22, color: activo ? _white : _textDark)),
+          child: SizedBox(width: 42, height: 42, child: Icon(icon, size: 22, color: activo ? Colors.white : ColoresApp.textoOscuro)),
         ),
       ),
     );
@@ -1907,7 +1900,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     return Container(
       key: _panelKey,
       decoration: BoxDecoration(
-        color: _white,
+        color: Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 14, offset: const Offset(0, -3))],
       ),
@@ -1946,17 +1939,17 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   ({String titulo, String detalle, IconData icono, Color color}) _infoEstado(String estado) {
     switch (estado) {
       case TripStatus.aceptado:
-        return (titulo: 'Conduce al punto de recogida', detalle: 'Avísale al cliente que vas en camino.', icono: Icons.navigation_rounded, color: _primaryBlue);
+        return (titulo: 'Conduce al punto de recogida', detalle: 'Avísale al cliente que vas en camino.', icono: Icons.navigation_rounded, color: ColoresApp.azul);
       case TripStatus.enCamino:
-        return (titulo: 'En camino al origen', detalle: 'Confirma la llegada cuando estés en el punto de recogida.', icono: Icons.local_shipping_rounded, color: _primaryBlue);
+        return (titulo: 'En camino al origen', detalle: 'Confirma la llegada cuando estés en el punto de recogida.', icono: Icons.local_shipping_rounded, color: ColoresApp.azul);
       case TripStatus.llegada:
-        return (titulo: 'Estás en el origen', detalle: 'Recibe la carga e inicia el viaje.', icono: Icons.inventory_2_rounded, color: _accentGreen);
+        return (titulo: 'Estás en el origen', detalle: 'Recibe la carga e inicia el viaje.', icono: Icons.inventory_2_rounded, color: ColoresApp.verde);
       case TripStatus.enCurso:
         return _isNearDestination
-            ? (titulo: 'Estás en el destino', detalle: 'Entrega la carga y finaliza el viaje.', icono: Icons.flag_rounded, color: _accentGreen)
-            : (titulo: 'Viaje en curso', detalle: 'Conduce hacia el punto de entrega.', icono: Icons.route_rounded, color: _primaryBlue);
+            ? (titulo: 'Estás en el destino', detalle: 'Entrega la carga y finaliza el viaje.', icono: Icons.flag_rounded, color: ColoresApp.verde)
+            : (titulo: 'Viaje en curso', detalle: 'Conduce hacia el punto de entrega.', icono: Icons.route_rounded, color: ColoresApp.azul);
       case TripStatus.entregado:
-        return (titulo: 'Carga entregada', detalle: 'Finaliza el viaje para que el cliente confirme.', icono: Icons.flag_rounded, color: _accentGreen);
+        return (titulo: 'Carga entregada', detalle: 'Finaliza el viaje para que el cliente confirme.', icono: Icons.flag_rounded, color: ColoresApp.verde);
       case TripStatus.esperaConfirmacion:
       case TripStatus.pendienteConfirmacion:
         return (titulo: 'Esperando al cliente', detalle: 'El cliente debe confirmar la entrega para cerrar el viaje.', icono: Icons.hourglass_top_rounded, color: const Color(0xFFEF6C00));
@@ -1965,7 +1958,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         // a su estado (o lo cierra/cancela): trip_state_machine 'sos'.
         return (titulo: 'Emergencia activa', detalle: 'Soporte fue notificado y te contactará. El viaje sigue cuando soporte cierre la emergencia.', icono: Icons.emergency_rounded, color: Colors.red.shade700);
       default:
-        return (titulo: TripStatus.label(estado), detalle: '', icono: Icons.info_outline, color: _textGrey);
+        return (titulo: TripStatus.label(estado), detalle: '', icono: Icons.info_outline, color: ColoresApp.textoSecundario);
     }
   }
 
@@ -1986,21 +1979,21 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           Container(
             width: 38, height: 38,
             decoration: BoxDecoration(color: info.color, borderRadius: BorderRadius.circular(12)),
-            child: Icon(info.icono, color: _white, size: 22),
+            child: Icon(info.icono, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(info.titulo, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark)),
+            Text(info.titulo, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
             if (info.detalle.isNotEmpty) ...[
               const SizedBox(height: 2),
-              Text(info.detalle, style: const TextStyle(fontSize: 12, color: _textGrey, height: 1.3)),
+              Text(info.detalle, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario, height: 1.3)),
             ],
           ])),
         ]),
         if (muestraDistancia) ...[
           const SizedBox(height: 10),
           Row(children: [
-            Icon(d == null ? Icons.gps_off_rounded : Icons.near_me_rounded, size: 16, color: d == null ? _textGrey : info.color),
+            Icon(d == null ? Icons.gps_off_rounded : Icons.near_me_rounded, size: 16, color: d == null ? ColoresApp.textoSecundario : info.color),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -2010,16 +2003,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                     // de 1 km siguen en recta, como valida el backend).
                     : '${_fmtDist(_etaFase == _faseActual && _restanteServidorM != null && (antes == (_faseActual == 'recogida')) ? _restanteServidorM! / 1000 : d)} '
                         '${antes ? 'al origen' : 'al destino'}  ·  ${_fmtEta(d)}',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: d == null ? _textGrey : _textDark),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: d == null ? ColoresApp.textoSecundario : ColoresApp.textoOscuro),
               ),
             ),
             if (estado == TripStatus.enCurso || estado == TripStatus.entregado)
               Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.timer_outlined, size: 14, color: _primaryBlue),
+                const Icon(Icons.timer_outlined, size: 14, color: ColoresApp.azul),
                 const SizedBox(width: 4),
                 ValueListenableBuilder<int>(
                   valueListenable: _elapsed,
-                  builder: (_, _, _) => Text(_formatElapsed(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: _primaryBlue)),
+                  builder: (_, _, _) => Text(_formatElapsed(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: ColoresApp.azul)),
                 ),
               ]),
           ]),
@@ -2040,16 +2033,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       ),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(nombre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textDark), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(nombre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro), maxLines: 1, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 2),
         Row(children: [
           if (rating != null) ...[
             const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 15),
             const SizedBox(width: 2),
-            Text(rating.toStringAsFixed(1), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+            Text(rating.toStringAsFixed(1), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
             const SizedBox(width: 6),
           ],
-          const Text('Cliente', style: TextStyle(fontSize: 12, color: _textGrey)),
+          const Text('Cliente', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
         ]),
       ])),
       if (TripStatus.chatHabilitado(estado))
@@ -2065,12 +2058,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: _bgLight,
+        color: ColoresApp.fondo,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 20, color: _primaryDark)),
+          child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 20, color: ColoresApp.azulOscuro)),
         ),
       ),
     );
@@ -2090,12 +2083,12 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 18, color: color)),
       const SizedBox(width: 10),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: _textGrey)),
+        Text(label, style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
         Text(
           dir.isEmpty ? '--' : dir,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 13, fontWeight: destacada ? FontWeight.w600 : FontWeight.w400, color: destacada ? _textDark : _textGrey),
+          style: TextStyle(fontSize: 13, fontWeight: destacada ? FontWeight.w600 : FontWeight.w400, color: destacada ? ColoresApp.textoOscuro : ColoresApp.textoSecundario),
         ),
       ])),
     ]);
@@ -2106,16 +2099,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final carga = t.carga ?? t.descripcion;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: _bgLight, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(12)),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Precio acordado', style: TextStyle(fontSize: 11, color: _textGrey)),
-          Text(_fmtPrecio(precio), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _primaryDark)),
+          const Text('Precio acordado', style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+          Text(_fmtPrecio(precio), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: ColoresApp.azulOscuro)),
         ])),
         if (carga != null && carga.isNotEmpty)
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            const Text('Carga', style: TextStyle(fontSize: 11, color: _textGrey)),
-            Text(carga, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textDark)),
+            const Text('Carga', style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+            Text(carga, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
           ])),
       ]),
     );
@@ -2127,11 +2120,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   List<Widget> _accionesEstado(Trip t, String estado) {
     switch (estado) {
       case TripStatus.aceptado:
-        return [_botonPrincipal('Voy en camino al origen', Icons.navigation_rounded, _confirmArrival, _primaryDark)];
+        return [_botonPrincipal('Voy en camino al origen', Icons.navigation_rounded, _confirmArrival, ColoresApp.azulOscuro)];
       case TripStatus.enCamino:
         return [
           ..._avisoOrigen('confirmar la llegada'),
-          _botonPrincipal('Llegué al origen', Icons.where_to_vote_rounded, _lejosDelOrigen ? null : _confirmPickup, _primaryDark),
+          _botonPrincipal('Llegué al origen', Icons.where_to_vote_rounded, _lejosDelOrigen ? null : _confirmPickup, ColoresApp.azulOscuro),
         ];
       case TripStatus.llegada:
         return [
@@ -2139,7 +2132,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           if (_pickupPhotoUrl != null) ...[_avisoFotoRecogidaLista(), const SizedBox(height: 8)],
           _botonFotoRecogida(),
           const SizedBox(height: 8),
-          _botonPrincipal('Iniciar viaje', Icons.play_arrow_rounded, _lejosDelOrigen ? null : _startTrip, _accentGreen),
+          _botonPrincipal('Iniciar viaje', Icons.play_arrow_rounded, _lejosDelOrigen ? null : _startTrip, ColoresApp.verde),
         ];
       case TripStatus.enCurso:
       case TripStatus.entregado:
@@ -2152,7 +2145,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           ],
           _botonFoto(),
           const SizedBox(height: 8),
-          _botonPrincipal('Finalizar viaje', Icons.flag_rounded, _requestFinalization, _isNearDestination ? _accentGreen : _primaryBlue),
+          _botonPrincipal('Finalizar viaje', Icons.flag_rounded, _requestFinalization, _isNearDestination ? ColoresApp.verde : ColoresApp.azul),
         ];
       case TripStatus.esperaConfirmacion:
       case TripStatus.pendienteConfirmacion:
@@ -2259,8 +2252,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         icon: Icon(lista ? Icons.check_circle_rounded : Icons.photo_camera_outlined, size: 20),
         label: Text(lista ? 'Foto de entrega lista (tomar otra)' : 'Tomar foto de entrega'),
         style: OutlinedButton.styleFrom(
-          foregroundColor: lista ? const Color(0xFF15803D) : _primaryBlue,
-          side: BorderSide(color: lista ? const Color(0xFF15803D) : _primaryBlue, width: 1.5),
+          foregroundColor: lista ? const Color(0xFF15803D) : ColoresApp.azul,
+          side: BorderSide(color: lista ? const Color(0xFF15803D) : ColoresApp.azul, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
@@ -2287,8 +2280,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         icon: Icon(lista ? Icons.check_circle_rounded : Icons.photo_camera_outlined, size: 20),
         label: Text(lista ? 'Foto de la carga lista (tomar otra)' : 'Foto de la carga'),
         style: OutlinedButton.styleFrom(
-          foregroundColor: lista ? const Color(0xFF15803D) : _primaryBlue,
-          side: BorderSide(color: lista ? const Color(0xFF15803D) : _primaryBlue, width: 1.5),
+          foregroundColor: lista ? const Color(0xFF15803D) : ColoresApp.azul,
+          side: BorderSide(color: lista ? const Color(0xFF15803D) : ColoresApp.azul, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
@@ -2349,14 +2342,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                   Navigator.push(context, MaterialPageRoute(builder: (_) => SOSAlertScreen(tripId: t.id)));
                 }
               : null,
-          color: puedeSos ? const Color(0xFFDC2626) : _textGrey,
+          color: puedeSos ? const Color(0xFFDC2626) : ColoresApp.textoSecundario,
         ),
         _navItem(Icons.more_horiz_rounded, 'Más', () => _mostrarMasAcciones(t, estado), key: const Key('btn_mas_acciones')),
       ]),
     );
   }
 
-  Widget _navItem(IconData icon, String label, VoidCallback? onTap, {Color color = _textGrey, Key? key}) {
+  Widget _navItem(IconData icon, String label, VoidCallback? onTap, {Color color = ColoresApp.textoSecundario, Key? key}) {
     return InkWell(
       key: key,
       onTap: onTap,
@@ -2368,7 +2361,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           const SizedBox(height: 4),
           Text(label,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10, color: color, height: 1.1, fontWeight: color == _textGrey ? FontWeight.normal : FontWeight.w700)),
+              style: TextStyle(fontSize: 10, color: color, height: 1.1, fontWeight: color == ColoresApp.textoSecundario ? FontWeight.normal : FontWeight.w700)),
         ]),
       ),
     );
@@ -2380,7 +2373,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final pideCancelacion = estado == TripStatus.enCurso || estado == TripStatus.llegada;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: _white,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (ctx) => SafeArea(
         top: false,
@@ -2392,7 +2385,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             const SizedBox(height: 6),
             ListTile(
               key: const Key('accion_detalle_cliente'),
-              leading: const Icon(Icons.info_outline, color: _primaryBlue),
+              leading: const Icon(Icons.info_outline, color: ColoresApp.azul),
               title: const Text('Información del cliente'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -2401,7 +2394,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             ),
             ListTile(
               key: const Key('accion_reportar'),
-              leading: const Icon(Icons.gavel_outlined, color: _primaryBlue),
+              leading: const Icon(Icons.gavel_outlined, color: ColoresApp.azul),
               title: const Text('Reportar un problema'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -2410,7 +2403,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             ),
             ListTile(
               key: const Key('accion_soporte'),
-              leading: const Icon(Icons.headset_mic_outlined, color: _primaryBlue),
+              leading: const Icon(Icons.headset_mic_outlined, color: ColoresApp.azul),
               title: const Text('Escribir a soporte'),
               subtitle: const Text('Abre un ticket con este viaje.'),
               onTap: () {
@@ -2462,11 +2455,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       builder: (ctx) => AlertDialog(
         title: Text('Contactar a $nombre'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.phone, size: 48, color: _primaryBlue),
+          const Icon(Icons.phone, size: 48, color: ColoresApp.azul),
           const SizedBox(height: 12),
           Text(telefono, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          Text('$nombre - Cliente', style: const TextStyle(color: _textGrey)),
+          Text('$nombre - Cliente', style: const TextStyle(color: ColoresApp.textoSecundario)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
@@ -2493,18 +2486,18 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           children: [
             CircleAvatar(
               radius: 32,
-              backgroundColor: _primaryDark,
+              backgroundColor: ColoresApp.azulOscuro,
               child: Text(
                 _initials(nombre),
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 22),
               ),
             ),
             const SizedBox(height: 12),
-            Text(nombre, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: _textDark)),
+            Text(nombre, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: ColoresApp.textoOscuro)),
             if (telefono != null && telefono.isNotEmpty) ...[
               const SizedBox(height: 8),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.phone, size: 16, color: _primaryBlue),
+                Icon(Icons.phone, size: 16, color: ColoresApp.azul),
                 const SizedBox(width: 6),
                 Text(telefono, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
               ]),
@@ -2532,7 +2525,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                 t.receptorTelefono != null && t.receptorTelefono!.isNotEmpty
                     ? 'Recibe: ${t.receptorNombre} — ${t.receptorTelefono}'
                     : 'Recibe: ${t.receptorNombre}',
-                style: const TextStyle(fontSize: 14, color: _textDark),
+                style: const TextStyle(fontSize: 14, color: ColoresApp.textoOscuro),
                 textAlign: TextAlign.center,
               ),
             ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/media_image.dart';
+import '../shared/ui_compartida.dart';
 
 class EntregaConfirmadaScreen extends StatelessWidget {
   final String nombreCliente;
@@ -30,12 +31,6 @@ class EntregaConfirmadaScreen extends StatelessWidget {
     this.onCalificarCliente,
   });
 
-  static const Color _green = Color(0xFF16A34A);
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
-  static const Color _star = Color(0xFFF59E0B);
   static const Color _greenDark = Color(0xFF15803D);
 
   @override
@@ -66,7 +61,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
   Widget _buildBanner() {
     return Container(
       width: double.infinity,
-      color: _green,
+      color: ColoresApp.verde,
       padding: const EdgeInsets.fromLTRB(24, 60, 24, 28),
       child: Column(
         children: [
@@ -113,7 +108,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _divider),
+        border: Border.all(color: ColoresApp.divisor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -141,17 +136,17 @@ class EntregaConfirmadaScreen extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: _textPrimary)),
+                      color: ColoresApp.textoOscuro)),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.star_rounded, color: _star, size: 16),
+                  const Icon(Icons.star_rounded, color: ColoresApp.ambar, size: 16),
                   const SizedBox(width: 3),
                   Text(ratingCliente.toStringAsFixed(1),
                       style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: _textPrimary)),
+                          color: ColoresApp.textoOscuro)),
                 ],
               ),
             ],
@@ -168,7 +163,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _divider),
+        border: Border.all(color: ColoresApp.divisor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -180,14 +175,14 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       child: Column(
         children: [
           _buildFinRow('Precio acordado', precioAcordado,
-              valueColor: _textPrimary),
-          const Divider(color: _divider, height: 1),
+              valueColor: ColoresApp.textoOscuro),
+          const Divider(color: ColoresApp.divisor, height: 1),
           _buildFinRow('Comisión ($porcentajeComision)', comision,
-              valueColor: _textSecondary),
-          const Divider(color: _divider, height: 1),
+              valueColor: ColoresApp.textoSecundario),
+          const Divider(color: ColoresApp.divisor, height: 1),
           _buildFinRow('Ganancia total', gananciaTotal,
-              labelColor: _green,
-              valueColor: _green,
+              labelColor: ColoresApp.verde,
+              valueColor: ColoresApp.verde,
               bold: true),
         ],
       ),
@@ -229,7 +224,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: _divider)),
+        border: Border(top: BorderSide(color: ColoresApp.divisor)),
       ),
       child: Column(
         children: [
@@ -240,7 +235,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
                 onPressed: onCalificarCliente,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  backgroundColor: _green,
+                  backgroundColor: ColoresApp.verde,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
@@ -258,7 +253,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
               onPressed: onVerResumen,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 15),
-                side: const BorderSide(color: _green, width: 1.5),
+                side: const BorderSide(color: ColoresApp.verde, width: 1.5),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text('Ver resumen del viaje',
@@ -271,7 +266,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
             child: TextButton(
               onPressed: onVolverInicio ?? () => Navigator.of(context).popUntil((r) => r.isFirst),
               child: const Text('Volver al inicio',
-                  style: TextStyle(color: _accentBlue, fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: ColoresApp.azul, fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ),
         ],

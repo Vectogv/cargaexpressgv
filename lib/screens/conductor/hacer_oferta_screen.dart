@@ -8,6 +8,7 @@ import '../../services/api/http_client.dart';
 import '../shared/cuenta_no_activa_dialog.dart' show esCuentaNoActiva, mostrarCuentaNoActivaDialog;
 import 'earnings_screen.dart';
 import '../../core/formato_dinero.dart';
+import '../shared/ui_compartida.dart';
 
 /// Resultado de enviar la oferta: el monto formateado y cuándo vence.
 class OfertaCreada {
@@ -55,12 +56,6 @@ class HacerOfertaScreen extends StatefulWidget {
 }
 
 class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _green = Color(0xFF16A34A);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
-  static const Color _inputBorder = Color(0xFFD1D5DB);
-  static const Color _chipBg = Color(0xFFEFF6FF);
   static const Color _chipBorder = Color(0xFFBFDBFE);
 
   late double _ofertaActual;
@@ -221,11 +216,11 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           Row(
             children: [
               const Icon(Icons.person_outline_rounded,
-                  size: 14, color: _textSecondary),
+                  size: 14, color: ColoresApp.textoSecundario),
               const SizedBox(width: 5),
               const Text(
                 'Precio propuesto por el cliente',
-                style: TextStyle(fontSize: 12, color: _textSecondary),
+                style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
               ),
             ],
           ),
@@ -235,7 +230,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: _green,
+              color: ColoresApp.verde,
             ),
           ),
         ],
@@ -277,11 +272,11 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: _inputBorder),
+              borderSide: const BorderSide(color: ColoresApp.bordeCampo),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: _accentBlue, width: 1.5),
+              borderSide: const BorderSide(color: ColoresApp.azul, width: 1.5),
             ),
           ),
         ),
@@ -298,7 +293,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: _chipBg,
+                      color: ColoresApp.azulTenue,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: _chipBorder),
                     ),
@@ -306,7 +301,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
                     child: Text(
                       label,
                       style: const TextStyle(
-                        color: _accentBlue,
+                        color: ColoresApp.azul,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -342,15 +337,15 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
           decoration: InputDecoration(
             hintText: 'Escribe un mensaje al cliente...',
-            hintStyle: const TextStyle(color: _textSecondary, fontSize: 14),
+            hintStyle: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 14),
             contentPadding: const EdgeInsets.all(14),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: _inputBorder),
+              borderSide: const BorderSide(color: ColoresApp.bordeCampo),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: _accentBlue, width: 1.5),
+              borderSide: const BorderSide(color: ColoresApp.azul, width: 1.5),
             ),
           ),
         ),
@@ -374,12 +369,12 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
                 children: [
                   const Text('• ',
                       style:
-                          TextStyle(color: _textSecondary, fontSize: 13)),
+                          TextStyle(color: ColoresApp.textoSecundario, fontSize: 13)),
                   Expanded(
                     child: Text(
                       note,
                       style: const TextStyle(
-                          color: _textSecondary, fontSize: 13),
+                          color: ColoresApp.textoSecundario, fontSize: 13),
                     ),
                   ),
                 ],
@@ -396,7 +391,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
       padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: _divider)),
+        border: Border(top: BorderSide(color: ColoresApp.divisor)),
       ),
       child: Row(
         children: [
@@ -405,7 +400,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
               onPressed: _sending ? null : () => Navigator.of(context).maybePop(),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 15),
-                side: const BorderSide(color: _inputBorder, width: 1.5),
+                side: const BorderSide(color: ColoresApp.bordeCampo, width: 1.5),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
@@ -424,7 +419,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
             child: ElevatedButton(
               onPressed: _sending ? null : _enviarOferta,
               style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
-                backgroundColor: _accentBlue,
+                backgroundColor: ColoresApp.azul,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),

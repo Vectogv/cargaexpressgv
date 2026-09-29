@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 
 class DisputaEnRevisionScreen extends StatelessWidget {
   final String origen;
@@ -12,11 +13,6 @@ class DisputaEnRevisionScreen extends StatelessWidget {
     this.onVerDetalles,
   });
 
-  static const Color _textPrimary = Color(0xFF111111);
-  static const Color _textSecondary = Color(0xFF555555);
-  static const Color _label = Color(0xFF888888);
-  static const Color _divider = Color(0xFFEEEEEE);
-  static const Color _blue = Color(0xFF1565C0);
 
   @override
   Widget build(BuildContext context) {
@@ -31,12 +27,12 @@ class DisputaEnRevisionScreen extends StatelessWidget {
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w600,
-            color: _textPrimary,
+            color: ColoresApp.textoOscuro,
           ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
-              size: 18, color: _textPrimary),
+              size: 18, color: ColoresApp.textoOscuro),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -52,7 +48,7 @@ class DisputaEnRevisionScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: _label,
+                  color: ColoresApp.chevron,
                 ),
               ),
               const SizedBox(height: 4),
@@ -61,11 +57,11 @@ class DisputaEnRevisionScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _blue,
+                  color: ColoresApp.azul,
                 ),
               ),
               const SizedBox(height: 20),
-              const Divider(color: _divider, height: 1),
+              const Divider(color: ColoresApp.divisor, height: 1),
               const SizedBox(height: 20),
               const Center(
                 child: Text(
@@ -73,20 +69,20 @@ class DisputaEnRevisionScreen extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
-                    color: _textSecondary,
+                    color: ColoresApp.textoSecundario,
                     height: 1.6,
                   ),
                 ),
               ),
               const SizedBox(height: 28),
-              const Divider(color: _divider, height: 1),
+              const Divider(color: ColoresApp.divisor, height: 1),
               const SizedBox(height: 20),
               const Text(
                 'Información del viaje',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _textPrimary,
+                  color: ColoresApp.textoOscuro,
                 ),
               ),
               const SizedBox(height: 16),
@@ -103,11 +99,11 @@ class DisputaEnRevisionScreen extends StatelessWidget {
                   onPressed: onVerDetalles,
                   style: ButtonStyle(
                     foregroundColor: WidgetStateProperty.resolveWith(
-                      (states) => states.contains(WidgetState.disabled) ? _divider : _blue,
+                      (states) => states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
                     ),
                     side: WidgetStateProperty.resolveWith(
                       (states) => BorderSide(
-                        color: states.contains(WidgetState.disabled) ? _divider : _blue,
+                        color: states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
                         width: 1.5,
                       ),
                     ),

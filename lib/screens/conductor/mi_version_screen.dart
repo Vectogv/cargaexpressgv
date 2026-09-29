@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 
 class MiVersionScreen extends StatefulWidget {
   final String? initialDescripcion;
@@ -33,14 +34,6 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
     super.dispose();
   }
 
-  static const Color _textPrimary = Color(0xFF111111);
-  static const Color _textBody = Color(0xFF333333);
-  static const Color _hint = Color(0xFFAAAAAA);
-  static const Color _blue = Color(0xFF1565C0);
-  static const Color _inputBorder = Color(0xFFDDDDDD);
-  static const Color _addIcon = Color(0xFF888888);
-  static const Color _addBorder = Color(0xFFCCCCCC);
-  static const Color _divider = Color(0xFFE5E7EB);
 
   @override
   Widget build(BuildContext context) {
@@ -55,12 +48,12 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w600,
-            color: _textPrimary,
+            color: ColoresApp.textoOscuro,
           ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
-              size: 18, color: _textPrimary),
+              size: 18, color: ColoresApp.textoOscuro),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -79,14 +72,14 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: _textPrimary,
+                        color: ColoresApp.textoOscuro,
                       ),
                     ),
                     const SizedBox(height: 10),
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        border: Border.all(color: _inputBorder, width: 1),
+                        border: Border.all(color: ColoresApp.bordeCampo, width: 1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: TextField(
@@ -94,14 +87,14 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                         maxLines: 6,
                         style: const TextStyle(
                           fontSize: 14,
-                          color: _textBody,
+                          color: ColoresApp.textoSecundario,
                           height: 1.55,
                         ),
                         decoration: const InputDecoration(
                           contentPadding: EdgeInsets.all(14),
                           border: InputBorder.none,
                           hintText: 'Escribe tu versión aquí...',
-                          hintStyle: TextStyle(color: _hint),
+                          hintStyle: TextStyle(color: ColoresApp.chevron),
                         ),
                       ),
                     ),
@@ -111,7 +104,7 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: _textPrimary,
+                        color: ColoresApp.textoOscuro,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -129,15 +122,15 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               border: Border.all(
-                                  color: widget.onPickMedia == null ? _divider : _addBorder, width: 1.5),
+                                  color: widget.onPickMedia == null ? ColoresApp.divisor : ColoresApp.bordeCampo, width: 1.5),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
                               Icons.add,
                               size: 28,
                               color: widget.onPickMedia == null
-                                  ? _divider
-                                  : _addIcon,
+                                  ? ColoresApp.divisor
+                                  : ColoresApp.chevron,
                             ),
                           ),
                         ),
@@ -159,8 +152,8 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                       ? null
                       : () => widget.onSubmit!(_controller.text.trim()),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _blue,
-                    disabledBackgroundColor: _divider,
+                    backgroundColor: ColoresApp.azul,
+                    disabledBackgroundColor: ColoresApp.divisor,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(

@@ -7,7 +7,7 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import 'aviso_cuenta_pago.dart' show formatoDinero, numeroDe;
 import '../../core/formato_dinero.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca;
+import '../shared/ui_compartida.dart';
 
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -30,10 +30,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
   bool _uploading = false;
   bool _downloadingPdf = false;
 
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -165,7 +161,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       body: Column(
         children: [
           _buildHeader(context),
@@ -219,23 +215,23 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      color: _white,
       padding: const EdgeInsets.only(top: 44, left: 16, right: 16, bottom: 14),
+      decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: ColoresApp.borde))),
       child: Row(
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: const Icon(Icons.arrow_back_ios_new, size: 20),
+            child: const Icon(Icons.arrow_back_ios_new, size: 20, color: ColoresApp.textoOscuro),
           ),
           const SizedBox(width: 12),
-          const Text('Ganancias', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const Text('Ganancias', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
         ],
       ),
     );
   }
 
   Widget _buildSectionTitle(String title) {
-    return Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)));
+    return Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro));
   }
 
   Widget _buildTodayCard() {
@@ -248,7 +244,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF1A3C6E), Color(0xFF1565C0)]),
+        gradient: const LinearGradient(colors: [ColoresApp.azulOscuro, ColoresApp.azul]),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 14, offset: const Offset(0, 5))],
       ),
@@ -260,7 +256,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(_pesos(netaHoy), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+              Text(_pesos(netaHoy), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, fontFeatures: cifrasTabulares)),
               const SizedBox(width: 8),
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -285,7 +281,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
   Widget _todayStat(String value, String label) {
     return Column(children: [
-      Text(value, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+      Text(value, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800, fontFeatures: cifrasTabulares)),
       const SizedBox(height: 2),
       Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
     ]);
@@ -321,13 +317,13 @@ class _EarningsScreenState extends State<EarningsScreen> {
       radio: 14,
       child: Column(
         children: [
-          Text(_pesos(p['neto']), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _primaryDark)),
+          Text(_pesos(p['neto']), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: ColoresApp.azulOscuro, fontFeatures: cifrasTabulares)),
           const SizedBox(height: 2),
-          Text('neto', style: TextStyle(fontSize: 10, color: _textGrey)),
+          Text('neto', style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario)),
           const SizedBox(height: 4),
-          Text(_pesos(p['bruto']), style: TextStyle(fontSize: 11, color: _textGrey)),
+          Text(_pesos(p['bruto']), style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 11, color: _textGrey, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -353,11 +349,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
 
   Widget _statItem(IconData icon, String value, String label) {
     return Column(children: [
-      Icon(icon, color: _primaryDark, size: 22),
+      Icon(icon, color: ColoresApp.azulOscuro, size: 22),
       const SizedBox(height: 6),
-      Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+      Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
       const SizedBox(height: 2),
-      Text(label, style: TextStyle(fontSize: 9, color: _textGrey), textAlign: TextAlign.center),
+      Text(label, style: TextStyle(fontSize: 9, color: ColoresApp.textoSecundario), textAlign: TextAlign.center),
     ]);
   }
 
@@ -366,7 +362,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
       return const TarjetaBlanca(
         radio: 14,
         padding: EdgeInsets.all(20),
-        child: Text('Aún no hay ganancias registradas', style: TextStyle(color: Colors.black45)),
+        child: Text('Aún no hay ganancias registradas', style: TextStyle(color: ColoresApp.textoSecundario)),
       );
     }
     return TarjetaBlanca(
@@ -407,7 +403,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0)))),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.divisor))),
       child: Row(
         children: [
           Expanded(
@@ -423,7 +419,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   fechaTxt.isNotEmpty ? fechaTxt : (h['id']?.toString() ?? ''),
-                  style: TextStyle(fontSize: 11, color: _textGrey),
+                  style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario),
                 ),
               ],
             ),
@@ -432,9 +428,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(_pesos(neto), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _primaryDark)),
-              Text('comisión ${_pesos(comision)}', style: TextStyle(fontSize: 10, color: _textGrey)),
-              Text('bruto ${_pesos(bruto)}', style: TextStyle(fontSize: 10, color: _textGrey)),
+              Text(_pesos(neto), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: ColoresApp.azulOscuro, fontFeatures: cifrasTabulares)),
+              Text('comisión ${_pesos(comision)}', style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
+              Text('bruto ${_pesos(bruto)}', style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
             ],
           ),
         ],
@@ -459,14 +455,14 @@ class _EarningsScreenState extends State<EarningsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Descargar reporte en PDF', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          const Text('Descargar reporte en PDF', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
           const SizedBox(height: 12),
           Row(children: [
-            Expanded(child: OutlinedButton(onPressed: () => _downloadPdf('todo', 'Todo'), child: const Text('Todo'))),
+            Expanded(child: BotonSecundario(texto: 'Todo', alto: 44, onPressed: () => _downloadPdf('todo', 'Todo'))),
             const SizedBox(width: 8),
-            Expanded(child: OutlinedButton(onPressed: () => _downloadPdf('semana', 'Semana'), child: const Text('Semana'))),
+            Expanded(child: BotonSecundario(texto: 'Semana', alto: 44, onPressed: () => _downloadPdf('semana', 'Semana'))),
             const SizedBox(width: 8),
-            Expanded(child: OutlinedButton(onPressed: () => _downloadPdf('mes', 'Mes'), child: const Text('Mes'))),
+            Expanded(child: BotonSecundario(texto: 'Mes', alto: 44, onPressed: () => _downloadPdf('mes', 'Mes'))),
           ]),
         ],
       ),
@@ -512,22 +508,22 @@ class _EarningsScreenState extends State<EarningsScreen> {
         radio: 14,
         padding: EdgeInsets.all(16),
         child: Row(children: [
-          Icon(Icons.check_circle_outline, color: Color(0xFF4CAF50), size: 20),
+          Icon(Icons.check_circle_outline, color: ColoresApp.verde, size: 20),
           SizedBox(width: 10),
-          Expanded(child: Text('No tienes deudas pendientes', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+          Expanded(child: Text('No tienes deudas pendientes', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro))),
         ]),
       );
     }
 
-    final estadoColor = estado == 'suspension_por_pago' ? Colors.red.shade700 : Colors.orange.shade800;
+    final estadoColor = estado == 'suspension_por_pago' ? ColoresApp.rojo : ColoresApp.naranjaTexto;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.orange.shade200),
+        border: Border.all(color: ColoresApp.naranjaBorde),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,22 +533,22 @@ class _EarningsScreenState extends State<EarningsScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Deuda pendiente', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                Text(_estadoCuentaLabel(estado), style: TextStyle(fontSize: 11, color: _textGrey)),
+                Text('Deuda pendiente', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+                Text(_estadoCuentaLabel(estado), style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
               ]),
             ),
-            Text(_pesos(monto), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: estadoColor)),
+            Text(_pesos(monto), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: estadoColor, fontFeatures: cifrasTabulares)),
           ]),
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: ColoresApp.naranjaFondo, borderRadius: BorderRadius.circular(10)),
             child: Text(
               '${_fechaLimiteTexto(_debt?['deudaFechaLimite']) ?? 'Tienes un plazo para pagar tu deuda'} '
               '(restan $dias día${dias == 1 ? '' : 's'}). '
               'Pasado ese plazo tu cuenta podría ser suspendida.',
-              style: TextStyle(fontSize: 12, color: const Color(0xFFBF360C), height: 1.4),
+              style: const TextStyle(fontSize: 12, color: ColoresApp.naranjaAviso, height: 1.4),
             ),
           ),
           if (estado == 'esperando_confirmacion' && comprobante != null && comprobante > 0) ...[
@@ -560,11 +556,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: ColoresApp.azulTenue, borderRadius: BorderRadius.circular(10)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(
                   'Comprobante en revisión por ${formatoDinero(comprobante)}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: ColoresApp.azulOscuro),
                 ),
                 if (monto > comprobante) ...[
                   const SizedBox(height: 4),
@@ -572,7 +568,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     'Tu deuda actual es ${formatoDinero(monto)}: los ${formatoDinero(monto - comprobante)} adicionales '
                     'son comisiones de viajes terminados mientras se revisa el comprobante. '
                     'Seguirán pendientes cuando se apruebe el pago.',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF0D47A1), height: 1.4),
+                    style: const TextStyle(fontSize: 12, color: ColoresApp.azulOscuro, height: 1.4),
                   ),
                 ],
               ]),
@@ -582,25 +578,18 @@ class _EarningsScreenState extends State<EarningsScreen> {
             const SizedBox(height: 10),
             Text(
               'Paga por Nequi: ${nequiNombre != null ? '$nequiNombre — ' : ''}$nequiNumero',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF1A1A2E)),
+              style: const TextStyle(fontSize: 12, color: ColoresApp.textoOscuro),
             ),
           ],
           if (puedeSubirComprobante(_debt)) ...[
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _uploading ? null : _uploadProof,
-                icon: _uploading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.upload_file, size: 18),
-                label: Text(_uploading ? 'Subiendo...' : 'Subir comprobante de pago'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade800,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
+            BotonPrincipal(
+              texto: _uploading ? 'Subiendo...' : 'Subir comprobante de pago',
+              icono: Icons.upload_file,
+              cargando: _uploading,
+              color: ColoresApp.naranja,
+              alto: 48,
+              onPressed: _uploading ? null : _uploadProof,
             ),
           ],
         ],

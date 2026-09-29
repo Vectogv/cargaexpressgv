@@ -65,12 +65,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
     this.textoAccion = 'Voy en camino a recoger',
   });
 
-  static const Color _textPrimary = ColoresApp.textoOscuro;
-  static const Color _textSecondary = ColoresApp.textoSecundario;
-  static const Color _divider = ColoresApp.borde;
-  static const Color _star = ColoresApp.ambar;
   static const Color _greenDark = Color(0xFF15803D);
-  static const Color _iconDisabled = Color(0xFFD1D5DB);
 
   bool get _busy => isStarting || isCancelling;
 
@@ -101,7 +96,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
                   _buildParada(Icons.trip_origin, ColoresApp.verde, 'Recogida', origen, destacada: true),
                   const SizedBox(height: 12),
                   _buildParada(Icons.location_on, Colors.red, 'Destino', destino),
-                  const Divider(height: 26, color: _divider),
+                  const Divider(height: 26, color: ColoresApp.borde),
                   _buildPrecioRow(),
                 ],
               ),
@@ -120,10 +115,10 @@ class ViajeAceptadoScreen extends StatelessWidget {
       centerTitle: true,
       title: const Text(
         'Viaje aceptado',
-        style: TextStyle(color: _textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+        style: TextStyle(color: ColoresApp.textoOscuro, fontSize: 17, fontWeight: FontWeight.w700),
       ),
       leading: IconButton(
-        icon: const Icon(Icons.chevron_left_rounded, color: _textPrimary, size: 28),
+        icon: const Icon(Icons.chevron_left_rounded, color: ColoresApp.textoOscuro, size: 28),
         onPressed: () => Navigator.of(context).maybePop(),
       ),
     );
@@ -167,15 +162,15 @@ class ViajeAceptadoScreen extends StatelessWidget {
               Text(nombreCliente,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textPrimary)),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
               const SizedBox(height: 3),
               Row(
                 children: [
-                  const Icon(Icons.star_rounded, color: _star, size: 16),
+                  const Icon(Icons.star_rounded, color: ColoresApp.ambar, size: 16),
                   const SizedBox(width: 3),
                   Text(ratingCliente.toStringAsFixed(1),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary)),
-                  const Text('  ·  Cliente', style: TextStyle(fontSize: 13, color: _textSecondary)),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+                  const Text('  ·  Cliente', style: TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
                 ],
               ),
             ],
@@ -194,14 +189,14 @@ class ViajeAceptadoScreen extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: Colors.transparent,
-        shape: CircleBorder(side: BorderSide(color: disabled ? _iconDisabled : _divider, width: 1.5)),
+        shape: CircleBorder(side: BorderSide(color: disabled ? ColoresApp.bordeCampo : ColoresApp.borde, width: 1.5)),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: SizedBox(
             width: 40,
             height: 40,
-            child: Icon(icon, color: disabled ? _iconDisabled : _textPrimary, size: 20),
+            child: Icon(icon, color: disabled ? ColoresApp.bordeCampo : ColoresApp.textoOscuro, size: 20),
           ),
         ),
       ),
@@ -218,7 +213,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(titulo, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+              Text(titulo, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
               const SizedBox(height: 2),
               Text(texto,
                   maxLines: 2,
@@ -226,7 +221,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: destacada ? FontWeight.w700 : FontWeight.w500,
-                    color: destacada ? _textPrimary : const Color(0xFF374151),
+                    color: destacada ? ColoresApp.textoOscuro : const Color(0xFF374151),
                   )),
             ],
           ),
@@ -239,9 +234,9 @@ class ViajeAceptadoScreen extends StatelessWidget {
     return Row(
       children: [
         const Expanded(
-          child: Text('Precio acordado', style: TextStyle(fontSize: 14, color: _textSecondary)),
+          child: Text('Precio acordado', style: TextStyle(fontSize: 14, color: ColoresApp.textoSecundario)),
         ),
-        Text(precioAcordado, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _textPrimary)),
+        Text(precioAcordado, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro)),
       ],
     );
   }

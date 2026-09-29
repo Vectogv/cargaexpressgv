@@ -9,6 +9,7 @@ import '../../services/server_clock.dart';
 import 'oferta_aceptada_screen.dart';
 import 'offers_screen.dart';
 import '../../core/formato_dinero.dart';
+import '../shared/ui_compartida.dart';
 
 class OfertaEnviadaScreen extends StatefulWidget {
   final String montoOferta;
@@ -47,11 +48,6 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
   /// su siguiente pasada (cada 30 s).
   static const Duration _plazoRespaldo = Duration(seconds: 90);
 
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _lightBlue = Color(0xFFEFF6FF);
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -245,12 +241,12 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                         width: 110,
                         height: 110,
                         decoration: BoxDecoration(
-                          color: _lightBlue,
+                          color: ColoresApp.azulTenue,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.send_rounded,
-                          color: _accentBlue,
+                          color: ColoresApp.azul,
                           size: 46,
                         ),
                       ),
@@ -260,7 +256,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
-                          color: _textPrimary,
+                          color: ColoresApp.textoOscuro,
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -269,7 +265,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                         text: TextSpan(
                           style: const TextStyle(
                             fontSize: 15,
-                            color: _textSecondary,
+                            color: ColoresApp.textoSecundario,
                             height: 1.55,
                           ),
                           children: [
@@ -278,7 +274,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                               text: widget.montoOferta,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: _textPrimary,
+                                color: ColoresApp.textoOscuro,
                               ),
                             ),
                             const TextSpan(
@@ -291,15 +287,15 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: _lightBlue,
+                            color: ColoresApp.azulTenue,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.timer_outlined, size: 18, color: _accentBlue),
+                            const Icon(Icons.timer_outlined, size: 18, color: ColoresApp.azul),
                             const SizedBox(width: 6),
                             Text(
                               'Vence en ${formatoCuentaRegresiva(_restante(widget.venceEn!))}',
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _accentBlue),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.azul),
                             ),
                           ]),
                         ),
@@ -310,7 +306,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
-                          color: _textSecondary,
+                          color: ColoresApp.textoSecundario,
                           height: 1.55,
                         ),
                       ),
@@ -325,14 +321,14 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
                 onPressed: _irAOfertas,
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 52),
-                  side: const BorderSide(color: _divider, width: 1.5),
+                  side: const BorderSide(color: ColoresApp.divisor, width: 1.5),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text(
                   'Ir a mis ofertas',
                   style: TextStyle(
-                    color: _accentBlue,
+                    color: ColoresApp.azul,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),

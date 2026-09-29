@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../contracts/disputa_resultado.dart';
+import '../shared/ui_compartida.dart';
 
 String? _texto(dynamic v) {
   final s = v?.toString().trim();
@@ -28,19 +29,14 @@ class ResolucionScreen extends StatelessWidget {
   String get _resultado =>
       _resultadoCrudo == null ? 'Disputa resuelta' : etiquetaResultado(_resultadoCrudo);
 
-  static const Color _textPrimary = Color(0xFF111111);
-  static const Color _textBody = Color(0xFF333333);
-  static const Color _label = Color(0xFF888888);
-  static const Color _divider = Color(0xFFEEEEEE);
-  static const Color _blue = Color(0xFF1565C0);
 
   static ButtonStyle _outlineStyle() => ButtonStyle(
     foregroundColor: WidgetStateProperty.resolveWith(
-      (s) => s.contains(WidgetState.disabled) ? _divider : _blue,
+      (s) => s.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
     ),
     side: WidgetStateProperty.resolveWith(
       (s) => BorderSide(
-        color: s.contains(WidgetState.disabled) ? _divider : _blue,
+        color: s.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
         width: 1.5,
       ),
     ),
@@ -62,12 +58,12 @@ class ResolucionScreen extends StatelessWidget {
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w600,
-            color: _textPrimary,
+            color: ColoresApp.textoOscuro,
           ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
-              size: 18, color: _textPrimary),
+              size: 18, color: ColoresApp.textoOscuro),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -88,7 +84,7 @@ class ResolucionScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: _label,
+                        color: ColoresApp.chevron,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -97,13 +93,13 @@ class ResolucionScreen extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: _blue,
+                        color: ColoresApp.azul,
                       ),
                     ),
                     // Mensaje del backend (p. ej. "Quedas bajo observación").
                     if (_texto(disputa['mensaje']) != null) ...[
                       const SizedBox(height: 8),
-                      Text(_texto(disputa['mensaje'])!, style: TextStyle(fontSize: 14, color: _label, height: 1.4)),
+                      Text(_texto(disputa['mensaje'])!, style: TextStyle(fontSize: 14, color: ColoresApp.chevron, height: 1.4)),
                     ],
                     if (_texto(disputa['problema']) != null)
                       ..._seccion('Problema reportado', etiquetaProblemaDisputa(disputa['problema'])),
@@ -153,14 +149,14 @@ class ResolucionScreen extends StatelessWidget {
 
   List<Widget> _seccion(String titulo, String texto) => [
         const SizedBox(height: 20),
-        const Divider(color: _divider, height: 1),
+        const Divider(color: ColoresApp.divisor, height: 1),
         const SizedBox(height: 20),
         Text(
           titulo,
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: _label,
+            color: ColoresApp.chevron,
           ),
         ),
         const SizedBox(height: 6),
@@ -168,7 +164,7 @@ class ResolucionScreen extends StatelessWidget {
           texto,
           style: const TextStyle(
             fontSize: 14,
-            color: _textBody,
+            color: ColoresApp.textoSecundario,
             height: 1.55,
           ),
         ),

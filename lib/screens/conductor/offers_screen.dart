@@ -9,7 +9,7 @@ import '../../services/server_clock.dart';
 import 'oferta_aceptada_screen.dart';
 import 'trip_in_progress_screen.dart';
 import '../../core/formato_dinero.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca;
+import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
 
 class OffersScreen extends StatefulWidget {
   const OffersScreen({super.key});
@@ -36,11 +36,6 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
   StreamSubscription<Map<String, dynamic>>? _offerRejectedSub;
   StreamSubscription<Map<String, dynamic>>? _offerExpiredSub;
 
-  static const Color _primaryBlue = Color(0xFF1565C0);
-  static const Color _accentGreen = Color(0xFF4CAF50);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
 
   @override
   void initState() {
@@ -154,15 +149,15 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       appBar: AppBar(
-        backgroundColor: Colors.white, foregroundColor: _textDark, elevation: 0,
+        backgroundColor: Colors.white, foregroundColor: ColoresApp.textoOscuro, elevation: 0,
         title: const Text('Mis ofertas', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: _primaryBlue,
-          labelColor: _primaryBlue,
-          unselectedLabelColor: _textGrey,
+          indicatorColor: ColoresApp.azul,
+          labelColor: ColoresApp.azul,
+          unselectedLabelColor: ColoresApp.textoSecundario,
           tabs: const [
             Tab(text: 'Pendientes'),
             Tab(text: 'Viaje activo'),
@@ -251,7 +246,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            const Icon(Icons.trip_origin, size: 16, color: _accentGreen),
+            const Icon(Icons.trip_origin, size: 16, color: ColoresApp.verde),
             const SizedBox(width: 8),
             Expanded(child: Text(o.origen, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
           ]),
@@ -259,7 +254,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           Row(children: [
             const Icon(Icons.location_on, size: 16, color: Colors.red),
             const SizedBox(width: 8),
-            Expanded(child: Text(o.destino, style: const TextStyle(fontSize: 13, color: _textGrey))),
+            Expanded(child: Text(o.destino, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario))),
           ]),
         ]),
       ),
@@ -301,7 +296,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
               const Text('Ruta', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
               const SizedBox(height: 10),
               Row(children: [
-                Icon(Icons.trip_origin, size: 16, color: _accentGreen),
+                Icon(Icons.trip_origin, size: 16, color: ColoresApp.verde),
                 const SizedBox(width: 8),
                 Expanded(child: Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w500))),
               ]),
@@ -312,7 +307,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
                 Expanded(child: Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontWeight: FontWeight.w500))),
               ]),
               const SizedBox(height: 12),
-              Text('Carga: ${t['carga'] as String? ?? ''}', style: const TextStyle(color: _textGrey)),
+              Text('Carga: ${t['carga'] as String? ?? ''}', style: const TextStyle(color: ColoresApp.textoSecundario)),
               Text('Precio: ${formatearPesos((t['precioFinal'] as num?) ?? (t['precioEstimado'] as num?) ?? 0)}', style: const TextStyle(fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -322,7 +317,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
             child: ElevatedButton(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TripInProgressScreen(trip: _activeTrip != null ? Trip.fromJson(_activeTrip!) : null))),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryBlue, foregroundColor: Colors.white,
+                backgroundColor: ColoresApp.azul, foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -340,12 +335,12 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     switch (estado) {
       case TripStatus.aceptado: c = const Color(0xFFFF8F00); label = 'Aceptado — Dirígete al origen'; break;
       case TripStatus.enCamino: c = const Color(0xFFFF8F00); label = 'En camino al origen'; break;
-      case TripStatus.llegada: c = _accentGreen; label = 'Llegada al origen'; break;
-      case TripStatus.enCurso: c = _primaryBlue; label = 'En curso — Realizando entrega'; break;
-      case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
+      case TripStatus.llegada: c = ColoresApp.verde; label = 'Llegada al origen'; break;
+      case TripStatus.enCurso: c = ColoresApp.azul; label = 'En curso — Realizando entrega'; break;
+      case TripStatus.entregado: c = ColoresApp.verde; label = 'Entregado'; break;
       case TripStatus.esperaConfirmacion:
-      case TripStatus.pendienteConfirmacion: c = _accentGreen; label = 'Esperando confirmación del cliente'; break;
-      case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
+      case TripStatus.pendienteConfirmacion: c = ColoresApp.verde; label = 'Esperando confirmación del cliente'; break;
+      case TripStatus.finalizado: c = ColoresApp.verde; label = 'Finalizado'; break;
       case TripStatus.reservado: c = Colors.grey; label = 'Reservado'; break;
       default: c = Colors.grey; label = TripStatus.label(estado); break;
     }
@@ -397,7 +392,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           ]),
           const SizedBox(height: 8),
           Text(origen?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13)),
-          Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13, color: _textGrey)),
+          Text(destino?['direccion'] as String? ?? '', style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
         ]),
       ),
     );
@@ -409,15 +404,15 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     switch (estado) {
       case TripStatus.aceptado: c = const Color(0xFFFF8F00); label = 'Aceptado'; break;
       case TripStatus.enCamino: c = const Color(0xFFFF8F00); label = 'En camino'; break;
-      case TripStatus.llegada: c = _accentGreen; label = 'Llegada'; break;
-      case TripStatus.enCurso: c = _primaryBlue; label = 'En curso'; break;
-      case TripStatus.entregado: c = _accentGreen; label = 'Entregado'; break;
+      case TripStatus.llegada: c = ColoresApp.verde; label = 'Llegada'; break;
+      case TripStatus.enCurso: c = ColoresApp.azul; label = 'En curso'; break;
+      case TripStatus.entregado: c = ColoresApp.verde; label = 'Entregado'; break;
       case TripStatus.esperaConfirmacion:
-      case TripStatus.pendienteConfirmacion: c = _primaryBlue; label = 'Esperando confirmación'; break;
-      case TripStatus.finalizado: c = _accentGreen; label = 'Finalizado'; break;
-      case TripStatus.reservado: c = _textGrey; label = 'Reservado'; break;
+      case TripStatus.pendienteConfirmacion: c = ColoresApp.azul; label = 'Esperando confirmación'; break;
+      case TripStatus.finalizado: c = ColoresApp.verde; label = 'Finalizado'; break;
+      case TripStatus.reservado: c = ColoresApp.textoSecundario; label = 'Reservado'; break;
       case TripStatus.cancelado: c = Colors.red; label = 'Cancelado'; break;
-      default: c = _textGrey; label = TripStatus.label(estado); break;
+      default: c = ColoresApp.textoSecundario; label = TripStatus.label(estado); break;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

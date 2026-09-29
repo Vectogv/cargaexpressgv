@@ -16,7 +16,6 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
   bool _sending = false;
   bool _sent = false;
 
-  static const Color _white = Colors.white;
   static const Color _bgDark = Color(0xFF0D1B2E);
 
   @override
@@ -84,7 +83,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16,
-                      color: _white.withValues(alpha: 0.85),
+                      color: Colors.white.withValues(alpha: 0.85),
                       height: 1.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -111,7 +110,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: Icon(Icons.arrow_back_ios_new, size: 20, color: _white),
+            child: Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white),
           ),
           const SizedBox(width: 12),
           Text(
@@ -119,7 +118,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: _white,
+              color: Colors.white,
             ),
           ),
         ],
@@ -218,7 +217,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
           onPressed: _sending ? null : _activateSOS,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.red.shade600,
-            foregroundColor: _white,
+            foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 18),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 0,

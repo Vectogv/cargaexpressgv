@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/route_painter.dart';
+import '../shared/ui_compartida.dart';
 
 class EsperandoConfirmacionScreen extends StatelessWidget {
   final VoidCallback? onChat;
@@ -13,12 +14,6 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
     this.segundosRestantes,
   });
 
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
-  static const Color _iconDisabled = Color(0xFFD1D5DB);
-  static const Color _countdownNormal = Color(0xFF2563EB);
-  static const Color _countdownWarning = Color(0xFFDC2626);
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +37,7 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
-                          color: _textPrimary,
+                          color: ColoresApp.textoOscuro,
                           height: 1.3,
                         ),
                       ),
@@ -52,7 +47,7 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
-                          color: _textSecondary,
+                          color: ColoresApp.textoSecundario,
                           height: 1.6,
                         ),
                       ),
@@ -62,7 +57,7 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
-                          color: _textSecondary,
+                          color: ColoresApp.textoSecundario,
                           height: 1.6,
                         ),
                       ),
@@ -74,8 +69,8 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
                             fontSize: 40,
                             fontWeight: FontWeight.w700,
                             color: segundosRestantes! < 10
-                                ? _countdownWarning
-                                : _countdownNormal,
+                                ? ColoresApp.rojo
+                                : ColoresApp.azul,
                             height: 1.1,
                           ),
                         ),
@@ -84,8 +79,8 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 13,
                             color: segundosRestantes! < 10
-                                ? _countdownWarning
-                                : _textSecondary,
+                                ? ColoresApp.rojo
+                                : ColoresApp.textoSecundario,
                           ),
                         ),
                       ],
@@ -114,7 +109,7 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: _divider)),
+        border: Border(top: BorderSide(color: ColoresApp.divisor)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -133,9 +128,9 @@ class EsperandoConfirmacionScreen extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: disabled ? _iconDisabled : _textPrimary, size: 24),
+          Icon(icon, color: disabled ? ColoresApp.bordeCampo : ColoresApp.textoOscuro, size: 24),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: disabled ? _iconDisabled : _textSecondary)),
+          Text(label, style: TextStyle(fontSize: 12, color: disabled ? ColoresApp.bordeCampo : ColoresApp.textoSecundario)),
         ],
       ),
     );

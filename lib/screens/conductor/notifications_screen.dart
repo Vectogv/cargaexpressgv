@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/notification_service.dart';
 import '../shared/tickets/ticket_detalle_screen.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca;
+import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -16,10 +16,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _loading = true;
   bool _error = false;
 
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
-  static const Color _bgLight = Color(0xFFF5F7FA);
-  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -120,7 +116,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bgLight,
+      backgroundColor: ColoresApp.fondo,
       body: Column(
         children: [
           _buildHeader(context),
@@ -179,7 +175,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildHeader(BuildContext context) {
     final hayNoLeidas = _notifications.any((n) => n['leido'] != true);
     return Container(
-      color: _white,
+      color: Colors.white,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -236,16 +232,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: leido ? FontWeight.w500 : FontWeight.w700,
-                      color: _textDark,
+                      color: ColoresApp.textoOscuro,
                       height: 1.4,
                     ),
                   ),
                   if (notif['mensaje'] != null) ...[
                     const SizedBox(height: 2),
-                    Text(notif['mensaje'] as String, style: TextStyle(fontSize: 12, color: _textGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(notif['mensaje'] as String, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ],
                   const SizedBox(height: 4),
-                  Text(_formatDate(notif['createdAt'] as String?), style: TextStyle(fontSize: 11, color: _textGrey)),
+                  Text(_formatDate(notif['createdAt'] as String?), style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
                 ],
               ),
             ),

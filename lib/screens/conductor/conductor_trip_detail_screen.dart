@@ -10,6 +10,7 @@ import '../../services/solicitudes_disponibles_service.dart';
 import 'hacer_oferta_screen.dart';
 import 'oferta_enviada_screen.dart';
 import '../../core/formato_dinero.dart';
+import '../shared/ui_compartida.dart';
 
 export '../../contracts/solicitud.dart' show busquedaTimeoutMin, segundosRestantesSolicitud;
 
@@ -31,11 +32,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   late int _secondsLeft;
   Timer? _expireTimer;
 
-  static const Color _accentBlue = Color(0xFF2563EB);
-  static const Color _green = Color(0xFF16A34A);
-  static const Color _orange = Color(0xFFEA580C);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
 
   @override
   void initState() {
@@ -236,18 +232,18 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.person_outline_rounded, size: 15, color: _textSecondary),
+              const Icon(Icons.person_outline_rounded, size: 15, color: ColoresApp.textoSecundario),
               const SizedBox(width: 6),
               const Text(
                 'Precio propuesto por el cliente',
-                style: TextStyle(fontSize: 12, color: _textSecondary),
+                style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             precio,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _green),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: ColoresApp.verde),
           ),
         ],
       ),
@@ -259,7 +255,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       children: [
         _buildRouteRow(
           icon: Icons.location_on_outlined,
-          iconColor: _accentBlue,
+          iconColor: ColoresApp.azul,
           label: 'Origen',
           value: origen?['direccion'] as String? ?? 'Origen',
         ),
@@ -272,14 +268,14 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
                 width: 2,
                 height: 5,
                 margin: const EdgeInsets.symmetric(vertical: 2),
-                color: _divider,
+                color: ColoresApp.divisor,
               ),
             ),
           ),
         ),
         _buildRouteRow(
           icon: Icons.remove_circle_outline_rounded,
-          iconColor: _textSecondary,
+          iconColor: ColoresApp.textoSecundario,
           label: 'Destino',
           value: destino?['direccion'] as String? ?? 'Destino',
         ),
@@ -302,7 +298,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+              Text(label, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
               const SizedBox(height: 2),
               Text(
                 value,
@@ -321,7 +317,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: _textSecondary)),
+          Text(label, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
           const SizedBox(height: 4),
           Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF111827))),
         ],
@@ -329,7 +325,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     );
   }
 
-  Widget _buildDivider() => const Divider(color: _divider, height: 1);
+  Widget _buildDivider() => const Divider(color: ColoresApp.divisor, height: 1);
 
   Widget _buildExpirationBanner() {
     return Container(
@@ -355,7 +351,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: _orange,
+              color: ColoresApp.naranja,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
@@ -370,7 +366,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.of(context).padding.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: _divider)),
+        border: Border(top: BorderSide(color: ColoresApp.divisor)),
       ),
       child: SizedBox(
         width: double.infinity,

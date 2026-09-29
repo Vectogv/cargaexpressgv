@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 
 class DisputaIniciadaScreen extends StatelessWidget {
   final String motivo;
@@ -14,12 +15,6 @@ class DisputaIniciadaScreen extends StatelessWidget {
     this.onLlamar,
   });
 
-  static const Color _textPrimary = Color(0xFF111827);
-  static const Color _textSecondary = Color(0xFF6B7280);
-  static const Color _divider = Color(0xFFE5E7EB);
-  static const Color _red = Color(0xFFD32F2F);
-  static const Color _blue = Color(0xFF1565C0);
-  static const Color _inputBorder = Color(0xFFDDDDDD);
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +37,7 @@ class DisputaIniciadaScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: _red,
+                        color: ColoresApp.rojo,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -51,7 +46,7 @@ class DisputaIniciadaScreen extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
-                        color: _textSecondary,
+                        color: ColoresApp.textoSecundario,
                         height: 1.5,
                       ),
                     ),
@@ -63,7 +58,7 @@ class DisputaIniciadaScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: _textPrimary,
+                          color: ColoresApp.textoOscuro,
                         ),
                       ),
                     ),
@@ -76,14 +71,14 @@ class DisputaIniciadaScreen extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        border: Border.all(color: _inputBorder),
+                        border: Border.all(color: ColoresApp.bordeCampo),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         motivo,
                         style: const TextStyle(
                           fontSize: 14,
-                          color: _textPrimary,
+                          color: ColoresApp.textoOscuro,
                         ),
                       ),
                     ),
@@ -94,8 +89,8 @@ class DisputaIniciadaScreen extends StatelessWidget {
                       child: ElevatedButton(
                         onPressed: onVerDetalles,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _blue,
-                          disabledBackgroundColor: _divider,
+                          backgroundColor: ColoresApp.azul,
+                          disabledBackgroundColor: ColoresApp.divisor,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -152,7 +147,6 @@ class _WarningIcon extends StatelessWidget {
 
 class _TrianglePainter extends CustomPainter {
   static const Color _fill = Color(0xFFFFEBEE);
-  static const Color _stroke = Color(0xFFD32F2F);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -161,7 +155,7 @@ class _TrianglePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final strokePaint = Paint()
-      ..color = _stroke
+      ..color = ColoresApp.rojo
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeJoin = StrokeJoin.round;
