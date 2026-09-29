@@ -7,6 +7,7 @@ import '../../core/formato_dinero.dart';
 import '../../widgets/carga_express_bottom_nav.dart';
 import '../../services/api_client.dart';
 import '../../services/api/payment_service.dart';
+import '../../services/banner_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/config_cliente_service.dart';
 import '../../services/notification_service.dart';
@@ -65,6 +66,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     NotificationService.instance.refresh();
     // Plazo de confirmación que muestra la tarjeta de entrega por confirmar.
     ConfigClienteService.instance.cargar();
+    // Banner de la gerencia (Configuración → Banner en el panel).
+    BannerService.instance.cargar();
     _sondeo = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted && _activeTrip != null && ModalRoute.of(context)?.isCurrent == true) _loadActiveTrip();
     });

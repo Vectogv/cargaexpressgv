@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../contracts/trip_status.dart';
 import '../../core/formato_dinero.dart';
+import '../../services/banner_service.dart';
 import '../../services/config_cliente_service.dart';
 import '../shared/ui_compartida.dart';
 import 'confirmar_entrega_screen.dart' show avisoConfirmacionPendiente;
@@ -171,6 +172,7 @@ class ClienteInicioView extends StatelessWidget {
           const SizedBox(height: 4),
           Text(_subtitulo(estado), style: const TextStyle(fontSize: 15, color: _kGris)),
           const SizedBox(height: 20),
+          const _BannerPlataforma(),
           if (cargando)
             const _CargandoCard()
           else ...[
@@ -206,6 +208,55 @@ class ClienteInicioView extends StatelessWidget {
             _ViajeRecienteTile(viaje: recientes.first, onTap: () => onVerViaje(recientes.first)),
         ],
       ),
+    );
+  }
+}
+
+/// Banner que la gerencia configura desde el panel (Configuración → Banner).
+/// Se oculta solo si no está activo o no tiene texto; sin toque si no trae
+/// enlace.
+class _BannerPlataforma extends StatelessWidget {
+  const _BannerPlataforma();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<BannerPlataforma>(
+      valueListenable: BannerService.instance.banner,
+      builder: (_, banner, _) {
+        if (!banner.visible) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: banner.link == null ? null : () => launchUrl(Uri.parse(banner.link!), mode: LaunchMode.externalApplication),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: ColoresApp.azulTenue,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.campaign_outlined, color: ColoresApp.azul, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      banner.texto,
+                      style: const TextStyle(fontSize: 13, color: ColoresApp.azulOscuro, height: 1.4, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  if (banner.link != null) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.chevron_right_rounded, color: ColoresApp.azul, size: 20),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
