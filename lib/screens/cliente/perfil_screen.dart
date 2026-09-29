@@ -26,27 +26,6 @@ const Map<String, String> portadasPerfil = {
   'liso': 'Azul',
 };
 
-/// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre y
-/// apellido vacíos no se envían (no se borran); teléfono y contacto de
-/// emergencia vacíos se envían como null (el backend los acepta nulos). El
-/// email no se envía: es el usuario de inicio de sesión y no se edita aquí.
-Map<String, dynamic> cuerpoActualizacionPerfil({
-  required String nombre,
-  required String apellido,
-  required String telefono,
-  required String contactoNombre,
-  required String contactoTelefono,
-}) {
-  String? opcional(String v) => v.trim().isEmpty ? null : v.trim();
-  return {
-    if (nombre.trim().isNotEmpty) 'nombre': nombre.trim(),
-    if (apellido.trim().isNotEmpty) 'apellido': apellido.trim(),
-    'telefono': opcional(telefono),
-    'contactoEmergenciaNombre': opcional(contactoNombre),
-    'contactoEmergenciaTelefono': opcional(contactoTelefono),
-  };
-}
-
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
 

@@ -15,8 +15,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _sonido = true;
   bool _vibrar = true;
   bool _notifViaje = true;
-  bool _ubicacion = true;
-  bool _visible = true;
   bool _loading = true;
 
 
@@ -32,7 +30,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         setState(() {
         _sonido = settings['notificacionesSonido'] as bool? ?? true;
-        _visible = settings['visibilidad'] == 'visible';
         _loading = false;
       });
       }
@@ -46,8 +43,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _sonido = CacheService.instance.getPreference('sonido') as bool? ?? true;
       _vibrar = CacheService.instance.getPreference('vibrar') as bool? ?? true;
       _notifViaje = CacheService.instance.getPreference('notifViaje') as bool? ?? true;
-      _ubicacion = CacheService.instance.getPreference('ubicacion') as bool? ?? true;
-      _visible = CacheService.instance.getPreference('visible') as bool? ?? true;
       _loading = false;
     });
   }
@@ -56,15 +51,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     CacheService.instance.setPreference('sonido', _sonido);
     CacheService.instance.setPreference('vibrar', _vibrar);
     CacheService.instance.setPreference('notifViaje', _notifViaje);
-    CacheService.instance.setPreference('ubicacion', _ubicacion);
-    CacheService.instance.setPreference('visible', _visible);
 
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ApiClient.instance.updateSettings({
-        'notificacionesSonido': _sonido,
-        'visibilidad': _visible ? 'visible' : 'oculto',
-      });
+      await ApiClient.instance.updateSettings({'notificacionesSonido': _sonido});
     } catch (e) {
       // Antes el error se ignoraba y el usuario creía que se había guardado.
       messenger.showSnackBar(SnackBar(
@@ -90,11 +80,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSwitchItem('Sonido', _sonido, (v) => setState(() { _sonido = v; _save(); })),
             _buildSwitchItem('Vibrar', _vibrar, (v) => setState(() { _vibrar = v; _save(); })),
             _buildSwitchItem('Notificaciones de viaje', _notifViaje, (v) => setState(() { _notifViaje = v; _save(); })),
-          ]),
-          const SizedBox(height: 12),
-          _buildSection('Privacidad', [
-            _buildSwitchItem('Compartir ubicación en vivo', _ubicacion, (v) => setState(() { _ubicacion = v; _save(); })),
-            _buildSwitchItem('Visible para clientes', _visible, (v) => setState(() { _visible = v; _save(); })),
           ]),
           const SizedBox(height: 12),
           _buildSection('Cuenta', [

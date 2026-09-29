@@ -363,11 +363,19 @@ class _EarningsScreenState extends State<EarningsScreen> {
       radio: 14,
       child: Column(
         children: [
-          Text(_pesos(p['neto']), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: ColoresApp.azulOscuro, fontFeatures: cifrasTabulares)),
+          // Montos grandes en columnas angostas: se encogen, nunca se parten ni
+          // se truncan (un monto truncado se lee como otra cifra).
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(_pesos(p['neto']), maxLines: 1, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: ColoresApp.azulOscuro, fontFeatures: cifrasTabulares)),
+          ),
           const SizedBox(height: 2),
           Text('neto', style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario)),
           const SizedBox(height: 4),
-          Text(_pesos(p['bruto']), style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(_pesos(p['bruto']), maxLines: 1, style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
+          ),
           const SizedBox(height: 2),
           Text(label, style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontWeight: FontWeight.w500)),
         ],
@@ -394,13 +402,17 @@ class _EarningsScreenState extends State<EarningsScreen> {
   }
 
   Widget _statItem(IconData icon, String value, String label) {
-    return Column(children: [
+    // Expanded: sin ancho fijo el FittedBox de abajo no tendría contra qué encogerse.
+    return Expanded(child: Column(children: [
       Icon(icon, color: ColoresApp.azulOscuro, size: 22),
       const SizedBox(height: 6),
-      Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(value, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+      ),
       const SizedBox(height: 2),
       Text(label, style: TextStyle(fontSize: 9, color: ColoresApp.textoSecundario), textAlign: TextAlign.center),
-    ]);
+    ]));
   }
 
   Widget _buildHistoryCard() {

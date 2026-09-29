@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:cargaexpress/contracts/validacion_usuario.dart' show cuerpoActualizacionPerfil;
 import 'package:cargaexpress/screens/cliente/perfil_screen.dart';
 import 'package:cargaexpress/screens/user/auth_screen.dart';
 

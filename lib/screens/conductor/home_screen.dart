@@ -17,17 +17,12 @@ import '../../services/driver_location_service.dart';
 import '../../services/solicitudes_disponibles_service.dart';
 import '../../services/api/driver_service.dart';
 import '../../services/map_config.dart';
-import '../user/auth_screen.dart';
 import 'trip_in_progress_screen.dart';
-import 'offers_screen.dart';
 import 'earnings_screen.dart';
-import 'trip_chat_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'documents_screen.dart';
 import 'trip_history_screen.dart';
-import 'support_screen.dart';
-import 'settings_screen.dart';
 import 'solicitudes_disponibles_screen.dart';
 import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
@@ -44,7 +39,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _bottomIndex = 0;
   bool _online = true;
   bool _statusLoading = false;
@@ -533,28 +527,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'En l\u00ednea';
   }
 
-  Color _statusColor() {
-    final estado = _verificacionEstado;
-    if (estado == 'rechazado' || estado == 'pendiente') return Colors.orange;
-    if (!_online) return Colors.grey;
-    return ColoresApp.verde;
-  }
-
   void _navigate(int index) {
-    if (index == 5) {
-      SocketServiceClient.instance.resetChatUnread();
-    }
+    // Sin el menú lateral, Mis ofertas / Soporte / Ajustes viven en Perfil y
+    // el chat se abre desde el viaje en curso.
     final routes = <int, Widget>{
       1: TripInProgressScreen(trip: _activeTrip != null ? Trip.fromJson(_activeTrip!) : null),
-      2: const OffersScreen(),
       4: const EarningsScreen(),
-      5: TripChatScreen(trip: _activeTrip),
       6: const NotificationsScreen(),
       9: const ProfileScreen(),
       10: const DocumentsScreen(),
       11: const TripHistoryScreen(),
-      12: const SupportScreen(),
-      13: const SettingsScreen(),
       14: const SolicitudesDisponiblesScreen(),
     };
     final route = routes[index];
@@ -570,9 +552,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
       backgroundColor: ColoresApp.fondo,
-      drawer: _buildDrawer(),
       body: Column(
         children: [
           _buildHeader(),
@@ -601,121 +581,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _logout() async {
-    DriverLocationService.instance.stop();
-    await ApiClient.instance.logout();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const AuthScreen()),
-      (_) => false,
-    );
-  }
-
-  Widget _buildDrawer() {
-    return Drawer(
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 48, 20, 20),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [ColoresApp.azulOscuro, ColoresApp.azul],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.white.withValues(alpha: 0.2),
-                  child: Text(
-                    _initials(ApiClient.instance.nombreCompleto),
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ApiClient.instance.nombreCompleto,
-                        style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      GestureDetector(
-                        onTap: () {
-                          final estado = _verificacionEstado;
-                          if (estado == 'rechazado' || estado == 'pendiente') {
-                            Navigator.pop(context);
-                            _navigate(10);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: _statusColor(),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            _statusLabel(),
-                            style: const TextStyle(color: Colors.white, fontSize: 11),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _buildDrawerItem(Icons.inbox_outlined, 'Solicitudes disponibles', 14),
-                _buildDrawerItem(Icons.local_offer_outlined, 'Mis ofertas', 2),
-                _buildDrawerItem(Icons.person_outline, 'Perfil', 9),
-                _buildDrawerItem(Icons.description_outlined, 'Documentaci\u00f3n', 10),
-                _buildDrawerItem(Icons.route_outlined, 'Historial de viajes', 11),
-                _buildDrawerItem(Icons.chat_bubble_outline, 'Mensajes', 5),
-                _buildDrawerItem(Icons.notifications_none, 'Notificaciones', 6),
-                _buildDrawerItem(Icons.settings_outlined, 'Ajustes', 13),
-                _buildDrawerItem(Icons.headset_mic_outlined, 'Soporte', 12),
-                const Divider(),
-                _buildDrawerItem(Icons.logout, 'Cerrar sesi\u00f3n', -1, isDestructive: true),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem(IconData icon, String label, int index, {bool isDestructive = false}) {
-    return ListTile(
-      leading: Icon(icon, color: isDestructive ? ColoresApp.rojoSesion : ColoresApp.textoSecundario),
-      title: Text(
-        label,
-        style: TextStyle(
-          color: isDestructive ? ColoresApp.rojoSesion : ColoresApp.textoOscuro,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      onTap: () {
-        Navigator.pop(context);
-        if (index == -1) {
-          _logout();
-        } else {
-          _navigate(index);
-        }
-      },
-    );
-  }
-
   Widget _buildHeader() {
     final nombre = (_profile?['nombre'] as String?)?.trim();
     final saludo = (nombre == null || nombre.isEmpty) ? 'Hola, conductor' : 'Hola, ${nombre.split(' ').first}';
@@ -736,16 +601,12 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Row(
                 children: [
-                  // El avatar abre el menú lateral (antes lo hacía el botón de hamburguesa).
-                  GestureDetector(
-                    onTap: () => _scaffoldKey.currentState?.openDrawer(),
-                    child: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: ColoresApp.azulOscuro,
-                      child: Text(
-                        _initials(nombre),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                      ),
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: ColoresApp.azulOscuro,
+                    child: Text(
+                      _initials(nombre),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(width: 12),

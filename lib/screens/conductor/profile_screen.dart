@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:image_picker/image_picker.dart';
 import '../../contracts/calificacion.dart' show etiquetaCalificacion;
 import '../../contracts/validacion_usuario.dart';
@@ -6,10 +7,13 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/driver_location_service.dart';
 import '../../widgets/media_image.dart';
-import '../shared/ui_compartida.dart' show ColoresApp, TarjetaBlanca, cifrasTabulares;
+import '../shared/ui_compartida.dart' show BotonPrincipal, ColoresApp, TarjetaBlanca, cifrasTabulares;
+import '../user/auth_estilos.dart' show AvisoErrorAuth;
 import '../user/auth_screen.dart';
 import 'documents_screen.dart';
+import 'offers_screen.dart';
 import 'settings_screen.dart';
+import 'support_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -91,88 +95,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Pantalla completa (como el cliente); guarda por su cuenta y devuelve true
+  /// si hubo cambios que recargar.
   Future<void> _editInfo() async {
-    final nombreCtrl = TextEditingController(text: _profile?['nombre'] as String? ?? '');
-    final apellidoCtrl = TextEditingController(text: _profile?['apellido'] as String? ?? '');
-    final emailCtrl = TextEditingController(text: _profile?['email'] as String? ?? '');
-    final telefonoCtrl = TextEditingController(text: _profile?['telefono'] as String? ?? '');
-
-    String? errorTelefono;
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return AlertDialog(
-            title: const Text('Editar perfil'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-                  const SizedBox(height: 8),
-                  TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellido')),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: emailCtrl,
-                    enabled: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      helperText: 'Para cambiarlo, escribe a soporte',
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: telefonoCtrl,
-                    decoration: InputDecoration(labelText: 'Teléfono', errorText: errorTelefono),
-                    keyboardType: TextInputType.phone,
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-              ElevatedButton(
-                onPressed: () {
-                  final error = validarTelefono(telefonoCtrl.text);
-                  if (error != null) {
-                    setDialogState(() => errorTelefono = error);
-                    return;
-                  }
-                  Navigator.pop(ctx, true);
-                },
-                child: const Text('Guardar'),
-              ),
-            ],
-          );
-        },
-      ),
+    final guardado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => _EditarPerfilConductorScreen(perfil: _profile ?? const {})),
     );
-
-    final body = {
-      'nombre': nombreCtrl.text.trim(),
-      'apellido': apellidoCtrl.text.trim(),
-      'telefono': telefonoCtrl.text.trim(),
-    };
-    // Liberar los controladores tras la animación de cierre del diálogo
-    // (antes nunca se liberaban).
-    Future<void>.delayed(const Duration(seconds: 1), () {
-      nombreCtrl.dispose();
-      apellidoCtrl.dispose();
-      emailCtrl.dispose();
-      telefonoCtrl.dispose();
-    });
-    if (result != true || !mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ApiClient.instance.updateProfile(body);
-      await _loadProfile();
-      messenger.showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
-    }
+    if (guardado != true || !mounted) return;
+    await _loadProfile();
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
   }
 
   Map<String, dynamic>? get _conductor => _profile?['conductor'] as Map<String, dynamic>?;
@@ -181,22 +113,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final placa = _conductor?['placa'] as String? ?? 'No registrada';
     final tipo = _conductor?['tipoVehiculo'] as String? ?? 'No especificado';
     final capacidad = _conductor?['capacidad'] as String? ?? 'No especificada';
+    final foto = _conductor?['fotoVehiculo'] as String?;
 
-    showDialog(
+    // Hoja inferior en vez del diálogo chico: la foto necesita ancho.
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Vehículo'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _infoRow('Placa', placa),
-            _infoRow('Tipo', tipo.isEmpty ? tipo : tipo[0].toUpperCase() + tipo.substring(1)),
-            _infoRow('Capacidad', capacidad),
-          ],
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Vehículo', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
+              const SizedBox(height: 12),
+              // Sin foto subida, MediaImage muestra su placeholder por defecto.
+              MediaImage(path: foto, height: 180, width: double.infinity, fit: BoxFit.cover, borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 12),
+              _infoRow('Placa', placa),
+              _infoRow('Tipo', tipo.isEmpty ? tipo : tipo[0].toUpperCase() + tipo.substring(1)),
+              _infoRow('Capacidad', capacidad),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
-        ],
       ),
     );
   }
@@ -387,6 +333,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
           _buildMenuItem(Icons.directions_car_outlined, 'Vehículo', _showVehicleInfo),
           _buildMenuItem(Icons.description_outlined, 'Documentos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()))),
+          // Mis ofertas y Soporte vivían solo en el menú lateral del inicio (ya quitado).
+          _buildMenuItem(Icons.local_offer_outlined, 'Mis ofertas', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OffersScreen()))),
+          _buildMenuItem(Icons.headset_mic_outlined, 'Soporte', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
           _buildMenuItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), divisor: false),
         ],
       ),
@@ -413,6 +362,211 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         if (divisor) const Divider(height: 1, thickness: 1, color: ColoresApp.divisor),
       ],
+    );
+  }
+}
+
+/// Edición del perfil del conductor, calcada de la del cliente
+/// (`cliente/perfil_screen.dart`, `_EditarPerfilScreen`) pero sin portada y
+/// con el contacto de emergencia obligatorio: el SOS del conductor necesita a
+/// quién llamar. Guarda por su cuenta (PUT /api/users/profile) y devuelve true
+/// si guardó, null si se canceló.
+class _EditarPerfilConductorScreen extends StatefulWidget {
+  final Map<String, dynamic> perfil;
+  const _EditarPerfilConductorScreen({required this.perfil});
+
+  @override
+  State<_EditarPerfilConductorScreen> createState() => _EditarPerfilConductorScreenState();
+}
+
+class _EditarPerfilConductorScreenState extends State<_EditarPerfilConductorScreen> {
+  late final _nombre = _ctrl('nombre');
+  late final _apellido = _ctrl('apellido');
+  late final _email = _ctrl('email');
+  late final _telefono = _ctrl('telefono');
+  late final _contactoNombre = _ctrl('contactoEmergenciaNombre');
+  late final _contactoTelefono = _ctrl('contactoEmergenciaTelefono');
+
+  String? _errorTelefono;
+  String? _errorContactoNombre;
+  String? _errorContactoTelefono;
+  String? _errorGeneral;
+  bool _guardando = false;
+
+  TextEditingController _ctrl(String campo) =>
+      TextEditingController(text: widget.perfil[campo]?.toString() ?? '');
+
+  @override
+  void dispose() {
+    for (final c in [_nombre, _apellido, _email, _telefono, _contactoNombre, _contactoTelefono]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _seccion(String titulo, {String? detalle, required List<Widget> hijos}) => Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(titulo, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+            if (detalle != null) ...[
+              const SizedBox(height: 2),
+              Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+            ],
+            const SizedBox(height: 12),
+            ...hijos,
+          ],
+        ),
+      );
+
+  Widget _campo(TextEditingController c, String label, int max,
+      {TextInputType tipo = TextInputType.text, String? error, bool enabled = true, String? ayuda}) {
+    OutlineInputBorder borde(Color color, [double ancho = 1]) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: color, width: ancho));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: ColoresApp.etiquetaCampo)),
+        const SizedBox(height: 6),
+        TextField(
+          key: ValueKey('campo_$label'),
+          controller: c,
+          keyboardType: tipo,
+          enabled: enabled && !_guardando,
+          inputFormatters: [LengthLimitingTextInputFormatter(max)],
+          style: TextStyle(fontSize: 15, color: enabled ? ColoresApp.textoOscuro : ColoresApp.textoSecundario),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: enabled ? Colors.white : ColoresApp.fondo,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            enabledBorder: borde(ColoresApp.bordeCampo),
+            disabledBorder: borde(ColoresApp.borde),
+            focusedBorder: borde(ColoresApp.azul, 2),
+            errorBorder: borde(ColoresApp.rojoSesion),
+            focusedErrorBorder: borde(ColoresApp.rojoSesion, 2),
+            errorText: error,
+            helperText: ayuda,
+            helperStyle: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _guardar() async {
+    final errorTelefono = validarTelefono(_telefono.text);
+    final errorContactoNombre = _contactoNombre.text.trim().isEmpty ? 'El nombre del contacto es obligatorio' : null;
+    final errorContactoTelefono = validarTelefono(_contactoTelefono.text);
+    if (errorTelefono != null || errorContactoNombre != null || errorContactoTelefono != null) {
+      setState(() {
+        _errorTelefono = errorTelefono;
+        _errorContactoNombre = errorContactoNombre;
+        _errorContactoTelefono = errorContactoTelefono;
+      });
+      return;
+    }
+    setState(() {
+      _guardando = true;
+      _errorGeneral = null;
+      _errorTelefono = null;
+      _errorContactoNombre = null;
+      _errorContactoTelefono = null;
+    });
+    try {
+      await ApiClient.instance.updateProfile(cuerpoActualizacionPerfil(
+        nombre: _nombre.text,
+        apellido: _apellido.text,
+        telefono: _telefono.text,
+        contactoNombre: _contactoNombre.text,
+        contactoTelefono: _contactoTelefono.text,
+      ));
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      setState(() {
+        _guardando = false;
+        _errorGeneral = e.message;
+      });
+    } catch (e) {
+      setState(() {
+        _guardando = false;
+        _errorGeneral = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_guardando,
+      child: Scaffold(
+        backgroundColor: ColoresApp.fondo,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          foregroundColor: ColoresApp.textoOscuro,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          shape: const Border(bottom: BorderSide(color: ColoresApp.borde)),
+          title: const Text('Editar perfil', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+          children: [
+            _seccion('Datos personales', hijos: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _campo(_nombre, 'Nombre', LimitesUsuario.nombre)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _campo(_apellido, 'Apellido', LimitesUsuario.apellido)),
+                ],
+              ),
+            ]),
+            _seccion('Contacto', hijos: [
+              _campo(_email, 'Correo', LimitesUsuario.email,
+                  tipo: TextInputType.emailAddress, enabled: false, ayuda: 'Para cambiarlo, escribe a soporte.'),
+              const SizedBox(height: 14),
+              _campo(_telefono, 'Teléfono', LimitesUsuario.telefono, tipo: TextInputType.phone, error: _errorTelefono),
+            ]),
+            _seccion('Contacto de emergencia', detalle: 'Lo llamamos si activas el SOS durante un viaje.', hijos: [
+              _campo(_contactoNombre, 'Nombre del contacto', LimitesUsuario.contactoNombre, error: _errorContactoNombre),
+              const SizedBox(height: 14),
+              _campo(_contactoTelefono, 'Teléfono del contacto', LimitesUsuario.contactoTelefono,
+                  tipo: TextInputType.phone, error: _errorContactoTelefono),
+            ]),
+          ],
+        ),
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: ColoresApp.borde)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_errorGeneral != null) ...[
+                    AvisoErrorAuth(mensaje: _errorGeneral!),
+                    const SizedBox(height: 10),
+                  ],
+                  BotonPrincipal(
+                    texto: _guardando ? 'Guardando…' : 'Guardar cambios',
+                    onPressed: _guardando ? null : _guardar,
+                    color: ColoresApp.azul,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
