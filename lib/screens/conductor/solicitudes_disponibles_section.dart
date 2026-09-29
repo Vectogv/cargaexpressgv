@@ -9,6 +9,7 @@ import '../../services/api_client.dart';
 import '../../services/driver_location_service.dart';
 import '../../services/server_clock.dart';
 import '../../services/solicitudes_disponibles_service.dart';
+import '../../widgets/vehiculo_mapa.dart' show TipoVehiculoMapa, tipoVehiculoMapaDe;
 import 'conductor_trip_detail_screen.dart';
 import 'offers_screen.dart';
 import '../../core/formato_dinero.dart';
@@ -230,15 +231,9 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
     required String detalle,
     Widget? accion,
   }) {
-    return Container(
+    return TarjetaBlanca(
       key: key,
-      width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
       child: Row(
         children: [
           Container(
@@ -321,85 +316,86 @@ class SolicitudDisponibleCard extends StatelessWidget {
     final vehiculoRequerido = v['tipoVehiculoRequerido']?.toString().trim();
     final oferta = solicitud.oferta;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: oferta != null ? Border.all(color: ColoresApp.azul.withValues(alpha: 0.35)) : null,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
+    final tieneVehiculo = vehiculoRequerido != null && vehiculoRequerido.isNotEmpty;
+
+    return TarjetaBlanca(
+      colorBorde: oferta != null ? ColoresApp.azul.withValues(alpha: 0.5) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Precio propuesto por el cliente',
-                        style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
-                    Text(dinero(precio),
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: ColoresApp.verde, letterSpacing: -0.5)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
+              if (tieneVehiculo) _badge(vehiculoRequerido, _colorVehiculo(vehiculoRequerido)),
+              const Spacer(),
               if (programada)
                 _chip(Icons.event_rounded, 'Reserva', color: ColoresApp.azulOscuro)
               else if (restante > 0)
                 _chip(
                   Icons.timer_outlined,
                   formatoCuentaRegresiva(Duration(seconds: restante)),
-                  color: restante <= 60 ? Colors.red : ColoresApp.naranja,
+                  color: restante <= 60 ? ColoresApp.rojo : ColoresApp.naranja,
                 )
               else
-                _chip(Icons.timer_off_outlined, 'Por vencer', color: Colors.red),
+                _chip(Icons.timer_off_outlined, 'Por vencer', color: ColoresApp.rojo),
             ],
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              if (km != null) _chip(Icons.near_me_rounded, textoDistanciaRecogida(km)),
-              if (minutos != null && minutos > 0) _chip(Icons.schedule_rounded, '$minutos min de viaje'),
-              if (vehiculoRequerido != null && vehiculoRequerido.isNotEmpty)
-                _chip(Icons.local_shipping_outlined, vehiculoRequerido, color: ColoresApp.azulOscuro),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _parada(Icons.circle, ColoresApp.verde, 'Recogida', origen.isEmpty ? 'Cerca de ti' : origen),
+          if (km != null || (minutos != null && minutos > 0)) ...[
+            const SizedBox(height: 8),
+            Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 5, children: [
+              const Icon(Icons.near_me_rounded, size: 14, color: ColoresApp.textoSecundario),
+              if (km != null) Text(textoDistanciaRecogida(km), style: _estiloDato),
+              if (km != null && minutos != null && minutos > 0) const Text('·', style: _estiloDato),
+              if (minutos != null && minutos > 0) Text('$minutos min de viaje', style: _estiloDato),
+            ]),
+          ],
+          const SizedBox(height: 12),
+          _parada(ColoresApp.verde, 'Recoge', origen.isEmpty ? 'Cerca de ti' : origen),
           Padding(
-            padding: const EdgeInsets.only(left: 8),
+            padding: const EdgeInsets.only(left: 4),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Container(width: 2, height: 14, color: Colors.grey.shade300),
+              child: Container(width: 2, height: 16, color: ColoresApp.borde),
             ),
           ),
-          _parada(Icons.location_on_rounded, Colors.red, 'Destino', destino.isEmpty ? 'Cargando…' : destino),
+          _parada(ColoresApp.rojo, 'Entrega', destino.isEmpty ? 'Cargando…' : destino),
           if (carga.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(12)),
-              child: Row(children: [
-                const Icon(Icons.inventory_2_outlined, size: 18, color: ColoresApp.textoSecundario),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(carga,
-                      style: const TextStyle(color: ColoresApp.textoOscuro, fontSize: 13),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                ),
-              ]),
-            ),
+            const SizedBox(height: 10),
+            Row(children: [
+              const Icon(Icons.inventory_2_outlined, size: 16, color: ColoresApp.textoSecundario),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(carga,
+                    style: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ]),
           ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          const Divider(height: 1, thickness: 1, color: ColoresApp.divisor),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(dinero(precio),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+              ),
+              if (oferta == null)
+                ElevatedButton(
+                  onPressed: onVer,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColoresApp.azul,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(112, 44),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Ofertar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                ),
+            ],
+          ),
           if (oferta != null) ...[
+            const SizedBox(height: 12),
             Container(
               key: const Key('oferta_enviada'),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -427,37 +423,41 @@ class SolicitudDisponibleCard extends StatelessWidget {
               ),
               child: const Text('Ver mi oferta', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
-          ] else ...[
-            if (solicitud.ofertaRechazada) ...[
-              Row(
-                key: const Key('oferta_rechazada'),
-                children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: ColoresApp.naranja),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text('El cliente rechazó tu oferta anterior. Puedes enviar una nueva.',
-                        style: TextStyle(fontSize: 12, color: ColoresApp.naranja, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-            ElevatedButton(
-              onPressed: onVer,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ColoresApp.azul,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(48),
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: const Text('Ver y ofertar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          ] else if (solicitud.ofertaRechazada) ...[
+            const SizedBox(height: 10),
+            Row(
+              key: const Key('oferta_rechazada'),
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 16, color: ColoresApp.naranja),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text('El cliente rechazó tu oferta anterior. Puedes enviar una nueva.',
+                      style: TextStyle(fontSize: 12, color: ColoresApp.naranja, fontWeight: FontWeight.w600)),
+                ),
+              ],
             ),
           ],
         ],
       ),
     );
   }
+
+  static const _estiloDato = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoSecundario);
+
+  /// Color del distintivo según el tipo de vehículo pedido (misma clasificación
+  /// que el dibujo del mapa).
+  static Color _colorVehiculo(String tipo) => switch (tipoVehiculoMapaDe(tipo)) {
+        TipoVehiculoMapa.camioneta => ColoresApp.azul,
+        TipoVehiculoMapa.carro => ColoresApp.verde,
+        TipoVehiculoMapa.furgon => ColoresApp.naranja,
+        _ => ColoresApp.azulOscuro,
+      };
+
+  Widget _badge(String texto, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+        child: Text(texto, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+      );
 
   static String _textoOferta(num monto, Duration? restante) {
     final base = 'Oferta enviada · ${dinero(monto)}';
@@ -475,14 +475,14 @@ class SolicitudDisponibleCard extends StatelessWidget {
         ]),
       );
 
-  Widget _parada(IconData icon, Color color, String titulo, String texto) => Row(
+  Widget _parada(Color color, String titulo, String texto) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: 18, color: color),
+            padding: const EdgeInsets.only(top: 5),
+            child: Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(titulo, style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../contracts/calificacion.dart' show etiquetaCalificacion;
 import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
+import '../../services/driver_location_service.dart';
 import '../../widgets/media_image.dart';
-import '../shared/ui_compartida.dart' show ColoresApp;
+import '../shared/ui_compartida.dart' show ColoresApp, TarjetaBlanca, cifrasTabulares;
+import '../user/auth_screen.dart';
 import 'documents_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,12 +22,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _profile;
   bool _loading = true;
   String? _error;
-
+  // Contadores del historial (el servidor no da totales aparte), como en el perfil del cliente.
+  int _envios = 0, _completados = 0, _cancelados = 0;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadEstadisticas();
   }
 
   Future<void> _loadProfile() async {
@@ -33,6 +39,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
     }
+  }
+
+  Future<void> _loadEstadisticas() async {
+    try {
+      final viajes = await ApiClient.instance.getTripHistory(limit: 100);
+      if (!mounted) return;
+      setState(() {
+        _envios = viajes.length;
+        _completados = viajes.where((v) => v['estado'] == 'finalizado').length;
+        _cancelados = viajes.where((v) => v['estado'] == 'cancelado').length;
+      });
+    } catch (_) {
+      // Silencioso: las estadísticas son secundarias al perfil.
+    }
+  }
+
+  Future<void> _logout() async {
+    DriverLocationService.instance.stop();
+    await ApiClient.instance.logout();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+      (_) => false,
+    );
   }
 
   Future<void> _pickAvatar() async {
@@ -230,11 +261,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 )
               : SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.of(context).padding.bottom),
                   child: Column(
                     children: [
                       _buildProfileCard(),
+                      const SizedBox(height: 20),
+                      _buildStatsCard(),
                       const SizedBox(height: 12),
                       _buildMenuItems(),
+                      const SizedBox(height: 12),
+                      TarjetaBlanca(
+                        padding: EdgeInsets.zero,
+                        child: _buildMenuItem(Icons.logout_rounded, 'Cerrar sesión', _logout, color: ColoresApp.rojo, divisor: false),
+                      ),
                     ],
                   ),
                 ),
@@ -244,14 +283,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileCard() {
     final nombre = '${_profile?['nombre'] ?? ApiClient.instance.nombre ?? ''} ${_profile?['apellido'] ?? ''}'.trim();
     final email = _profile?['email'] as String? ?? ApiClient.instance.email ?? '';
+    final telefono = (_profile?['telefono'] as String?)?.trim() ?? '';
     final avatar = _profile?['avatar'] as String?;
-    final rating = (_conductor?['calificacion'] ?? 4.8).toString();
-    final viajes = _conductor?['totalViajes'] ?? 129;
+    final viajes = (_conductor?['totalViajes'] as num?)?.toInt() ?? 0;
+    final rating = etiquetaCalificacion(_conductor?['calificacion'], totalViajes: viajes);
 
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
         children: [
           GestureDetector(
             onTap: _pickAvatar,
@@ -261,19 +300,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 MediaAvatar(
                   path: avatar,
                   name: nombre,
-                  radius: 35,
+                  radius: 44,
                   backgroundColor: ColoresApp.azulOscuro,
                   foregroundColor: Colors.white,
-                  fontSize: 22,
-                  border: Border.all(color: Colors.grey.shade200, width: 2),
+                  fontSize: 28,
+                  border: Border.all(color: ColoresApp.borde, width: 2),
                 ),
                 Positioned(
                   bottom: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      color: ColoresApp.azulOscuro,
+                      color: ColoresApp.azul,
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2),
                     ),
@@ -283,65 +322,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                  Text(
-                    nombre.isNotEmpty ? nombre : 'Sin nombre',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
-                  ),
-                const SizedBox(height: 2),
-                Text(email, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.star_rounded, color: Color(0xFFFFC107), size: 18),
-                    const SizedBox(width: 4),
-                    Text(rating, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
-                    Text(' ($viajes viajes)', style: TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
-                  ],
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          Text(
+            nombre.isNotEmpty ? nombre : 'Sin nombre',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro),
           ),
+          const SizedBox(height: 4),
+          Text(email, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+          if (telefono.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(telefono, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.star_rounded, color: ColoresApp.ambar, size: 20),
+              const SizedBox(width: 4),
+              Text(rating, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+              Text(' ($viajes viajes)', style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsCard() {
+    return TarjetaBlanca(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            _stat('$_envios', 'Envíos', ColoresApp.textoOscuro),
+            const VerticalDivider(width: 1, thickness: 1, color: ColoresApp.divisor),
+            _stat('$_completados', 'Completados', ColoresApp.verde),
+            const VerticalDivider(width: 1, thickness: 1, color: ColoresApp.divisor),
+            _stat('$_cancelados', 'Cancelados', ColoresApp.rojo),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stat(String valor, String etiqueta, Color color) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(valor, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color, fontFeatures: cifrasTabulares)),
+          const SizedBox(height: 2),
+          Text(etiqueta, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
         ],
       ),
     );
   }
 
   Widget _buildMenuItems() {
-    return Container(
-      color: Colors.white,
+    return TarjetaBlanca(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           _buildMenuItem(Icons.person_outline, 'Información personal', _editInfo),
-          _buildMenuItem(Icons.directions_car_outlined, 'Vehículos', _showVehicleInfo),
+          _buildMenuItem(Icons.directions_car_outlined, 'Vehículo', _showVehicleInfo),
           _buildMenuItem(Icons.description_outlined, 'Documentos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()))),
+          _buildMenuItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), divisor: false),
         ],
       ),
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap) {
+  Widget _buildMenuItem(IconData icon, String label, VoidCallback? onTap, {Color color = ColoresApp.textoOscuro, bool divisor = true}) {
     return Column(
       children: [
         InkWell(
           onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(icon, size: 22, color: ColoresApp.textoOscuro),
+                Icon(icon, size: 22, color: color),
                 const SizedBox(width: 14),
-                Expanded(child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
-                Icon(Icons.chevron_right, color: Colors.grey.shade400),
+                Expanded(child: Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color))),
+                const Icon(Icons.chevron_right, color: ColoresApp.chevron),
               ],
             ),
           ),
         ),
-        const Divider(height: 1, indent: 56, endIndent: 0),
+        if (divisor) const Divider(height: 1, thickness: 1, color: ColoresApp.divisor),
       ],
     );
   }

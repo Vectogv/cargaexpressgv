@@ -1758,17 +1758,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 190),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: ColoresApp.verde.withValues(alpha: 0.12),
+                    color: _infoEstado(estado).color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: ColoresApp.verde.withValues(alpha: 0.4)),
                   ),
                   child: Text(
                     _etiquetaEstado(estado),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: ColoresApp.verde, fontSize: 11, fontWeight: FontWeight.w700),
+                    style: TextStyle(color: _infoEstado(estado).color, fontSize: 11, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -2028,8 +2027,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     return Row(children: [
       CircleAvatar(
         radius: 22,
-        backgroundColor: const Color(0xFFD1FAE5),
-        child: Text(_initials(nombre), style: const TextStyle(color: Color(0xFF15803D), fontSize: 15, fontWeight: FontWeight.w700)),
+        backgroundColor: ColoresApp.azulOscuro,
+        child: Text(_initials(nombre), style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
       ),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2037,7 +2036,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         const SizedBox(height: 2),
         Row(children: [
           if (rating != null) ...[
-            const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 15),
+            const Icon(Icons.star_rounded, color: ColoresApp.ambar, size: 15),
             const SizedBox(width: 2),
             Text(rating.toStringAsFixed(1), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
             const SizedBox(width: 6),
@@ -2071,17 +2070,24 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
 
   Widget _rutaFilas(Trip t, String estado) {
     final antes = _antesDeRecoger(estado);
-    return Column(children: [
-      _rutaFila(Icons.trip_origin, const Color(0xFF16A34A), 'Origen', t.origen?.direccion ?? '', destacada: antes),
-      const SizedBox(height: 6),
-      _rutaFila(Icons.location_on, const Color(0xFFEF4444), 'Destino', t.destino?.direccion ?? '', destacada: !antes),
-    ]);
+    return TarjetaBlanca(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      radio: 14,
+      child: Column(children: [
+        _rutaFila(ColoresApp.verde, 'Recoge', t.origen?.direccion ?? '', destacada: antes),
+        const Divider(height: 1, thickness: 1, color: ColoresApp.divisor),
+        _rutaFila(ColoresApp.rojo, 'Entrega', t.destino?.direccion ?? '', destacada: !antes),
+      ]),
+    );
   }
 
-  Widget _rutaFila(IconData icon, Color color, String label, String dir, {required bool destacada}) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 18, color: color)),
-      const SizedBox(width: 10),
+  Widget _rutaFila(Color color, String label, String dir, {required bool destacada}) {
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.only(top: 5),
+        child: Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      ),
+      const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
         Text(
@@ -2091,25 +2097,43 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           style: TextStyle(fontSize: 13, fontWeight: destacada ? FontWeight.w600 : FontWeight.w400, color: destacada ? ColoresApp.textoOscuro : ColoresApp.textoSecundario),
         ),
       ])),
-    ]);
+    ]));
   }
 
+  /// Placa (fondo amarillo), tipo de vehículo y precio acordado; la carga debajo.
   Widget _precioFila(Trip t) {
     final precio = t.precioFinal ?? t.precioEstimado;
     final carga = t.carga ?? t.descripcion;
+    final placa = t.conductor?.placa?.trim();
+    final tipo = t.conductor?.tipoVehiculo?.trim();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(12)),
-      child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Precio acordado', style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
-          Text(_fmtPrecio(precio), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: ColoresApp.azulOscuro)),
-        ])),
-        if (carga != null && carga.isNotEmpty)
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            const Text('Carga', style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
-            Text(carga, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
-          ])),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          if (placa != null && placa.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: ColoresApp.placaFondo, borderRadius: BorderRadius.circular(6)),
+              child: Text(placa.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: ColoresApp.placaTexto, letterSpacing: 1, fontFeatures: cifrasTabulares)),
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (tipo != null && tipo.isNotEmpty)
+            Expanded(child: Text(tipo, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoSecundario)))
+          else
+            const Expanded(child: Text('Precio acordado', style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario))),
+          const SizedBox(width: 8),
+          Text(_fmtPrecio(precio), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+        ]),
+        if (carga != null && carga.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Row(children: [
+            const Icon(Icons.inventory_2_outlined, size: 14, color: ColoresApp.textoSecundario),
+            const SizedBox(width: 6),
+            Expanded(child: Text(carga, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro))),
+          ]),
+        ],
       ]),
     );
   }
@@ -2120,11 +2144,11 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   List<Widget> _accionesEstado(Trip t, String estado) {
     switch (estado) {
       case TripStatus.aceptado:
-        return [_botonPrincipal('Voy en camino al origen', Icons.navigation_rounded, _confirmArrival, ColoresApp.azulOscuro)];
+        return [_botonPrincipal('Voy en camino al origen', Icons.navigation_rounded, _confirmArrival)];
       case TripStatus.enCamino:
         return [
           ..._avisoOrigen('confirmar la llegada'),
-          _botonPrincipal('Llegué al origen', Icons.where_to_vote_rounded, _lejosDelOrigen ? null : _confirmPickup, ColoresApp.azulOscuro),
+          _botonPrincipal('Llegué al origen', Icons.where_to_vote_rounded, _lejosDelOrigen ? null : _confirmPickup),
         ];
       case TripStatus.llegada:
         return [
@@ -2132,7 +2156,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           if (_pickupPhotoUrl != null) ...[_avisoFotoRecogidaLista(), const SizedBox(height: 8)],
           _botonFotoRecogida(),
           const SizedBox(height: 8),
-          _botonPrincipal('Iniciar viaje', Icons.play_arrow_rounded, _lejosDelOrigen ? null : _startTrip, ColoresApp.verde),
+          _botonPrincipal('Iniciar viaje', Icons.play_arrow_rounded, _lejosDelOrigen ? null : _startTrip),
         ];
       case TripStatus.enCurso:
       case TripStatus.entregado:
@@ -2145,7 +2169,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           ],
           _botonFoto(),
           const SizedBox(height: 8),
-          _botonPrincipal('Finalizar viaje', Icons.flag_rounded, _requestFinalization, _isNearDestination ? ColoresApp.verde : ColoresApp.azul),
+          _botonPrincipal('Finalizar viaje', Icons.flag_rounded, _requestFinalization),
         ];
       case TripStatus.esperaConfirmacion:
       case TripStatus.pendienteConfirmacion:
@@ -2297,7 +2321,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     }
   }
 
-  Widget _botonPrincipal(String label, IconData icon, VoidCallback? onPressed, Color color) {
+  Widget _botonPrincipal(String label, IconData icon, VoidCallback? onPressed) {
+    const color = ColoresApp.azul;
     return SizedBox(
       width: double.infinity,
       height: 52,

@@ -118,7 +118,7 @@ void main() {
       expect(find.text('Carrera 7 #80-15'), findsOneWidget);
       expect(find.text('Cajas de archivo'), findsOneWidget);
       expect(find.text('14:20'), findsOneWidget); // 15 min - 40 s
-      expect(find.text('Ver y ofertar'), findsOneWidget);
+      expect(find.text('Ofertar'), findsOneWidget);
       expect(find.byKey(const Key('esperando_solicitudes')), findsNothing);
 
       // Siguientes sondeos: sigue ahí y el aviso no se repite.
@@ -211,7 +211,7 @@ void main() {
       expect(find.byKey(const Key('oferta_enviada')), findsOneWidget);
       expect(find.text('Oferta enviada · \$70.000 · vence en 0:25'), findsOneWidget);
       expect(find.text('Ver mi oferta'), findsOneWidget);
-      expect(find.text('Ver y ofertar'), findsNothing);
+      expect(find.text('Ofertar'), findsNothing);
 
       // El cliente la rechaza: el backend deja ofertar de nuevo
       // (offer_controller.store sólo bloquea si hay otra oferta pendiente).
@@ -221,7 +221,7 @@ void main() {
       expect(tarjeta5, findsOneWidget);
       expect(find.byKey(const Key('oferta_enviada')), findsNothing);
       expect(find.byKey(const Key('oferta_rechazada')), findsOneWidget);
-      expect(find.text('Ver y ofertar'), findsOneWidget);
+      expect(find.text('Ofertar'), findsOneWidget);
       expect(find.text('Nueva solicitud'), findsNothing); // ya la conocía
 
       // El siguiente sondeo no la quita (el backend la sigue devolviendo).

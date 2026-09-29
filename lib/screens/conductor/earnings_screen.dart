@@ -22,6 +22,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
   Map<String, dynamic>? _today;
   Map<String, dynamic>? _debt;
   List<Map<String, dynamic>> _history = [];
+  // Ganancias de la semana en curso, para las barras por día.
+  List<Map<String, dynamic>> _semana = [];
   int _histTotal = 0;
   int _histPage = 0;
 
@@ -45,6 +47,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
         ApiClient.instance.getTodayStats(),
         ApiClient.instance.getDebt(),
         ApiClient.instance.getEarningsHistory(page: 1, limit: 10),
+        ApiClient.instance.getEarningsHistory(periodo: 'semana', page: 1, limit: 100),
       ]);
       final historyData = results[4];
       if (mounted) {
@@ -54,6 +57,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           _today = results[2];
           _debt = results[3];
           _history = (historyData['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          _semana = (results[5]['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
           _histTotal = (historyData['total'] as num?)?.toInt() ?? _history.length;
           _histPage = 1;
           _loading = false;
@@ -187,6 +191,10 @@ class _EarningsScreenState extends State<EarningsScreen> {
                             const SizedBox(height: 16),
                           ],
                           _buildTodayCard(),
+                          const SizedBox(height: 16),
+                          _buildSectionTitle('Esta semana'),
+                          const SizedBox(height: 8),
+                          _buildSemanaCard(),
                           const SizedBox(height: 12),
                           _buildPeriodRow(),
                           const SizedBox(height: 12),
@@ -242,33 +250,20 @@ class _EarningsScreenState extends State<EarningsScreen> {
     final calificacion = (_today?['calificacion'] as num?) ?? 0;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [ColoresApp.azulOscuro, ColoresApp.azul]),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 14, offset: const Offset(0, 5))],
-      ),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: ColoresApp.azulOscuro, borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Hoy', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+          const Text('Hoy', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(_pesos(netaHoy), style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, fontFeatures: cifrasTabulares)),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text('neto', style: const TextStyle(color: Colors.white60, fontSize: 12)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+          Text(_pesos(netaHoy), style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, fontFeatures: cifrasTabulares)),
+          const SizedBox(height: 4),
+          Text('$viajesHoy viajes completados · neto', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _todayStat('$viajesHoy', 'Viajes'),
               _todayStat('${horasOnline.toStringAsFixed(1)}h', 'Online'),
               _todayStat(_pesos(gananciasHoy), 'Bruto'),
               _todayStat(calificacion > 0 ? calificacion.toStringAsFixed(1) : '--', 'Rating'),
@@ -285,6 +280,57 @@ class _EarningsScreenState extends State<EarningsScreen> {
       const SizedBox(height: 2),
       Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
     ]);
+  }
+
+  /// Barras L–D con el neto de cada día de la semana en curso; la de hoy en azul.
+  Widget _buildSemanaCard() {
+    final porDia = List<double>.filled(7, 0);
+    for (final g in _semana) {
+      final dt = DateTime.tryParse(g['createdAt'] as String? ?? '')?.toLocal();
+      if (dt != null) porDia[dt.weekday - 1] += (montoDe(g['montoNeto']) ?? 0).toDouble();
+    }
+    final maximo = porDia.fold<double>(0, (m, v) => v > m ? v : m);
+    final hoy = DateTime.now().weekday - 1;
+    const dias = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    final semana = _periodo(_earnings?['semana'] as Map<String, dynamic>?);
+    return TarjetaBlanca(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_pesos(semana['neto']), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+          const Text('neto esta semana', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 72,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < 7; i++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            height: maximo > 0 ? 4 + 52 * porDia[i] / maximo : 4,
+                            decoration: BoxDecoration(
+                              color: i == hoy ? ColoresApp.azul : const Color(0xFFDCE6F8),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(dias[i], style: TextStyle(fontSize: 11, fontWeight: i == hoy ? FontWeight.w700 : FontWeight.w500, color: i == hoy ? ColoresApp.azul : ColoresApp.textoSecundario)),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Map<String, dynamic> _periodo(Map<String, dynamic>? map) {
@@ -365,12 +411,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
         child: Text('Aún no hay ganancias registradas', style: TextStyle(color: ColoresApp.textoSecundario)),
       );
     }
-    return TarjetaBlanca(
-      radio: 14,
-      padding: EdgeInsets.zero,
-      child: Column(
+    return Column(
         children: [
-          ..._history.map((h) => _historyItem(h)),
+          for (final h in _history) Padding(padding: const EdgeInsets.only(bottom: 8), child: _historyItem(h)),
           if (_history.length < _histTotal)
             SizedBox(
               width: double.infinity,
@@ -382,7 +425,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
               ),
             ),
         ],
-      ),
     );
   }
 
@@ -398,12 +440,16 @@ class _EarningsScreenState extends State<EarningsScreen> {
     if (fecha.isNotEmpty) {
       try {
         final dt = DateTime.tryParse(fecha);
-        if (dt != null) fechaTxt = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+        if (dt != null) {
+          final d = dt.toLocal();
+          fechaTxt = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} · '
+              '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+        }
       } catch (_) {}
     }
-    return Container(
+    return TarjetaBlanca(
+      radio: 14,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.divisor))),
       child: Row(
         children: [
           Expanded(
@@ -412,14 +458,14 @@ class _EarningsScreenState extends State<EarningsScreen> {
               children: [
                 Text(
                   origen.isNotEmpty && destino.isNotEmpty ? '$origen → $destino' : 'Viaje #${h['viajeId']}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   fechaTxt.isNotEmpty ? fechaTxt : (h['id']?.toString() ?? ''),
-                  style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario),
+                  style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares),
                 ),
               ],
             ),
@@ -428,9 +474,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(_pesos(neto), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: ColoresApp.azulOscuro, fontFeatures: cifrasTabulares)),
-              Text('comisión ${_pesos(comision)}', style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
-              Text('bruto ${_pesos(bruto)}', style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
+              Text('+${_pesos(neto)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: ColoresApp.verde, fontFeatures: cifrasTabulares)),
+              Text('comisión ${_pesos(comision)}', style: const TextStyle(fontSize: 10, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
+              Text('bruto ${_pesos(bruto)}', style: const TextStyle(fontSize: 10, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
             ],
           ),
         ],

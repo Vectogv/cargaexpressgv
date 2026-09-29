@@ -32,7 +32,7 @@ import 'solicitudes_disponibles_screen.dart';
 import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
-import '../shared/ui_compartida.dart' show FondoDegradado, TarjetaBlanca, ColoresApp, cifrasTabulares;
+import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp, cifrasTabulares;
 import '../shared/cuenta_no_activa_dialog.dart' show CuentaNoActivaDialog;
 import '../../core/formato_dinero.dart';
 
@@ -719,27 +719,33 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHeader() {
     final nombre = (_profile?['nombre'] as String?)?.trim();
     final saludo = (nombre == null || nombre.isEmpty) ? 'Hola, conductor' : 'Hola, ${nombre.split(' ').first}';
-    return FondoDegradado(
-      colores: const [ColoresApp.azulOscuro, ColoresApp.azul],
-      radio: const BorderRadius.vertical(bottom: Radius.circular(24)),
+    final conductor = _profile?['conductor'] as Map<String, dynamic>?;
+    final vehiculo = [conductor?['tipoVehiculo'], conductor?['placa']]
+        .map((v) => (v as String?)?.trim() ?? '')
+        .where((v) => v.isNotEmpty)
+        .join(' · ');
+    final netaHoy = _num(_stats?['netaHoy']);
+    final viajesHoy = _num(_stats?['viajesHoy'])?.toInt() ?? 0;
+    return Material(
+      color: Colors.white,
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 16, 18),
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
           child: Column(
             children: [
               Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
-                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  ),
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: Text(
-                      _initials(nombre),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  // El avatar abre el menú lateral (antes lo hacía el botón de hamburguesa).
+                  GestureDetector(
+                    onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                    child: CircleAvatar(
+                      radius: 22,
+                      backgroundColor: ColoresApp.azulOscuro,
+                      child: Text(
+                        _initials(nombre),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -748,31 +754,74 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(saludo,
-                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: ColoresApp.textoOscuro, fontSize: 18, fontWeight: FontWeight.w800),
                             overflow: TextOverflow.ellipsis),
-                        Text(_statusLabel(),
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
+                        Text(vehiculo.isEmpty ? _statusLabel() : vehiculo,
+                            style: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 13),
+                            overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
                   if (_activeTrip != null)
                     Container(
+                      margin: const EdgeInsets.only(right: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: ColoresApp.verde.withValues(alpha: 0.9),
+                        color: ColoresApp.verde.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text('Viaje activo',
-                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                          style: TextStyle(color: ColoresApp.verde, fontSize: 11, fontWeight: FontWeight.w700)),
                     ),
+                  ValueListenableBuilder<int>(
+                    valueListenable: NotificationService.instance.unread,
+                    builder: (_, sinLeer, __) => _iconoNotificaciones(sinLeer),
+                  ),
                 ],
               ),
-              const SizedBox(height: 14),
+              if (netaHoy != null) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: ColoresApp.azulTenue, borderRadius: BorderRadius.circular(20)),
+                    child: Text(
+                      'Hoy: ${_money(netaHoy)} · $viajesHoy ${viajesHoy == 1 ? 'viaje' : 'viajes'}',
+                      style: const TextStyle(
+                          color: ColoresApp.azulOscuro, fontSize: 13, fontWeight: FontWeight.w700, fontFeatures: cifrasTabulares),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
               _buildOnlineToggle(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _iconoNotificaciones(int sinLeer) {
+    return Stack(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_none_rounded, color: ColoresApp.textoOscuro, size: 24),
+          onPressed: () => _navigate(6),
+        ),
+        if (sinLeer > 0)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(color: ColoresApp.rojo, shape: BoxShape.circle),
+              child: Text(sinLeer > 9 ? '9+' : '$sinLeer',
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+            ),
+          ),
+      ],
     );
   }
 
@@ -786,14 +835,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? 'Pago en revisión: aún no puedes conectarte'
                 : 'Suspendido por pago: paga para conectarte')
             : 'No recibirás solicitudes';
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
+    return TarjetaBlanca(
       padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-      ),
+      radio: 14,
       child: Row(
         children: [
           AnimatedContainer(
@@ -802,10 +846,8 @@ class _HomeScreenState extends State<HomeScreen> {
             height: 10,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _online ? const Color(0xFF4ADE80) : Colors.white38,
-              boxShadow: _online
-                  ? [BoxShadow(color: const Color(0xFF4ADE80).withValues(alpha: 0.6), blurRadius: 8)]
-                  : null,
+              color: _online ? ColoresApp.verde : ColoresApp.chevron,
+              boxShadow: _online ? [BoxShadow(color: ColoresApp.verde.withValues(alpha: 0.5), blurRadius: 8)] : null,
             ),
           ),
           const SizedBox(width: 10),
@@ -814,17 +856,17 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_online ? 'Conectado' : 'Desconectado',
-                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                    style: const TextStyle(color: ColoresApp.textoOscuro, fontSize: 15, fontWeight: FontWeight.w700)),
                 Text(subtitulo,
                     key: const Key('subtitulo_conexion'),
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12)),
+                    style: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 12)),
               ],
             ),
           ),
           if (_statusLoading)
             const Padding(
               padding: EdgeInsets.all(12),
-              child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+              child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: ColoresApp.azul, strokeWidth: 2)),
             )
           else
             Switch(
@@ -833,7 +875,7 @@ class _HomeScreenState extends State<HomeScreen> {
               activeThumbColor: Colors.white,
               activeTrackColor: ColoresApp.verde,
               inactiveThumbColor: Colors.white,
-              inactiveTrackColor: Colors.white24,
+              inactiveTrackColor: ColoresApp.borde,
             ),
         ],
       ),
