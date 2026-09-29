@@ -2504,61 +2504,125 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final calificacion = cliente.calificacion;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Informaci\u00f3n del cliente'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundColor: ColoresApp.azulOscuro,
-              child: Text(
-                _initials(nombre),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 22),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: ColoresApp.azulTenue,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBFD3F2)),
+                    ),
+                    child: const Icon(Icons.info_outline, color: ColoresApp.azul, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Información del cliente',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(nombre, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: ColoresApp.textoOscuro)),
-            if (telefono != null && telefono.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.phone, size: 16, color: ColoresApp.azul),
-                const SizedBox(width: 6),
-                Text(telefono, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-              ]),
-            ],
-            if (calificacion != null) ...[
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                ...List.generate(5, (i) {
-                  final val = calificacion.toInt();
-                  return Icon(
-                    i < val ? Icons.star_rounded : Icons.star_border_rounded,
-                    color: const Color(0xFFFF8F00),
-                    size: 24,
-                  );
-                }),
-                const SizedBox(width: 4),
-                Text(calificacion.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
-              ]),
-            ],
-            if (t.receptorNombre != null) ...[
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 4),
-              Text(
-                t.receptorTelefono != null && t.receptorTelefono!.isNotEmpty
-                    ? 'Recibe: ${t.receptorNombre} — ${t.receptorTelefono}'
-                    : 'Recibe: ${t.receptorNombre}',
-                style: const TextStyle(fontSize: 14, color: ColoresApp.textoOscuro),
-                textAlign: TextAlign.center,
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: ColoresApp.fondo,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: ColoresApp.azulOscuro,
+                      child: Text(
+                        _initials(nombre),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 20),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(nombre, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: ColoresApp.textoOscuro)),
+                    if (calificacion != null) ...[
+                      const SizedBox(height: 6),
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        ...List.generate(5, (i) {
+                          final val = calificacion.toInt();
+                          return Icon(
+                            i < val ? Icons.star_rounded : Icons.star_border_rounded,
+                            color: const Color(0xFFFF8F00),
+                            size: 20,
+                          );
+                        }),
+                        const SizedBox(width: 4),
+                        Text(calificacion.toString(), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: ColoresApp.textoSecundario)),
+                      ]),
+                    ],
+                    if (telefono != null && telefono.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(height: 1, color: ColoresApp.divisor),
+                      const SizedBox(height: 10),
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(Icons.phone_outlined, size: 16, color: ColoresApp.azul),
+                        const SizedBox(width: 6),
+                        Text(telefono, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+                      ]),
+                    ],
+                  ],
+                ),
+              ),
+              if (t.receptorNombre != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: ColoresApp.azulTenue,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.assignment_ind_outlined, size: 18, color: ColoresApp.azul),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        t.receptorTelefono != null && t.receptorTelefono!.isNotEmpty
+                            ? 'Recibe: ${t.receptorNombre} — ${t.receptorTelefono}'
+                            : 'Recibe: ${t.receptorNombre}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro),
+                      ),
+                    ),
+                  ]),
+                ),
+              ],
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ColoresApp.textoOscuro,
+                    side: const BorderSide(color: Color(0xFFD1D5DB), width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Cerrar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
               ),
             ],
-          ],
+          ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
-        ],
       ),
     );
   }
