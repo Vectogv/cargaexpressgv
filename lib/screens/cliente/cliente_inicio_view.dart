@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../contracts/trip_status.dart';
 import '../../core/formato_dinero.dart';
@@ -261,53 +262,8 @@ class _NuevoEnvioCard extends StatelessWidget {
   const _NuevoEnvioCard({required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: ColoresApp.azul,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        key: const Key('btn_nuevo_envio'),
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 28),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Nuevo envío',
-                      style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Indica origen, destino y tu oferta. Te conectamos con conductores cercanos.',
-                      style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 13, height: 1.3),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              const CircleAvatar(
-                radius: 22,
-                backgroundColor: Colors.white,
-                child: Icon(Icons.arrow_forward_rounded, color: _kPrimary),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      BotonPrincipal(key: const Key('btn_nuevo_envio'), texto: 'Nuevo envío', icono: Icons.add_rounded, onPressed: onTap);
 }
 
 /// Estado vacío de "Tu envío": no hay ninguno en curso.
@@ -372,13 +328,8 @@ class _ViajeActivoCard extends StatelessWidget {
           children: [
             _ChipEstado(estado: estado),
             const SizedBox(height: 12),
-            Text(
-              _rutaCorta(viaje),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _kTexto, height: 1.3),
-            ),
-            const SizedBox(height: 6),
+            _Recorrido(viaje: viaje),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 14,
               runSpacing: 4,
@@ -403,6 +354,10 @@ class _ViajeActivoCard extends StatelessWidget {
             ] else if (mostrarPin) ...[
               const SizedBox(height: 16),
               _PinEntrega(pin: pin),
+            ],
+            if (paso != null && !espera) ...[
+              const SizedBox(height: 14),
+              BotonSecundario(key: const Key('btn_ver_mapa'), texto: 'Ver en el mapa', icono: Icons.map_outlined, alto: 48, onPressed: onTap),
             ],
             if (_buscando(estado) || _enDisputa(estado)) ...[
               const SizedBox(height: 16),
@@ -459,6 +414,7 @@ class _ConductorRow extends StatelessWidget {
       conductor['tipoVehiculo'],
     ].where((e) => e != null && e.toString().isNotEmpty).join(' · ');
     final placa = conductor['placa']?.toString() ?? '';
+    final telefono = conductor['telefono']?.toString() ?? '';
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: ColoresApp.fondoPin, borderRadius: BorderRadius.circular(14)),
@@ -478,23 +434,102 @@ class _ConductorRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  placa.isEmpty ? nombre : '$nombre · $placa',
+                  nombre,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _kTexto),
                 ),
-                if (linea2.isNotEmpty)
-                  Text(
-                    linea2,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: _kGris),
-                  ),
+                if (placa.isNotEmpty || linea2.isNotEmpty) const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (placa.isNotEmpty) ...[_Placa(placa), const SizedBox(width: 8)],
+                    if (linea2.isNotEmpty)
+                      Flexible(
+                        child: Text(
+                          linea2,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, color: _kGris),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
+          if (telefono.isNotEmpty)
+            IconButton.filled(
+              key: const Key('btn_llamar_conductor'),
+              tooltip: 'Llamar al conductor',
+              style: IconButton.styleFrom(backgroundColor: ColoresApp.azulTenue, foregroundColor: ColoresApp.azul),
+              onPressed: () => launchUrl(Uri.parse('tel:$telefono'), mode: LaunchMode.externalApplication),
+              icon: const Icon(Icons.call_outlined, size: 20),
+            ),
         ],
       ),
+    );
+  }
+}
+
+/// Placa colombiana: amarilla con letras negras.
+class _Placa extends StatelessWidget {
+  final String placa;
+  const _Placa(this.placa);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: ColoresApp.placaFondo,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ColoresApp.placaTexto, width: 1),
+      ),
+      child: Text(
+        placa.toUpperCase(),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ColoresApp.placaTexto, letterSpacing: 1, fontFeatures: cifrasTabulares),
+      ),
+    );
+  }
+}
+
+/// Recoge / Entrega con la línea de puntos entre los dos.
+class _Recorrido extends StatelessWidget {
+  final Map<String, dynamic> viaje;
+  const _Recorrido({required this.viaje});
+
+  @override
+  Widget build(BuildContext context) {
+    String dir(dynamic p) => ((p is Map ? p['direccion']?.toString() : null) ?? '').split(',').first.trim();
+    Widget punto(String etiqueta, String direccion, Color color) => Row(
+          children: [
+            Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: '$etiqueta  ', style: const TextStyle(fontSize: 12, color: _kGris)),
+                  TextSpan(
+                    text: direccion.isEmpty ? '—' : direccion,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTexto),
+                  ),
+                ]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        punto('Recoge', dir(viaje['origen']), _kPrimary),
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Container(width: 2, height: 14, color: _kBorde),
+        ),
+        punto('Entrega', dir(viaje['destino']), _kTexto),
+      ],
     );
   }
 }
@@ -591,7 +626,11 @@ class _PinEntrega extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoPin,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ColoresApp.bordeCampo),
+      ),
       child: Row(
         children: [
           const Expanded(
@@ -611,7 +650,7 @@ class _PinEntrega extends StatelessWidget {
           Text(
             pin,
             key: const Key('pin_entrega_inicio'),
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _kTexto, letterSpacing: 6),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: _kTexto, letterSpacing: 6, fontFeatures: cifrasTabulares),
           ),
         ],
       ),

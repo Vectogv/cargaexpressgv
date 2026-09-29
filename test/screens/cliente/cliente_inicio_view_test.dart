@@ -81,7 +81,8 @@ void main() {
   testWidgets('conductor asignado: chip, conductor, progreso y PIN; abre el seguimiento', (tester) async {
     final l = await _pump(tester, activo: {..._viaje('a1', 'aceptado'), 'conductor': _conductor, 'pinEntrega': '4821'});
     expect(find.text('Conductor asignado'), findsOneWidget);
-    expect(find.text('Carlos Pérez · ABC123'), findsOneWidget);
+    expect(find.text('Carlos Pérez'), findsOneWidget);
+    expect(find.text('ABC123'), findsOneWidget);
     expect(find.text('★ 4.8 · Camioneta'), findsOneWidget);
     expect(find.byKey(const Key('progreso_viaje')), findsOneWidget);
     expect(find.text('4821'), findsOneWidget);
