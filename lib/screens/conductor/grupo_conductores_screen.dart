@@ -314,7 +314,8 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
                 color: Colors.white,
                 onSelected: (op) => op == 'fijar'
                     ? _accion(() => HttpClient.put('/api/leader/avisos/${a['id']}/pin', auth: true), fijado ? 'Anuncio desfijado' : 'Anuncio fijado')
-                    : _accion(() => HttpClient.delete('/api/leader/avisos/${a['id']}', auth: true), 'Anuncio eliminado'),
+                    : _borrar('¿Eliminar este anuncio? También se borran sus comentarios.',
+                        () => HttpClient.delete('/api/leader/avisos/${a['id']}', auth: true), 'Anuncio eliminado'),
                 itemBuilder: (_) => [
                   PopupMenuItem(value: 'fijar', child: Text(fijado ? 'Desfijar' : 'Fijar arriba')),
                   const PopupMenuItem(value: 'eliminar', child: Text('Eliminar')),
@@ -327,6 +328,26 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
         ]),
       ),
     );
+  }
+
+  Future<void> _borrar(String pregunta, Future<void> Function() f, String exito) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        content: Text(pregunta),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            key: const Key('grupo_confirmar_borrar'),
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
+            child: const Text('Borrar'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _accion(f, exito);
   }
 
   Future<void> _comentar(Map<String, dynamic> a) async {
@@ -389,7 +410,8 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
             tooltip: 'Borrar comentario',
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.delete_outline, size: 18, color: ColoresApp.textoSecundario),
-            onPressed: () => _accion(() => HttpClient.delete('/api/drivers/grupo/comentarios/${c['id']}', auth: true), 'Comentario borrado'),
+            onPressed: () => _borrar('¿Borrar este comentario?',
+                () => HttpClient.delete('/api/drivers/grupo/comentarios/${c['id']}', auth: true), 'Comentario borrado'),
           ),
       ]),
     );

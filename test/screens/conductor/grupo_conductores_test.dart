@@ -90,8 +90,19 @@ void main() {
         await avanzar(tester);
         expect(find.text('Comentario publicado'), findsOneWidget);
 
+        // Cancelar no borra; confirmar sí.
         await tester.tap(find.byKey(const Key('grupo_borrar_comentario_20')));
         await avanzar(tester);
+        expect(find.text('¿Borrar este comentario?'), findsOneWidget);
+        await tester.tap(find.text('Cancelar'));
+        await avanzar(tester);
+        expect(log.where((r) => r.method == 'DELETE'), isEmpty);
+
+        await tester.tap(find.byKey(const Key('grupo_borrar_comentario_20')));
+        await avanzar(tester);
+        await tester.tap(find.byKey(const Key('grupo_confirmar_borrar')));
+        await avanzar(tester);
+        expect(find.text('Comentario borrado'), findsOneWidget);
       },
       log: log,
     );
