@@ -64,4 +64,40 @@ void main() {
     expect(post.url.path, '/api/leader/avisos');
     expect(jsonDecode(post.body), {'contenido': 'Reunión el viernes'});
   });
+
+  testWidgets('conductor: ve comentarios, comenta y borra el suyo', (tester) async {
+    pantallaAlta(tester);
+    final grupo = _grupo(esLider: false);
+    (grupo['avisos'] as List)[0]['comentarios'] = [
+      {'id': 20, 'contenido': 'Gracias', 'createdAt': '2026-09-30T10:05:00Z', 'autor': {'nombre': 'Ana', 'apellido': 'Ruiz'}, 'propio': true, 'puedeBorrar': true},
+      {'id': 21, 'contenido': 'Ya pasó', 'createdAt': '2026-09-30T10:06:00Z', 'autor': {'nombre': 'Pedro', 'apellido': 'Gil'}, 'propio': false, 'puedeBorrar': false},
+    ];
+    final log = <http.Request>[];
+    await conApiFalsa(
+      (req) => req.method == 'GET' ? jsonResp(grupo) : jsonResp({'id': 22}),
+      () async {
+        await tester.pumpWidget(const MaterialApp(home: GrupoConductoresScreen()));
+        await avanzar(tester);
+        expect(find.text('Gracias'), findsOneWidget);
+        expect(find.textContaining('Pedro Gil'), findsOneWidget);
+        expect(find.byKey(const Key('grupo_borrar_comentario_20')), findsOneWidget);
+        expect(find.byKey(const Key('grupo_borrar_comentario_21')), findsNothing);
+
+        await tester.tap(find.byKey(const Key('grupo_comentar_1')));
+        await avanzar(tester);
+        await tester.enterText(find.byKey(const Key('grupo_campo_contenido')), 'Voy para allá');
+        await tester.tap(find.text('Comentar').last);
+        await avanzar(tester);
+        expect(find.text('Comentario publicado'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('grupo_borrar_comentario_20')));
+        await avanzar(tester);
+      },
+      log: log,
+    );
+    final post = log.firstWhere((r) => r.method == 'POST');
+    expect(post.url.path, '/api/drivers/grupo/avisos/1/comentarios');
+    expect(jsonDecode(post.body), {'contenido': 'Voy para allá'});
+    expect(log.firstWhere((r) => r.method == 'DELETE').url.path, '/api/drivers/grupo/comentarios/20');
+  });
 }

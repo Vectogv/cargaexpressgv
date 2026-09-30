@@ -8,6 +8,7 @@ import '../user/auth_estilos.dart' show decoracionCampoAuth;
 /// Gerencia, anuncios y quién es el líder. El líder, además, publica anuncios
 /// (/api/leader/avisos) y envía inquietudes a Gerencia
 /// (/api/leader/comunicados). El líder no sanciona ni reemplaza al moderador.
+/// Todos comentan los anuncios; borra el autor del comentario o el líder.
 class GrupoConductoresScreen extends StatefulWidget {
   const GrupoConductoresScreen({super.key});
 
@@ -19,6 +20,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
   Map<String, dynamic>? _grupo;
   String? _error;
   bool _cargando = true;
+  final Set<Object?> _expandidos = {};
 
   bool get _esLider => _grupo?['esLider'] == true;
 
@@ -59,7 +61,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
   }
 
   /// Formulario de texto (anuncio o inquietud). Devuelve {titulo?, contenido}.
-  Future<Map<String, String>?> _formulario({required String titulo, required String boton, bool conTitulo = false}) {
+  Future<Map<String, String>?> _formulario({required String titulo, required String boton, bool conTitulo = false, int maxLength = 1000}) {
     final t = TextEditingController();
     final c = TextEditingController();
     return showModalBottomSheet<Map<String, String>>(
@@ -84,7 +86,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
               controller: c,
               minLines: 3,
               maxLines: 6,
-              maxLength: 1000,
+              maxLength: maxLength,
               decoration: decoracionCampoAuth(label: 'Mensaje', icono: Icons.chat_bubble_outline),
             ),
             const SizedBox(height: 8),
@@ -321,8 +323,75 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
           ]),
           const SizedBox(height: 6),
           Text('${a['contenido'] ?? ''}', style: const TextStyle(height: 1.35)),
+          _comentarios(a),
         ]),
       ),
+    );
+  }
+
+  Future<void> _comentar(Map<String, dynamic> a) async {
+    final r = await _formulario(titulo: 'Comentar el anuncio', boton: 'Comentar', maxLength: 500);
+    if (r == null) return;
+    await _accion(
+      () => HttpClient.post('/api/drivers/grupo/avisos/${a['id']}/comentarios', body: {'contenido': r['contenido']}, auth: true),
+      'Comentario publicado',
+    );
+  }
+
+  /// Comentarios del anuncio: los últimos 3 (o todos si se expande) y "Comentar".
+  Widget _comentarios(Map<String, dynamic> a) {
+    final lista = (a['comentarios'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? const [];
+    final todos = _expandidos.contains(a['id']);
+    final visibles = todos || lista.length <= 3 ? lista : lista.sublist(lista.length - 3);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (lista.isNotEmpty) const Divider(height: 20, color: ColoresApp.divisor),
+      if (visibles.length < lista.length)
+        GestureDetector(
+          onTap: () => setState(() => _expandidos.add(a['id'])),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text('Ver los ${lista.length} comentarios', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.azul)),
+          ),
+        ),
+      for (final c in visibles) _comentario(c),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: Key('grupo_comentar_${a['id']}'),
+          onPressed: () => _comentar(a),
+          style: TextButton.styleFrom(padding: EdgeInsets.zero, foregroundColor: ColoresApp.azul),
+          icon: const Icon(Icons.mode_comment_outlined, size: 18),
+          label: const Text('Comentar'),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _comentario(Map<String, dynamic> c) {
+    final autor = c['autor'] as Map<String, dynamic>?;
+    final nombre = c['propio'] == true ? 'Tú' : '${autor?['nombre'] ?? ''} ${autor?['apellido'] ?? ''}'.trim();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(12)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$nombre · ${tiempoRelativoTicket(DateTime.tryParse('${c['createdAt']}')?.toLocal())}',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ColoresApp.textoSecundario)),
+            const SizedBox(height: 2),
+            Text('${c['contenido'] ?? ''}', style: const TextStyle(fontSize: 14, height: 1.3)),
+          ]),
+        ),
+        if (c['puedeBorrar'] == true)
+          IconButton(
+            key: Key('grupo_borrar_comentario_${c['id']}'),
+            tooltip: 'Borrar comentario',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.delete_outline, size: 18, color: ColoresApp.textoSecundario),
+            onPressed: () => _accion(() => HttpClient.delete('/api/drivers/grupo/comentarios/${c['id']}', auth: true), 'Comentario borrado'),
+          ),
+      ]),
     );
   }
 }
