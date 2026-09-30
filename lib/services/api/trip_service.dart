@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'http_client.dart';
 
 /// Métodos con `idempotencyKey`: las pantallas pueden generar una clave por
@@ -118,8 +120,38 @@ class TripService {
     return HttpClient.post('/api/trips/$id/dispute', body: {'motivo': motivo, 'descripcion': descripcion}, auth: true);
   }
 
+  static const String prefViajesCalificados = 'viajes_calificados';
+
+  /// Un 400 "Ya calificaste este viaje" cuenta como éxito: la calificación
+  /// existe. El detalle del backend no informa si ya se calificó, así que se
+  /// recuerda en el teléfono ([yaCalificado]).
   static Future<void> rateTrip(dynamic id, int puntaje, {String? comentario}) async {
-    await HttpClient.post('/api/trips/$id/rate', body: {'puntaje': puntaje, 'comentario': comentario}, auth: true);
+    try {
+      await HttpClient.post('/api/trips/$id/rate', body: {'puntaje': puntaje, 'comentario': comentario}, auth: true);
+    } on ApiException catch (e) {
+      if (e.statusCode != 400 || !e.message.toLowerCase().contains('ya calificaste')) rethrow;
+    }
+    await _marcarCalificado(id);
+  }
+
+  static Future<bool> yaCalificado(dynamic id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return (prefs.getStringList(prefViajesCalificados) ?? const <String>[]).contains(id.toString());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> _marcarCalificado(dynamic id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lista = List<String>.from(prefs.getStringList(prefViajesCalificados) ?? const <String>[]);
+      if (lista.contains(id.toString())) return;
+      lista.add(id.toString());
+      if (lista.length > 200) lista.removeRange(0, lista.length - 200);
+      await prefs.setStringList(prefViajesCalificados, lista);
+    } catch (_) {}
   }
 
   static Future<String> deliveryPhoto(dynamic tripId, Uint8List bytes, String filename) async {

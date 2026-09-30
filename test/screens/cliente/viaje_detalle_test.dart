@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:cargaexpress/screens/cliente/reportar_conductor_screen.dart';
+import 'package:cargaexpress/screens/conductor/reportar_cliente_screen.dart';
 import 'package:cargaexpress/screens/cliente/viaje_detalle_screen.dart';
 
 import '../../helpers/fake_api.dart';
@@ -50,97 +50,82 @@ void main() {
     });
   });
 
-  testWidgets('con conductor asignado se puede reportar y al volver queda marcado', (tester) async {
+  testWidgets('el cliente no reporta (función del conductor)', (tester) async {
     pantallaAlta(tester);
-    final log = <http.Request>[];
-    await conApiFalsa(
-      (req) => req.method == 'POST'
-          ? jsonResp({'id': '9', 'estado': 'pendiente', 'motivo': 'otro', 'reportadoPor': 'cliente'}, 201)
-          : jsonResp(viaje),
-      () async {
-        await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
-        await avanzar(tester);
-        await tester.tap(find.text('Reportar conductor'));
-        await avanzar(tester);
-        expect(find.byType(ReportarConductorScreen), findsOneWidget);
-        expect(find.textContaining('Carlos'), findsOneWidget);
-
-        await tester.tap(find.text('Enviar reporte'));
-        await avanzar(tester);
-        expect(find.byType(ReportarConductorScreen), findsNothing);
-        expect(find.text('Reporte enviado. Un administrador lo revisará.'), findsOneWidget);
-        expect(find.text('Ya reportaste a este conductor'), findsOneWidget);
-        expect(find.text('Reportar conductor'), findsNothing);
-      },
-      log: log,
-    );
-    final post = log.singleWhere((r) => r.method == 'POST');
-    expect(post.url.path, '/api/trips/t1/report');
+    await conApiFalsa((_) => jsonResp(viaje), () async {
+      await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
+      await avanzar(tester);
+      expect(find.text('Carlos'), findsOneWidget);
+      expect(find.textContaining('Reportar'), findsNothing);
+    });
   });
 
-  testWidgets('al volver a entrar al viaje sigue "Ya reportaste" (se recuerda en el teléfono)', (tester) async {
+  testWidgets('ya calificado: no se vuelve a ofrecer "Calificar viaje"', (tester) async {
     pantallaAlta(tester);
     await conApiFalsa(
-      (req) => req.method == 'POST'
-          ? jsonResp({'id': '9', 'estado': 'pendiente', 'motivo': 'otro', 'reportadoPor': 'cliente'}, 201)
-          : jsonResp(viaje),
+      (req) => req.method == 'POST' ? errorResp(400, 'Ya calificaste este viaje') : jsonResp(viaje),
       () async {
         await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
         await avanzar(tester);
-        await tester.tap(find.text('Reportar conductor'));
+        await tester.tap(find.byIcon(Icons.star_border_rounded).first);
+        await tester.pump();
+        await tester.tap(find.text('Enviar calificación'));
         await avanzar(tester);
-        await tester.tap(find.text('Enviar reporte'));
-        await avanzar(tester);
-        expect(find.text('Ya reportaste a este conductor'), findsOneWidget);
+        expect(find.text('Calificar viaje'), findsNothing);
 
-        // Se cierra y se vuelve a abrir el detalle (pantalla nueva).
         await tester.pumpWidget(const SizedBox());
         await tester.pump();
         await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
         await avanzar(tester);
         expect(find.text('Calle 1'), findsOneWidget);
-        expect(find.text('Ya reportaste a este conductor'), findsOneWidget);
-        expect(find.text('Reportar conductor'), findsNothing);
+        expect(find.text('Calificar viaje'), findsNothing);
       },
     );
   });
 
-  testWidgets('si el backend responde 409 (ya reportado) el viaje también queda marcado', (tester) async {
-    pantallaAlta(tester);
-    await conApiFalsa(
-      (req) => req.method == 'POST' ? errorResp(409, 'Ya reportaste al conductor de este viaje') : jsonResp(viaje),
-      () async {
-        await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
-        await avanzar(tester);
-        await tester.tap(find.text('Reportar conductor'));
-        await avanzar(tester);
-        await tester.tap(find.text('Enviar reporte'));
-        await avanzar(tester);
-        // La pantalla de reporte avisa y no se cierra sola.
-        expect(find.byType(ReportarConductorScreen), findsOneWidget);
-        expect(find.text('Ya reportaste al conductor de este viaje.'), findsOneWidget);
+  group('como conductor', () {
+    Map<String, dynamic> cerradoHace(Duration d) => {
+          ...viaje,
+          'cliente': {'nombre': 'Ana Cliente'},
+          'completadoAt': DateTime.now().subtract(d).toUtc().toIso8601String(),
+        };
 
-        await tester.pageBack();
-        await avanzar(tester);
-        expect(find.byType(ReportarConductorScreen), findsNothing);
-        expect(find.text('Ya reportaste a este conductor'), findsOneWidget);
-        expect(find.text('Reportar conductor'), findsNothing);
-        // No hay snack de "Reporte enviado": no se envió nada nuevo.
-        expect(find.text('Reporte enviado. Un administrador lo revisará.'), findsNothing);
-      },
-    );
-  });
+    testWidgets('muestra cliente y ganancias, sin calificar, y reporta dentro de 30 min', (tester) async {
+      pantallaAlta(tester);
+      final log = <http.Request>[];
+      await conApiFalsa(
+        (req) => req.method == 'POST'
+            ? jsonResp({'id': '9', 'estado': 'pendiente', 'motivo': 'no_pago', 'reportadoPor': 'conductor'}, 201)
+            : jsonResp(cerradoHace(const Duration(minutes: 5))),
+        () async {
+          await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1', comoConductor: true)));
+          await avanzar(tester);
+          expect(find.text('Ana Cliente'), findsOneWidget);
+          expect(find.text('Tus ganancias'), findsOneWidget);
+          expect(find.text('- \$3.200'), findsOneWidget);
+          expect(find.text('\$28.800'), findsOneWidget);
+          expect(find.text('Calificar viaje'), findsNothing);
 
-  testWidgets('sin conductor no aparece "Reportar conductor"', (tester) async {
-    pantallaAlta(tester);
-    final sinConductor = Map<String, dynamic>.from(viaje)
-      ..remove('conductor')
-      ..['estado'] = 'cancelado';
-    await conApiFalsa((_) => jsonResp(sinConductor), () async {
-      await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1')));
-      await avanzar(tester);
-      expect(find.text('Calle 1'), findsOneWidget);
-      expect(find.text('Reportar conductor'), findsNothing);
+          await tester.tap(find.text('Reportar cliente'));
+          await avanzar(tester);
+          expect(find.byType(ReportarClienteScreen), findsOneWidget);
+          await tester.tap(find.text('Enviar reporte'));
+          await avanzar(tester);
+          expect(find.text('Ya reportaste este viaje'), findsOneWidget);
+        },
+        log: log,
+      );
+      expect(log.singleWhere((r) => r.method == 'POST').url.path, '/api/trips/t1/report');
+    });
+
+    testWidgets('pasados 30 min ya no se puede reportar', (tester) async {
+      pantallaAlta(tester);
+      await conApiFalsa((_) => jsonResp(cerradoHace(const Duration(minutes: 31))), () async {
+        await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't1', comoConductor: true)));
+        await avanzar(tester);
+        expect(find.text('Reportar cliente'), findsNothing);
+        expect(find.textContaining('hasta 30 minutos'), findsOneWidget);
+      });
     });
   });
 

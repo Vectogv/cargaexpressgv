@@ -3,25 +3,24 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../services/report_service.dart';
 import '../shared/ui_compartida.dart';
 
-/// El cliente reporta al conductor asignado a un viaje
-/// (POST /api/trips/:id/report). El backend decide la sanción: el reporte
+/// El conductor reporta al cliente de un viaje (POST /api/trips/:id/report).
+/// Reportar es exclusivo del conductor. El backend decide la sanción: el reporte
 /// nunca suspende, baja la reputación y deja la cuenta en revisión del admin
 /// desde el segundo. Devuelve `true` al cerrar si el reporte se envió.
-class ReportarConductorScreen extends StatefulWidget {
+class ReportarClienteScreen extends StatefulWidget {
   /// Mapa del viaje: `Trip.toJson()` trae `_id`, los del backend `id`.
   final Map<String, dynamic> trip;
 
-  const ReportarConductorScreen({super.key, required this.trip});
+  const ReportarClienteScreen({super.key, required this.trip});
 
   @override
-  State<ReportarConductorScreen> createState() => _ReportarConductorScreenState();
+  State<ReportarClienteScreen> createState() => _ReportarClienteScreenState();
 }
 
-class _ReportarConductorScreenState extends State<ReportarConductorScreen> {
-  /// Motivos aceptados por el backend para un reporte del cliente.
+class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
+  /// Motivos aceptados por el backend para un reporte del conductor.
   static const motivos = <String, String>{
-    'no_se_presento': 'El conductor no se presentó',
-    'cobro_incorrecto': 'Cobro incorrecto',
+    'no_pago': 'El cliente no pagó',
     'comportamiento': 'Comportamiento inadecuado',
     'otro': 'Otro',
   };
@@ -33,9 +32,9 @@ class _ReportarConductorScreenState extends State<ReportarConductorScreen> {
   dynamic get _tripId => widget.trip['_id'] ?? widget.trip['id'];
 
   String get _aviso {
-    final conductor = widget.trip['conductor'];
-    final nombre = conductor is Map ? (conductor['nombre']?.toString().trim() ?? '') : '';
-    final quien = nombre.isNotEmpty ? nombre : 'al conductor de este viaje';
+    final persona = widget.trip['cliente'];
+    final nombre = persona is Map ? (persona['nombre']?.toString().trim() ?? '') : '';
+    final quien = nombre.isNotEmpty ? nombre : 'al cliente de este viaje';
     final a = nombre.isNotEmpty ? 'a ' : '';
     return 'Vas a reportar $a$quien.\nUn administrador revisará tu reporte.';
   }
@@ -58,8 +57,8 @@ class _ReportarConductorScreenState extends State<ReportarConductorScreen> {
       if (!mounted) return;
       navigator.pop(true);
     } on ApiException catch (e) {
-      final msg = e.statusCode == 409
-          ? 'Ya reportaste al conductor de este viaje.'
+      final msg = e.statusCode == 409 || await ReportService.yaReportado(tripId)
+          ? 'Ya reportaste al cliente de este viaje.'
           : e.message;
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
@@ -87,7 +86,7 @@ class _ReportarConductorScreenState extends State<ReportarConductorScreen> {
         leading: const BackButton(color: Colors.black),
         centerTitle: true,
         title: const Text(
-          'Reportar conductor',
+          'Reportar cliente',
           style: TextStyle(
             color: Colors.black,
             fontSize: 17,

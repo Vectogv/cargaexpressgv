@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api/chat_service.dart';
 import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
-import '../cliente/soporte_screen.dart' show ConversacionChatScreen;
+import '../cliente/chat_thread_screen.dart';
 import '../shared/soporte_contacto.dart';
 import '../shared/tickets/acceso_tickets_soporte.dart';
 import '../shared/ui_compartida.dart';
@@ -198,6 +198,25 @@ class _SupportScreenState extends State<SupportScreen> {
           if (mounted) _fetch(quiet: true);
         },
       ),
+    );
+  }
+}
+
+class ConversacionChatScreen extends StatelessWidget {
+  final dynamic conversacionId;
+  final String titulo;
+  const ConversacionChatScreen({super.key, required this.conversacionId, required this.titulo});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChatThreadScreen(
+      titulo: titulo,
+      subtitulo: 'Soporte Carga Express',
+      threadId: conversacionId.toString(),
+      idField: 'conversacionId',
+      fetchMensajes: () => ChatService.getConversationMessages(conversacionId),
+      enviarMensaje: (texto) => ChatService.sendConversationMessage(conversacionId, texto),
+      mensajesSocket: SocketServiceClient.instance.onConversationMessage,
     );
   }
 }

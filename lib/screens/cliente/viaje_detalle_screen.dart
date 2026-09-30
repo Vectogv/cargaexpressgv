@@ -3,14 +3,22 @@ import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
+import '../../services/api/trip_service.dart';
 import '../../services/report_service.dart';
 import '../../widgets/error_carga.dart';
-import 'reportar_conductor_screen.dart';
+import '../conductor/reportar_cliente_screen.dart';
 import '../../core/formato_dinero.dart';
 
 class ViajeDetalleScreen extends StatefulWidget {
   final dynamic tripId;
-  const ViajeDetalleScreen({super.key, required this.tripId});
+
+  /// Vista del conductor (desde su historial): tarjeta del cliente, ganancias
+  /// del viaje y "Reportar cliente"; sin calificar (eso es del cliente).
+  final bool comoConductor;
+  const ViajeDetalleScreen({super.key, required this.tripId, this.comoConductor = false});
+
+  /// Minutos que el conductor tiene para reportar después de cerrar el viaje.
+  static const minutosParaReportar = 30;
 
   @override
   State<ViajeDetalleScreen> createState() => _ViajeDetalleScreenState();
@@ -21,10 +29,9 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   bool _loading = true;
   bool _rated = false;
   int _rating = 0;
-  /// El cliente ya reportó al conductor de este viaje. Se recuerda en el
-  /// teléfono ([ReportService.yaReportado]) porque el detalle del backend no
-  /// lo informa; antes el botón reaparecía al volver a entrar al viaje.
-  bool _conductorReportado = false;
+  /// El conductor ya reportó este viaje. Se recuerda en el teléfono
+  /// ([ReportService.yaReportado]) porque el detalle del backend no lo informa.
+  bool _reportado = false;
 
   @override
   void initState() {
@@ -40,10 +47,12 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     try {
       final data = await ApiClient.instance.getTripDetail(widget.tripId);
       final reportado = await ReportService.yaReportado(widget.tripId);
+      final calificado = await TripService.yaCalificado(widget.tripId);
       if (mounted) {
         setState(() {
           _trip = data;
-          _conductorReportado = _conductorReportado || reportado;
+          _rated = _rated || calificado;
+          _reportado = _reportado || reportado;
           _loading = false;
           _error = null;
         });
@@ -76,18 +85,27 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _reportarConductor() async {
+  /// Se cuenta desde que el conductor cerró el viaje (`completadoAt`); si no
+  /// viene, desde `finalizadoAt`.
+  bool get _dentroDelPlazoParaReportar {
+    final iso = (_trip?['completadoAt'] ?? _trip?['finalizadoAt']) as String?;
+    final cierre = iso == null ? null : DateTime.tryParse(iso);
+    if (cierre == null || _trip?['estado'] == 'cancelado') return false;
+    return DateTime.now().difference(cierre).inMinutes < ViajeDetalleScreen.minutosParaReportar;
+  }
+
+  Future<void> _reportarCliente() async {
     final trip = _trip;
-    if (trip == null || _conductorReportado) return;
+    if (trip == null || _reportado) return;
     final enviado = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => ReportarConductorScreen(trip: trip)),
+      MaterialPageRoute(builder: (_) => ReportarClienteScreen(trip: trip)),
     );
     // Aunque el usuario vuelva sin enviar, pudo recibir un 409 ("ya
     // reportaste"): ReportService lo deja marcado y aquí se refleja.
     final reportado = enviado == true || await ReportService.yaReportado(widget.tripId);
     if (!mounted || !reportado) return;
-    setState(() => _conductorReportado = true);
+    setState(() => _reportado = true);
     if (enviado == true) _snack('Reporte enviado. Un administrador lo revisará.');
   }
 
@@ -156,11 +174,20 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
                       _buildRouteSection(),
                       const SizedBox(height: 16),
                       _buildInfoSection(),
-                      if (_trip!['conductor'] != null) ...[
+                      if (widget.comoConductor) ...[
+                        if (_trip!['estado'] == 'finalizado') ...[
+                          const SizedBox(height: 16),
+                          _buildGananciasSection(),
+                        ],
+                        if (_trip!['cliente'] != null) ...[
+                          const SizedBox(height: 16),
+                          _buildClienteSection(),
+                        ],
+                      ] else if (_trip!['conductor'] != null) ...[
                         const SizedBox(height: 16),
                         _buildConductorSection(),
                       ],
-                      if (_trip!['estado'] == 'finalizado') ...[
+                      if (!widget.comoConductor && _trip!['estado'] == 'finalizado' && !_rated) ...[
                         const SizedBox(height: 16),
                         _buildRatingSection(),
                       ],
@@ -294,8 +321,9 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: Colors.black45)),
-          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.black45))),
+          const SizedBox(width: 8),
+          Flexible(child: Text(value, textAlign: TextAlign.end, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -326,28 +354,81 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
               Text(_vehiculoTexto(conductor), style: const TextStyle(fontSize: 12, color: Colors.black45)),
             ])),
           ]),
-          const SizedBox(height: 12),
-          if (_conductorReportado)
-            const Row(children: [
-              Icon(Icons.check_circle_outline, size: 16, color: Colors.black45),
-              SizedBox(width: 6),
-              Expanded(child: Text('Ya reportaste a este conductor', style: TextStyle(fontSize: 13, color: Colors.black45))),
-            ])
-          else
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _reportarConductor,
-                icon: const Icon(Icons.flag_outlined, size: 18),
-                label: const Text('Reportar conductor', style: TextStyle(fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFEF4444),
-                  side: const BorderSide(color: Color(0xFFFECACA)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGananciasSection() {
+    final precio = (_trip!['precioFinal'] ?? _trip!['precioEstimado']) as num? ?? 0;
+    // Comisión de la plataforma: 10 % del precio final (misma regla del backend).
+    final comision = (precio * 0.1 * 100).round() / 100;
+    return _tarjeta('Tus ganancias', [
+      _infoRow('Precio del viaje', formatearPesos(precio)),
+      _infoRow('Comisión CargaExpress (10 %)', '- ${formatearPesos(comision)}'),
+      const Divider(height: 16),
+      _infoRow('Ganancia neta', formatearPesos(precio - comision)),
+    ]);
+  }
+
+  Widget _buildClienteSection() {
+    final cliente = _trip!['cliente'] as Map<String, dynamic>;
+    final nombre = cliente['nombre'] as String? ?? '';
+    final Widget accion;
+    if (_reportado) {
+      accion = const Row(children: [
+        Icon(Icons.check_circle_outline, size: 16, color: Colors.black45),
+        SizedBox(width: 6),
+        Expanded(child: Text('Ya reportaste este viaje', style: TextStyle(fontSize: 13, color: Colors.black45))),
+      ]);
+    } else if (_dentroDelPlazoParaReportar) {
+      accion = SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _reportarCliente,
+          icon: const Icon(Icons.flag_outlined, size: 18),
+          label: const Text('Reportar cliente', style: TextStyle(fontWeight: FontWeight.w600)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFEF4444),
+            side: const BorderSide(color: Color(0xFFFECACA)),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      );
+    } else {
+      accion = const Text(
+        'Puedes reportar hasta ${ViajeDetalleScreen.minutosParaReportar} minutos después de cerrar el viaje. '
+        'Si necesitas ayuda, escribe a soporte.',
+        style: TextStyle(fontSize: 12, color: Colors.black45),
+      );
+    }
+    return _tarjeta('Cliente', [
+      Row(children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: const Color(0xFFE0E0E0),
+          child: Text(_initials(nombre), style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Text(nombre, style: const TextStyle(fontWeight: FontWeight.w600))),
+      ]),
+      const SizedBox(height: 12),
+      accion,
+    ]);
+  }
+
+  Widget _tarjeta(String titulo, List<Widget> hijos) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(titulo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black45)),
+          const SizedBox(height: 10),
+          ...hijos,
         ],
       ),
     );
@@ -388,26 +469,21 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
               );
             }),
           ),
-          if (_rated) ...[
-            const SizedBox(height: 8),
-            const Text('Ya calificaste este viaje', style: TextStyle(color: Colors.black45, fontSize: 13), textAlign: TextAlign.center),
-          ] else ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _rating > 0 ? _calificar : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A3C6E),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                ),
-                child: const Text('Enviar calificación', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _rating > 0 ? _calificar : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A3C6E),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
               ),
+              child: const Text('Enviar calificación', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
-          ],
+          ),
         ],
       ),
     );

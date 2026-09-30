@@ -32,7 +32,9 @@ class ReportService {
       await marcarReportado(tripId);
       return ReportModel.fromJson(data);
     } on ApiException catch (e) {
-      if (e.statusCode == 409) await marcarReportado(tripId);
+      if (e.statusCode == 409 || (e.statusCode == 400 && e.message.toLowerCase().contains('ya has reportado'))) {
+        await marcarReportado(tripId);
+      }
       rethrow;
     }
   }

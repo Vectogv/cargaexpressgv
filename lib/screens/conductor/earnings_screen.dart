@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
@@ -89,20 +90,35 @@ class _EarningsScreenState extends State<EarningsScreen> {
     }
   }
 
+  /// Descargas pública de Android: en 11+ se crea sin permiso, en 10 lo
+  /// permite `requestLegacyExternalStorage` y en 9 o menos pide el permiso.
+  Future<void> _guardarEnDescargas(String nombre, List<int> bytes) async {
+    final file = File('/storage/emulated/0/Download/$nombre');
+    try {
+      await file.writeAsBytes(bytes, flush: true);
+    } on FileSystemException {
+      if (!await Permission.storage.request().isGranted) {
+        throw Exception('Permite el acceso al almacenamiento para guardar el PDF en Descargas');
+      }
+      await file.writeAsBytes(bytes, flush: true);
+    }
+  }
+
   Future<void> _downloadPdf(String periodo, String label) async {
     if (_downloadingPdf) return;
     setState(() => _downloadingPdf = true);
     try {
       final bytes = await ApiClient.instance.getEarningsPdf(periodo: periodo);
-      final dir = Directory.systemTemp;
-      final file = File('${dir.path}/ganancias_${periodo}_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(bytes);
+      final a = DateTime.now();
+      String dd(int n) => n.toString().padLeft(2, '0');
+      final nombre = 'CargaExpress_ganancias_${periodo}_${a.year}-${dd(a.month)}-${dd(a.day)}_${dd(a.hour)}${dd(a.minute)}.pdf';
+      await _guardarEnDescargas(nombre, bytes);
       if (mounted) {
         showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('PDF generado'),
-            content: Text('Reporte de ganancias ($label) guardado en:\n${file.path}'),
+            title: const Text('PDF guardado en Descargas'),
+            content: Text('Reporte de ganancias ($label):\n$nombre\n\nÁbrelo desde Archivos → Descargas.'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
             ],
@@ -374,7 +390,11 @@ class _EarningsScreenState extends State<EarningsScreen> {
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(_pesos(p['bruto']), maxLines: 1, style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
+            child: Text('Bruto ${_pesos(p['bruto'])}', maxLines: 1, style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
+          ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('Comisión -${_pesos(p['comision'])}', maxLines: 1, style: TextStyle(fontSize: 11, color: Colors.red.shade400, fontFeatures: cifrasTabulares)),
           ),
           const SizedBox(height: 2),
           Text(label, style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario, fontWeight: FontWeight.w500)),

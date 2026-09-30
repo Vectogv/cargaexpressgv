@@ -128,21 +128,10 @@ void main() {
   });
 
   group('Soporte', () {
-    testWidgets('abre sin conversaciones', (tester) async {
+    testWidgets('solo tickets: sin chat con moderadores', (tester) async {
       await abrir(tester, const SoporteScreen(), ok: (_) => jsonResp([]), falla: () => false, body: () async {
-        expect(find.text('No tienes conversaciones de soporte'), findsOneWidget);
-      });
-    });
-
-    testWidgets('error -> mensaje y reintentar', (tester) async {
-      var falla = true;
-      await abrir(tester, const SoporteScreen(), ok: (_) => jsonResp([]), falla: () => falla, body: () async {
-        expect(find.byType(CircularProgressIndicator), findsNothing);
-        expect(find.text('No se pudo cargar el soporte'), findsOneWidget);
-        falla = false;
-        await tester.tap(find.text('Reintentar'));
-        await avanzar(tester);
-        expect(find.text('No tienes conversaciones de soporte'), findsOneWidget);
+        expect(find.text('Conversaciones con moderadores'), findsNothing);
+        expect(find.text('No tienes conversaciones de soporte'), findsNothing);
       });
     });
 

@@ -407,7 +407,8 @@ void main() {
         await tester.pumpWidget(const MaterialApp(home: SoporteScreen()));
         await avanzar(tester);
         expect(find.byType(AccesoTicketsSoporte), findsOneWidget);
-        expect(find.text('No tienes conversaciones de soporte'), findsOneWidget);
+        // El cliente solo usa tickets; el chat con moderación es del conductor.
+        expect(find.text('No tienes conversaciones de soporte'), findsNothing);
 
         await tester.pumpWidget(const MaterialApp(home: SupportScreen()));
         await avanzar(tester);
