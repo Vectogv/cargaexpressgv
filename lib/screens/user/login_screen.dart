@@ -3,8 +3,8 @@ import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../home_by_role.dart';
-import '../shared/cambiar_password.dart';
 import 'auth_estilos.dart';
+import 'recuperar_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -73,6 +73,17 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _error = _mensajeError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _recuperarPassword() async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => RecuperarPasswordScreen(email: _emailCtrl.text.trim())),
+    );
+    if (ok == true && mounted) {
+      _passCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contraseña actualizada. Inicia sesión con la nueva.')));
     }
   }
 
@@ -160,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               alignment: Alignment.centerRight,
                               child: TextButton(
                                 key: const Key('link_olvide_password'),
-                                onPressed: () => mostrarAyudaPasswordOlvidada(context),
+                                onPressed: _recuperarPassword,
                                 style: TextButton.styleFrom(foregroundColor: AuthColores.primario, padding: EdgeInsets.zero),
                                 child: const Text('¿Olvidaste tu contraseña?', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                               ),

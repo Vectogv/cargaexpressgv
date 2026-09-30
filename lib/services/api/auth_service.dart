@@ -20,6 +20,16 @@ class AuthService {
     return AuthResponse.fromJson(data);
   }
 
+  /// Envía un código de 6 dígitos al correo (Brevo). El backend responde lo
+  /// mismo exista o no la cuenta.
+  static Future<void> forgotPassword(String email) async {
+    await HttpClient.post('/api/auth/forgot-password', body: {'email': email});
+  }
+
+  static Future<void> resetPassword(String email, String codigo, String password) async {
+    await HttpClient.post('/api/auth/reset-password', body: {'email': email, 'codigo': codigo, 'password': password});
+  }
+
   /// Revoca el refresh token (el backend lo acepta aunque el access token
   /// haya expirado). Nunca lanza: el logout local no depende de la red.
   static Future<void> logout({String? refreshToken}) async {
