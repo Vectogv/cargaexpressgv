@@ -11,6 +11,7 @@ import '../shared/ui_compartida.dart' show BotonPrincipal, ColoresApp, TarjetaBl
 import '../user/auth_estilos.dart' show AvisoErrorAuth;
 import '../user/auth_screen.dart';
 import 'documents_screen.dart';
+import 'grupo_conductores_screen.dart';
 import 'offers_screen.dart';
 import 'settings_screen.dart';
 import 'support_screen.dart';
@@ -335,6 +336,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuItem(Icons.description_outlined, 'Documentos', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()))),
           // Mis ofertas y Soporte vivían solo en el menú lateral del inicio (ya quitado).
           _buildMenuItem(Icons.local_offer_outlined, 'Mis ofertas', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OffersScreen()))),
+          _buildMenuItem(Icons.groups_outlined, 'Grupo de conductores', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GrupoConductoresScreen()))),
           _buildMenuItem(Icons.headset_mic_outlined, 'Soporte', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
           _buildMenuItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), divisor: false),
         ],
