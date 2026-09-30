@@ -22,9 +22,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
 
   final List<_DocItem> _docs = [
-    _DocItem('cedula', 'Cédula de ciudadanía', Icons.badge_outlined),
+    _DocItem('cedula', 'Cédula (frente)', Icons.badge_outlined),
+    _DocItem('cedula_reverso', 'Cédula (reverso)', Icons.badge_outlined),
     _DocItem('licencia', 'Licencia de conducción', Icons.credit_card_outlined),
     _DocItem('foto_vehiculo', 'Foto del vehículo', Icons.directions_car_outlined),
+    _DocItem('tarjeta_propiedad', 'Tarjeta de propiedad', Icons.description_outlined),
+    _DocItem('tecnomecanica', 'Revisión técnico-mecánica', Icons.build_outlined, conVencimiento: true),
+    _DocItem('soat', 'SOAT', Icons.health_and_safety_outlined, conVencimiento: true),
     _DocItem('foto_conductor', 'Foto del conductor', Icons.person_outline),
   ];
 
@@ -44,7 +48,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           ? (estado == 'aprobado' ? '\u2713 \u00a1Verificaci\u00f3n aprobada! Ya puedes recibir viajes.' : 'Verificaci\u00f3n actualizada: $estado')
           : event == 'driver:rejected'
               ? '\u2717 Verificaci\u00f3n rechazada${nota != null && nota.isNotEmpty ? ': $nota' : ''}. Corrige tus documentos.'
-              : null;
+              : event == 'driver:soat_exception'
+                  ? (estado == 'aprobada'
+                      ? '\u2713 Excepci\u00f3n del SOAT aprobada.'
+                      : 'Excepci\u00f3n del SOAT rechazada${nota != null && nota.isNotEmpty ? ': $nota' : ''}.')
+                  : null;
       if (msg != null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
@@ -82,9 +90,29 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         return _conductor!['fotoVehiculo'] as String?;
       case 'foto_conductor':
         return _conductor!['fotoConductor'] as String?;
+      case 'cedula_reverso':
+        return _conductor!['fotoCedulaReverso'] as String?;
+      case 'tarjeta_propiedad':
+        return _conductor!['fotoTarjetaPropiedad'] as String?;
+      case 'tecnomecanica':
+        return _conductor!['fotoTecnomecanica'] as String?;
+      case 'soat':
+        return _conductor!['fotoSoat'] as String?;
     }
     return null;
   }
+
+  /// Fecha de vencimiento (YYYY-MM-DD) de la tecnomecánica o el SOAT.
+  String? _vence(String docType) {
+    final v = _conductor?[docType == 'soat' ? 'soatVence' : 'tecnomecanicaVence'];
+    return v?.toString().substring(0, 10);
+  }
+
+  static bool _vencida(String fecha) => fecha.compareTo(DateTime.now().toIso8601String().substring(0, 10)) < 0;
+
+  static String _fechaLegible(String iso) => '${iso.substring(8, 10)}/${iso.substring(5, 7)}/${iso.substring(0, 4)}';
+
+  String? get _excepcionSoat => _conductor?['excepcionSoatEstado'] as String?;
 
   String _estado(String docType) {
     final global = _conductor?['estadoVerificacion'] as String? ?? 'pendiente';
@@ -140,6 +168,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
       if (confirmed == true) {
         if (!mounted) return;
+        String? vence;
+        if (_docs.firstWhere((d) => d.type == docType).conVencimiento) {
+          final hoy = DateTime.now();
+          final fecha = await showDatePicker(
+            context: context,
+            initialDate: hoy,
+            firstDate: hoy,
+            lastDate: DateTime(hoy.year + 10),
+            helpText: 'Fecha de vencimiento',
+          );
+          if (fecha == null || !mounted) return;
+          vence = fecha.toIso8601String().substring(0, 10);
+        }
         final messenger = ScaffoldMessenger.of(context);
         setState(() => _uploadingDoc = docType);
         try {
@@ -156,6 +197,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             case 'foto_conductor':
               await ApiClient.instance.uploadDocumentDriverPhoto(bytes, filename);
               break;
+            default:
+              // cedula_reverso, tarjeta_propiedad, tecnomecanica, soat
+              await ApiClient.instance.uploadDocumento(docType.replaceAll('_', '-'), bytes, filename, vence: vence);
           }
           await _loadStatus();
           messenger.showSnackBar(
@@ -226,6 +270,103 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     );
   }
 
+  Future<void> _solicitarExcepcionSoat() async {
+    final ctrl = TextEditingController();
+    final enviar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Valoración del vehículo'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'El equipo CargaExpress revisará tu caso y valorará el vehículo. Puedes dejar un comentario.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: const InputDecoration(labelText: 'Comentario (opcional)', border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(foregroundColor: Colors.white, backgroundColor: ColoresApp.azulOscuro),
+            child: const Text('Enviar solicitud'),
+          ),
+        ],
+      ),
+    );
+    if (enviar != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ApiClient.instance.solicitarExcepcionSoat(ctrl.text.trim());
+      await _loadStatus();
+      messenger.showSnackBar(const SnackBar(content: Text('Solicitud enviada. Te avisaremos cuando la revisen.')));
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
+    }
+  }
+
+  /// Debajo de la tarjeta del SOAT: estado de la excepción o el enlace para pedirla.
+  Widget _buildExcepcionSoat() {
+    final estado = _excepcionSoat;
+    final nota = _conductor?['excepcionSoatNota'] as String?;
+    final foto = _fotoUrl('soat');
+    if (estado == 'pendiente' || estado == 'aprobada') {
+      final ok = estado == 'aprobada';
+      final color = ok ? ColoresApp.verde : ColoresApp.naranja;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            Icon(ok ? Icons.verified_outlined : Icons.schedule, size: 16, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                ok ? 'Excepción del SOAT aprobada' : 'Excepción del SOAT en revisión',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (foto != null && foto.isNotEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (estado == 'rechazada')
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Excepción del SOAT rechazada${nota != null && nota.isNotEmpty ? ': $nota' : ''}',
+                style: TextStyle(fontSize: 12, color: ColoresApp.rojo),
+              ),
+            ),
+          TextButton(
+            key: const Key('soat_excepcion'),
+            onPressed: _solicitarExcepcionSoat,
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+            child: const Text(
+              '¿No tienes SOAT? Contacta al equipo CargaExpress para valorar el vehículo',
+              style: TextStyle(fontSize: 12, decoration: TextDecoration.underline),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showRejectionNote() {
     final nota = _conductor?['notaRechazo'] as String?;
     if (nota == null || nota.isEmpty) return;
@@ -262,7 +403,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.all(16),
-                    children: _docs.map((doc) => _buildDocCard(doc)).toList(),
+                    children: [
+                      for (final doc in _docs) ...[
+                        _buildDocCard(doc),
+                        if (doc.type == 'soat') _buildExcepcionSoat(),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -316,6 +462,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final estado = _estado(doc.type);
     final subiendo = _uploadingDoc == doc.type;
     final nota = _conductor?['notaRechazo'] as String?;
+    final vence = doc.conVencimiento && estado != 'no_subido' ? _vence(doc.type) : null;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -339,6 +486,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(doc.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  if (vence != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        _vencida(vence) ? 'Vencido el ${_fechaLegible(vence)}' : 'Vence el ${_fechaLegible(vence)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _vencida(vence) ? ColoresApp.rojo : ColoresApp.verde,
+                        ),
+                      ),
+                    ),
                   if (estado == 'rechazado' && nota != null && nota.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
@@ -463,5 +622,7 @@ class _DocItem {
   final String type;
   final String title;
   final IconData icon;
-  const _DocItem(this.type, this.title, this.icon);
+  /// Pide la fecha de vencimiento al subir (tecnomecánica y SOAT).
+  final bool conVencimiento;
+  const _DocItem(this.type, this.title, this.icon, {this.conVencimiento = false});
 }

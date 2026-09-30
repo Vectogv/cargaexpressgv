@@ -57,6 +57,25 @@ class DriverService {
     return data['fotoVehiculo'] as String? ?? '';
   }
 
+  /// Documentos nuevos: `cedula-reverso`, `tarjeta-propiedad`, `tecnomecanica`
+  /// y `soat` (los 2 últimos con [vence] `YYYY-MM-DD`; el servidor rechaza
+  /// fechas vencidas con 422).
+  static Future<Map<String, dynamic>> uploadDocumento(String tipo, Uint8List bytes, String filename, {String? vence}) {
+    return HttpClient.uploadFile(
+      '/api/drivers/verification/$tipo',
+      bytes: bytes,
+      filename: filename,
+      fieldName: 'file',
+      auth: true,
+      fields: vence == null ? null : {'vence': vence},
+    );
+  }
+
+  /// "¿No tienes SOAT?": pide que CargaExpress valore el vehículo. Queda `pendiente`.
+  static Future<Map<String, dynamic>> solicitarExcepcionSoat(String comentario) {
+    return HttpClient.post('/api/drivers/verification-soat/excepcion', body: {'comentario': comentario}, auth: true);
+  }
+
   static Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) async {
     final data = await HttpClient.uploadFile('/api/drivers/driver-photo', bytes: bytes, filename: filename, fieldName: 'file', auth: true);
     return data['fotoConductor'] as String? ?? '';

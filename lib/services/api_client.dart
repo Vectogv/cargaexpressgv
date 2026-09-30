@@ -229,6 +229,9 @@ class ApiClient {
   Future<String> uploadDocumentLicencia(Uint8List bytes, String filename) => DriverService.uploadDocumentLicencia(bytes, filename);
   Future<String> uploadDocumentVehiculo(Uint8List bytes, String filename) => DriverService.uploadDocumentVehiculo(bytes, filename);
   Future<String> uploadDocumentDriverPhoto(Uint8List bytes, String filename) => DriverService.uploadDocumentDriverPhoto(bytes, filename);
+  Future<Map<String, dynamic>> uploadDocumento(String tipo, Uint8List bytes, String filename, {String? vence}) =>
+      DriverService.uploadDocumento(tipo, bytes, filename, vence: vence);
+  Future<Map<String, dynamic>> solicitarExcepcionSoat(String comentario) => DriverService.solicitarExcepcionSoat(comentario);
 
   // --- Trips ---
 

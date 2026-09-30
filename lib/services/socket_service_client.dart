@@ -399,6 +399,15 @@ class SocketServiceClient {
         }
       });
 
+      // El admin resolvió la excepción del SOAT (estado aprobada | rechazada).
+      safeOn('driver:soat_exception', (data) {
+        if (data is Map) {
+          final info = Map<String, dynamic>.from(data);
+          info['__event'] = 'driver:soat_exception';
+          safeAdd(_driverVerificationCtrl, info);
+        }
+      });
+
       safeOn(SocketEvents.chatMessage, (data) {
         if (data is Map) {
           safeAdd(_messageCtrl, Map<String, dynamic>.from(data));
