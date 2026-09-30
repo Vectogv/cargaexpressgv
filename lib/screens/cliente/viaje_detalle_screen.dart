@@ -365,7 +365,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     final comision = (precio * 0.1 * 100).round() / 100;
     return _tarjeta('Tus ganancias', [
       _infoRow('Precio del viaje', formatearPesos(precio)),
-      _infoRow('Comisión CargaExpress (10 %)', '- ${formatearPesos(comision)}'),
+      _infoRow('Comisión (10 %)', '- ${formatearPesos(comision)}'),
       const Divider(height: 16),
       _infoRow('Ganancia neta', formatearPesos(precio - comision)),
     ]);

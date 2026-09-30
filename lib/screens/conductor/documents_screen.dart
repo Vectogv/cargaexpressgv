@@ -356,7 +356,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           TextButton(
             key: const Key('soat_excepcion'),
             onPressed: _solicitarExcepcionSoat,
-            style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft, foregroundColor: ColoresApp.azul),
             child: const Text(
               '¿No tienes SOAT? Contacta al equipo CargaExpress para valorar el vehículo',
               style: TextStyle(fontSize: 12, decoration: TextDecoration.underline),
@@ -611,7 +611,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               elevation: 0,
               minimumSize: const Size(0, 32),
             ),
-            child: const Text('Subir imagen', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            child: const Text('Subir', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
           ),
         );
     }

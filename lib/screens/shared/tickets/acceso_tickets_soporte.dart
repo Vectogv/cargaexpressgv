@@ -55,32 +55,25 @@ class AccesoTicketsSoporte extends StatelessWidget {
           ),
           if (sesion) ...[
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: BotonPrincipal(
-                    key: const Key('btn_mis_tickets'),
-                    texto: 'Mis tickets',
-                    alto: 46,
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const MisTicketsScreen()),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: BotonSecundario(
-                    key: const Key('btn_nuevo_ticket_acceso'),
-                    texto: 'Nuevo ticket',
-                    alto: 46,
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const NuevoTicketScreen()),
-                    ),
-                  ),
-                ),
-              ],
+            // Uno debajo del otro: lado a lado se cortaban con la letra grande.
+            BotonPrincipal(
+              key: const Key('btn_mis_tickets'),
+              texto: 'Mis tickets',
+              alto: 46,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MisTicketsScreen()),
+              ),
+            ),
+            const SizedBox(height: 10),
+            BotonSecundario(
+              key: const Key('btn_nuevo_ticket_acceso'),
+              texto: 'Nuevo ticket',
+              alto: 46,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NuevoTicketScreen()),
+              ),
             ),
           ],
         ],

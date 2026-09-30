@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api/http_client.dart';
 import '../shared/tickets/tickets_ui.dart' show tiempoRelativoTicket;
 import '../shared/ui_compartida.dart';
+import '../user/auth_estilos.dart' show decoracionCampoAuth;
 
 /// Grupo de Conductores de la zona (GET /api/drivers/grupo): comunicados de
 /// Gerencia, anuncios y quién es el líder. El líder, además, publica anuncios
@@ -65,6 +66,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      backgroundColor: Colors.white,
       builder: (ctx) => Padding(
         padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
         child: Column(
@@ -74,7 +76,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
             Text(titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 14),
             if (conTitulo) ...[
-              TextField(key: const Key('grupo_campo_titulo'), controller: t, maxLength: 120, decoration: const InputDecoration(labelText: 'Asunto', border: OutlineInputBorder())),
+              TextField(key: const Key('grupo_campo_titulo'), controller: t, maxLength: 120, decoration: decoracionCampoAuth(label: 'Asunto', icono: Icons.subject)),
               const SizedBox(height: 8),
             ],
             TextField(
@@ -83,7 +85,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
               minLines: 3,
               maxLines: 6,
               maxLength: 1000,
-              decoration: const InputDecoration(labelText: 'Mensaje', border: OutlineInputBorder()),
+              decoration: decoracionCampoAuth(label: 'Mensaje', icono: Icons.chat_bubble_outline),
             ),
             const SizedBox(height: 8),
             BotonPrincipal(
@@ -118,6 +120,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
       showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
+        backgroundColor: Colors.white,
         builder: (_) => ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           children: [
@@ -127,7 +130,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
             for (final i in lista.whereType<Map<String, dynamic>>())
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('${i['titulo'] ?? ''}'),
+                title: Text('${i['titulo'] ?? ''}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 subtitle: Text('${i['contenido'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis),
                 trailing: _Etiqueta(texto: _estadoInquietud('${i['estado']}'), color: i['estado'] == 'rechazado' ? ColoresApp.rojo : i['estado'] == 'aprobado' ? ColoresApp.verde : ColoresApp.naranja),
               ),
@@ -150,7 +153,14 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ColoresApp.fondo,
-      appBar: AppBar(title: const Text('Grupo de conductores'), backgroundColor: ColoresApp.fondo, surfaceTintColor: Colors.transparent),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: ColoresApp.textoOscuro,
+        scrolledUnderElevation: 0,
+        shape: const Border(bottom: BorderSide(color: ColoresApp.borde)),
+        title: const Text('Grupo de conductores', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+      ),
       floatingActionButton: _esLider
           ? FloatingActionButton.extended(
               key: const Key('grupo_btn_publicar'),
@@ -247,7 +257,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
           children: [
             const Text('Herramientas de líder', style: TextStyle(fontWeight: FontWeight.w800, color: ColoresApp.naranjaAviso)),
             const SizedBox(height: 10),
-            BotonSecundario(texto: 'Enviar inquietud a Gerencia', icono: Icons.send_outlined, onPressed: _enviarInquietud),
+            BotonSecundario(texto: 'Escribir a Gerencia', icono: Icons.send_outlined, onPressed: _enviarInquietud),
             const SizedBox(height: 8),
             BotonSecundario(texto: 'Mis inquietudes enviadas', icono: Icons.history_rounded, onPressed: _verInquietudes),
           ],
@@ -299,6 +309,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
             if (_esLider)
               PopupMenuButton<String>(
                 key: Key('grupo_menu_aviso_${a['id']}'),
+                color: Colors.white,
                 onSelected: (op) => op == 'fijar'
                     ? _accion(() => HttpClient.put('/api/leader/avisos/${a['id']}/pin', auth: true), fijado ? 'Anuncio desfijado' : 'Anuncio fijado')
                     : _accion(() => HttpClient.delete('/api/leader/avisos/${a['id']}', auth: true), 'Anuncio eliminado'),

@@ -316,9 +316,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Text(_pesos(semana['neto']), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
           const Text('neto esta semana', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
           const SizedBox(height: 14),
-          SizedBox(
-            height: 72,
-            child: Row(
+          Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 for (var i = 0; i < 7; i++)
@@ -328,11 +326,18 @@ class _EarningsScreenState extends State<EarningsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Container(
-                            height: maximo > 0 ? 4 + 52 * porDia[i] / maximo : 4,
-                            decoration: BoxDecoration(
-                              color: i == hoy ? ColoresApp.azul : const Color(0xFFDCE6F8),
-                              borderRadius: BorderRadius.circular(4),
+                          // Alto fijo para las barras: la etiqueta crece con la letra sin desbordar.
+                          SizedBox(
+                            height: 56,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                height: maximo > 0 ? 4 + 52 * porDia[i] / maximo : 4,
+                                decoration: BoxDecoration(
+                                  color: i == hoy ? ColoresApp.azul : const Color(0xFFDCE6F8),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -343,7 +348,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
                   ),
               ],
             ),
-          ),
         ],
       ),
     );
@@ -662,7 +666,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           if (puedeSubirComprobante(_debt)) ...[
             const SizedBox(height: 12),
             BotonPrincipal(
-              texto: _uploading ? 'Subiendo...' : 'Subir comprobante de pago',
+              texto: _uploading ? 'Subiendo...' : 'Subir comprobante',
               icono: Icons.upload_file,
               cargando: _uploading,
               color: ColoresApp.naranja,

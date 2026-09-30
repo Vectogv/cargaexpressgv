@@ -43,7 +43,7 @@ void main() {
       await abrir(tester);
       await tester.scrollUntilVisible(find.text('Comprobante en revisión por \$12.000'), 200);
       expect(find.textContaining('viajes terminados mientras se revisa'), findsNothing);
-      expect(find.text('Subir comprobante de pago'), findsNothing);
+      expect(find.text('Subir comprobante'), findsNothing);
     });
   });
 
@@ -51,7 +51,7 @@ void main() {
     deuda = {'estadoCuenta': 'activa', 'montoDeuda': '11300.00', 'diasRestantes': 13};
     await conApiFalsa(backend, () async {
       await abrir(tester);
-      expect(find.text('Subir comprobante de pago'), findsOneWidget);
+      expect(find.text('Subir comprobante'), findsOneWidget);
     });
   });
 
@@ -60,7 +60,7 @@ void main() {
     await conApiFalsa(backend, () async {
       await abrir(tester);
       await tester.scrollUntilVisible(find.text('No tienes deudas pendientes'), 200);
-      expect(find.text('Subir comprobante de pago'), findsNothing);
+      expect(find.text('Subir comprobante'), findsNothing);
     });
   });
 }
