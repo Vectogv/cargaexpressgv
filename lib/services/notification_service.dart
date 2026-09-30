@@ -53,6 +53,10 @@ class NotificationService {
   /// Lo conecta `main.dart`.
   void Function(String viajeId)? abrirViaje;
 
+  /// Push de un mensaje de moderación (`tipo: conversacion_mensaje`,
+  /// `conversacionId`): abre la conversación. Lo conecta `main.dart`.
+  void Function(String conversacionId)? abrirConversacion;
+
   static bool esTipoViaje(String? tipo) =>
       tipo == 'viaje_estado' || tipo == 'viaje_cancelado' || tipo == 'disputa_resuelta';
 
@@ -481,6 +485,18 @@ class NotificationService {
           abrir(viajeId);
         } catch (e) {
           LoggerService.instance.error('NotificationService.abrirViaje error', e);
+        }
+      }
+    }
+    final conversacionId = data['conversacionId']?.toString();
+    if (data['tipo'] == 'conversacion_mensaje' && conversacionId != null && conversacionId.isNotEmpty) {
+      entry['__navigate'] = 'conversacion';
+      final abrir = abrirConversacion;
+      if (abrir != null && hasSession()) {
+        try {
+          abrir(conversacionId);
+        } catch (e) {
+          LoggerService.instance.error('NotificationService.abrirConversacion error', e);
         }
       }
     }

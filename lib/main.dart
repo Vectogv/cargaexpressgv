@@ -25,6 +25,7 @@ import 'screens/shared/cuenta_no_activa_dialog.dart' show mostrarCuentaSuspendid
 import 'screens/shared/tickets/tickets_navegacion.dart' show abrirTicketSoporteGlobal;
 import 'screens/home_by_role.dart';
 import 'screens/cliente/viaje_navegacion.dart' show abrirViajeGlobal;
+import 'screens/conductor/support_screen.dart' show abrirConversacionGlobal;
 
 final GlobalKey<NavigatorState> _navigatorKey = navegadorGlobal;
 
@@ -64,6 +65,8 @@ void main() {
       NotificationService.instance.abrirTicket = abrirTicketSoporteGlobal;
       // Igual con los push de un viaje (estado, cancelación, disputa).
       NotificationService.instance.abrirViaje = abrirViajeGlobal;
+      // Y los mensajes de moderación (solo conductor) abren la conversación.
+      NotificationService.instance.abrirConversacion = abrirConversacionGlobal;
 
       // 3. Servicios críticos (await — bloqueantes antes del runApp).
       await _initServices();

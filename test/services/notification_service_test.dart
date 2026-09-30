@@ -183,6 +183,18 @@ void main() {
     expect(abiertos, ['12', '13']);
   });
 
+  test('tocar un push de conversación con moderación abre la conversación', () {
+    final abiertas = <String>[];
+    service.abrirConversacion = abiertas.add;
+    addTearDown(() => service.abrirConversacion = null);
+
+    service.manejarToqueDePush({'tipo': 'conversacion_mensaje', 'conversacionId': '8'}, titulo: 'Moderación CargaExpress');
+    service.manejarToqueDePush({'tipo': 'conversacion_mensaje'});
+    sesion = false;
+    service.manejarToqueDePush({'tipo': 'conversacion_mensaje', 'conversacionId': '9'});
+    expect(abiertas, ['8']);
+  });
+
   test('tocar un push de viaje (estado / cancelado / disputa) abre el viaje', () {
     final abiertos = <String>[];
     service.abrirViaje = abiertos.add;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api/chat_service.dart';
 import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
+import '../../core/navegador_global.dart';
 import '../cliente/chat_thread_screen.dart';
 import '../shared/soporte_contacto.dart';
 import '../shared/tickets/acceso_tickets_soporte.dart';
@@ -200,6 +201,19 @@ class _SupportScreenState extends State<SupportScreen> {
       ),
     );
   }
+}
+
+/// Abre una conversación con moderación sin `BuildContext` (toque de un push
+/// `conversacion_mensaje`), con el mismo reintento que los tickets.
+void abrirConversacionGlobal(String conversacionId, {int intentos = 20}) {
+  if (ApiClient.instance.token == null) return;
+  final nav = navegadorGlobal.currentState;
+  if (nav == null) {
+    if (intentos <= 0) return;
+    Timer(const Duration(milliseconds: 500), () => abrirConversacionGlobal(conversacionId, intentos: intentos - 1));
+    return;
+  }
+  nav.push(MaterialPageRoute(builder: (_) => ConversacionChatScreen(conversacionId: conversacionId, titulo: 'Moderación')));
 }
 
 class ConversacionChatScreen extends StatelessWidget {
