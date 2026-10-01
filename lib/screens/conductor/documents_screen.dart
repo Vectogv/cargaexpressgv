@@ -6,7 +6,7 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
 import '../../widgets/error_carga.dart';
 import '../../services/socket_service_client.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
+import '../shared/ui_compartida.dart' show ChipEstado, ColoresApp, DialogoApp, TarjetaBlanca;
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -21,6 +21,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   bool _error = false;
   String? _uploadingDoc;
   StreamSubscription<Map<String, dynamic>>? _verificationSub;
+  /// Comentario del diálogo "Valoración del vehículo" (ver _solicitarExcepcionSoat).
+  final _comentarioSoat = TextEditingController();
 
 
   final List<_DocItem> _docs = [
@@ -64,6 +66,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   @override
   void dispose() {
     _verificationSub?.cancel();
+    _comentarioSoat.dispose();
     super.dispose();
   }
 
@@ -274,35 +277,26 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Future<void> _solicitarExcepcionSoat() async {
-    final ctrl = TextEditingController();
+    // Vive en el State (se libera en dispose): el diálogo sigue animándose al
+    // cerrar y un dispose inmediato rompía su TextField.
+    final ctrl = _comentarioSoat..clear();
     final enviar = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Valoración del vehículo'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'El equipo CargaExpress revisará tu caso y valorará el vehículo. Puedes dejar un comentario.',
-              style: TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              maxLines: 3,
-              maxLength: 500,
-              decoration: const InputDecoration(labelText: 'Comentario (opcional)', border: OutlineInputBorder()),
-            ),
-          ],
+      builder: (ctx) => DialogoApp(
+        desplazable: true,
+        icono: Icons.fact_check_outlined,
+        titulo: 'Valoración del vehículo',
+        cuerpo: 'El equipo CargaExpress revisará tu caso y valorará el vehículo. Puedes dejar un comentario.',
+        contenido: TextField(
+          controller: ctrl,
+          maxLines: 3,
+          maxLength: 500,
+          decoration: const InputDecoration(hintText: 'Comentario (opcional)', counterText: ''),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(foregroundColor: Colors.white, backgroundColor: ColoresApp.azulOscuro),
-            child: const Text('Enviar solicitud'),
-          ),
-        ],
+        textoPrincipal: 'Enviar solicitud',
+        onPrincipal: () => Navigator.pop(ctx, true),
+        textoSecundario: 'Cancelar',
+        onSecundario: () => Navigator.pop(ctx, false),
       ),
     );
     if (enviar != true || !mounted) return;
@@ -548,83 +542,38 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Widget _buildAction(String docType, String estado) {
-    switch (estado) {
-      case 'aprobado':
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: ColoresApp.verde.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, size: 14, color: ColoresApp.verde),
-              const SizedBox(width: 4),
-              Text('Aprobado', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ColoresApp.verde)),
-            ],
+    // Botón chico (36 px) para subir o volver a subir; los chips son de ChipEstado.
+    Widget subir(String texto, Color color) => SizedBox(
+          width: 92,
+          height: 36,
+          child: FilledButton(
+            onPressed: () => _confirmAndUpload(docType),
+            style: FilledButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            child: Text(texto),
           ),
         );
+    switch (estado) {
+      case 'aprobado':
+        return const ChipEstado.verde('Aprobado', icono: Icons.check_circle);
       case 'rechazado':
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: ColoresApp.rojo.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(20)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.cancel, size: 14, color: ColoresApp.rojo),
-                  const SizedBox(width: 4),
-                  Text('Rechazado', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ColoresApp.rojo)),
-                ],
-              ),
-            ),
+            const ChipEstado.rojo('Rechazado', icono: Icons.cancel),
             const SizedBox(height: 6),
-            SizedBox(
-              width: 90,
-              child: ElevatedButton(
-                onPressed: () => _confirmAndUpload(docType),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ColoresApp.rojo,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                  minimumSize: const Size(0, 28),
-                ),
-                child: const Text('Re-subir', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-              ),
-            ),
+            subir('Re-subir', ColoresApp.rojo),
           ],
         );
       case 'pendiente':
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: ColoresApp.naranja.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.schedule, size: 14, color: ColoresApp.naranja),
-              const SizedBox(width: 4),
-              Text('En revisión', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ColoresApp.naranja)),
-            ],
-          ),
-        );
+        return const ChipEstado.naranja('En revisión', icono: Icons.schedule);
       default:
-        return SizedBox(
-          width: 100,
-          child: ElevatedButton(
-            onPressed: () => _confirmAndUpload(docType),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: ColoresApp.azulOscuro,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-              minimumSize: const Size(0, 32),
-            ),
-            child: const Text('Subir', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-          ),
-        );
+        return subir('Subir', ColoresApp.azul);
     }
   }
 }

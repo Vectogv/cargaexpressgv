@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -72,6 +71,8 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   // reconstruye cada segundo (antes setState() reconstruía toda la pantalla,
   // FlutterMap incluido, 1 vez por segundo).
   final ValueNotifier<int> _elapsed = ValueNotifier<int>(0);
+  /// Justificación de la hoja "¿Por qué cancelas?" (ver _cancelTrip).
+  final _motivoCancelacion = TextEditingController();
   int get _elapsedSeconds => _elapsed.value;
   set _elapsedSeconds(int v) => _elapsed.value = v;
   // Throttle de reconstrucciones por GPS (máx. 1 por segundo).
@@ -211,6 +212,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _gpsRebuildTimer?.cancel();
     _cancelCountdown();
     _elapsed.dispose();
+    _motivoCancelacion.dispose();
     super.dispose();
   }
 
@@ -749,43 +751,44 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          return AlertDialog(
+          final largo = localJustificacion?.length ?? 0;
+          final faltan = 10 - largo;
+          return DialogoApp(
             // Con el teclado abierto el contenido se desplaza en vez de
             // quedar tapado por los botones.
-            scrollable: true,
-            title: const Text('Justificación de cierre'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
+            desplazable: true,
+            icono: Icons.edit_location_alt_outlined,
+            colorIcono: ColoresApp.naranjaTexto,
+            titulo: 'Justificación de cierre',
+            cuerpo: 'Estás a más de $radio km del destino (o no tenemos tu ubicación). '
+                'Para cerrar el viaje escribe el motivo (mínimo 10 caracteres).',
+            contenido: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Estás a más de $radio km del destino (o no tenemos tu ubicación). '
-                    'Para cerrar el viaje escribe el motivo (mínimo 10 caracteres).'),
-                const SizedBox(height: 16),
                 TextField(
                   maxLines: 3,
-                  decoration: const InputDecoration(
-                    hintText: 'Motivo del cierre...',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
+                  maxLength: 300,
+                  decoration: const InputDecoration(hintText: 'Motivo del cierre...', counterText: ''),
                   onChanged: (v) {
                     localJustificacion = v.trim();
                     setDialogState(() {});
                   },
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  faltan > 0 ? 'Faltan $faltan caracteres' : 'Listo',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: faltan > 0 ? ColoresApp.grisClaro : ColoresApp.verdeOscuro,
+                  ),
+                ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, null),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: (localJustificacion != null && localJustificacion!.length >= 10)
-                    ? () => Navigator.pop(ctx, localJustificacion)
-                    : null,
-                child: const Text('Continuar'),
-              ),
-            ],
+            textoPrincipal: 'Continuar',
+            onPrincipal: largo >= 10 ? () => Navigator.pop(ctx, localJustificacion) : null,
+            textoSecundario: 'Cancelar',
+            onSecundario: () => Navigator.pop(ctx, null),
           );
         },
       ),
@@ -801,45 +804,25 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          return AlertDialog(
-            scrollable: true,
-            title: const Text('PIN de entrega'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(incorrecto
-                    ? 'El PIN no coincide. Pídele al cliente el PIN de 4 dígitos que ve en su pantalla.'
-                    : 'Pídele al cliente el PIN de 4 dígitos que ve en su pantalla para cerrar el viaje.'),
-                const SizedBox(height: 16),
-                TextField(
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    hintText: '0000',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(12),
-                    counterText: '',
-                  ),
-                  onChanged: (v) {
-                    localPin = v.trim();
-                    setDialogState(() {});
-                  },
-                ),
-              ],
+          return DialogoApp(
+            desplazable: true,
+            icono: Icons.pin_outlined,
+            colorIcono: incorrecto ? ColoresApp.rojo : ColoresApp.azul,
+            titulo: 'PIN de entrega',
+            cuerpo: incorrecto
+                ? 'El PIN no coincide. Pídele al cliente el PIN de 4 dígitos que ve en su pantalla.'
+                : 'Pídele al cliente el PIN de 4 dígitos que ve en su pantalla para cerrar el viaje.',
+            contenido: CampoPin(
+              error: incorrecto,
+              onChanged: (v) {
+                localPin = v.trim();
+                setDialogState(() {});
+              },
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, null),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                onPressed: (localPin != null && localPin!.length == 4)
-                    ? () => Navigator.pop(ctx, localPin)
-                    : null,
-                child: const Text('Continuar'),
-              ),
-            ],
+            textoPrincipal: 'Continuar',
+            onPrincipal: (localPin != null && localPin!.length == 4) ? () => Navigator.pop(ctx, localPin) : null,
+            textoSecundario: 'Cancelar',
+            onSecundario: () => Navigator.pop(ctx, null),
           );
         },
       ),
@@ -855,19 +838,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
         ? false
         : await showDialog<bool>(
             context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Finalizar entrega'),
-              content: const Text('\u00bfDesea tomar una foto como evidencia de la entrega?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Sin foto'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Tomar foto'),
-                ),
-              ],
+            builder: (ctx) => DialogoApp(
+              icono: Icons.photo_camera_outlined,
+              titulo: 'Finalizar entrega',
+              cuerpo: '\u00bfDesea tomar una foto como evidencia de la entrega?',
+              textoPrincipal: 'Tomar foto',
+              onPrincipal: () => Navigator.pop(ctx, true),
+              textoSecundario: 'Sin foto',
+              onSecundario: () => Navigator.pop(ctx, false),
             ),
           );
 
@@ -876,19 +854,15 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       if (_deliveryPhotoUrl == null && _photoError != null && mounted) {
         final retry = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Error al subir la foto'),
-            content: Text('$_photoError\n\n¿Quieres intentarlo de nuevo?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Continuar sin foto'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Reintentar'),
-              ),
-            ],
+          builder: (ctx) => DialogoApp(
+            icono: Icons.cloud_off_outlined,
+            colorIcono: ColoresApp.rojo,
+            titulo: 'Error al subir la foto',
+            cuerpo: '$_photoError\n\n¿Quieres intentarlo de nuevo?',
+            textoPrincipal: 'Reintentar',
+            onPrincipal: () => Navigator.pop(ctx, true),
+            textoSecundario: 'Continuar sin foto',
+            onSecundario: () => Navigator.pop(ctx, false),
           ),
         );
         if (retry == true) {
@@ -991,40 +965,50 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
             });
           }
         });
-        return AlertDialog(
-              title: const Text('Esperando confirmaci\u00f3n'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Solicitando confirmaci\u00f3n al cliente...'),
-                  const SizedBox(height: 16),
-                  ValueListenableBuilder<int>(
-                    valueListenable: countdown,
-                    builder: (_, timeoutSec, _) => Text('Tiempo restante: $timeoutSec s',
-                      style: TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.w700,
-                        color: timeoutSec < 10 ? Colors.red : ColoresApp.azulOscuro,
+        return DialogoApp(
+          icono: Icons.hourglass_top_rounded,
+          titulo: 'Esperando confirmaci\u00f3n',
+          cuerpo: 'Solicitando confirmaci\u00f3n al cliente...',
+          // Anillo con el tiempo restante (MM:SS), como en el prototipo.
+          contenido: ValueListenableBuilder<int>(
+            valueListenable: countdown,
+            builder: (_, timeoutSec, _) {
+              final color = timeoutSec < 10 ? ColoresApp.rojo : ColoresApp.azul;
+              return Center(
+                child: SizedBox(
+                  width: 112,
+                  height: 112,
+                  child: Stack(fit: StackFit.expand, children: [
+                    CircularProgressIndicator(
+                      value: timeoutSec / 30,
+                      strokeWidth: 6,
+                      strokeCap: StrokeCap.round,
+                      color: color,
+                      backgroundColor: ColoresApp.divisor,
+                    ),
+                    Center(
+                      child: Text(
+                        '${(timeoutSec ~/ 60).toString().padLeft(2, '0')}:${(timeoutSec % 60).toString().padLeft(2, '0')}',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: color, fontFeatures: cifrasTabulares),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    _cancelCountdown();
-                    SocketServiceClient.instance.emit('trip:finalize_cancelled', {
-                      'tripId': _trip?.id,
-                    });
-                    Navigator.pop(ctx);
-                    if (mounted) {
-                      _snack('Finalizaci\u00f3n cancelada.');
-                    }
-                  },
-                  child: const Text('Cancelar'),
+                  ]),
                 ),
-              ],
-            );
+              );
+            },
+          ),
+          textoSecundario: 'Cancelar',
+          onSecundario: () {
+            _cancelCountdown();
+            SocketServiceClient.instance.emit('trip:finalize_cancelled', {
+              'tripId': _trip?.id,
+            });
+            Navigator.pop(ctx);
+            if (mounted) {
+              _snack('Finalizaci\u00f3n cancelada.');
+            }
+          },
+        );
       },
     );
     _dialogoEsperaAbierto = false;
@@ -2396,73 +2380,89 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   void _mostrarMasAcciones(Trip t, String estado) {
     final puedeCancelar = estado == TripStatus.aceptado || estado == TripStatus.enCamino;
     final pideCancelacion = estado == TripStatus.enCurso || estado == TripStatus.llegada;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 6),
-            ListTile(
-              key: const Key('accion_detalle_cliente'),
-              leading: const Icon(Icons.info_outline, color: ColoresApp.azul),
-              title: const Text('Información del cliente'),
+    // Fila del prototipo: icono en caja, título 15, detalle 13, chevron.
+    Widget fila({
+      required Key key,
+      required IconData icono,
+      required String titulo,
+      String? detalle,
+      Color color = ColoresApp.azul,
+      required VoidCallback onTap,
+    }) {
+      return ListTile(
+        key: key,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        leading: CajaIcono(icono: icono, color: color),
+        title: Text(titulo, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color == ColoresApp.azul ? ColoresApp.textoOscuro : color)),
+        subtitle: detalle == null ? null : Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.gris)),
+        trailing: const Icon(Icons.chevron_right_rounded, color: ColoresApp.chevron),
+        onTap: onTap,
+      );
+    }
+
+    mostrarHojaApp<void>(
+      context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const TituloHoja(titulo: 'Más opciones', detalle: 'Acciones sobre este viaje.'),
+          const SizedBox(height: 8),
+          fila(
+            key: const Key('accion_detalle_cliente'),
+            icono: Icons.info_outline,
+            titulo: 'Información del cliente',
+            onTap: () {
+              Navigator.pop(ctx);
+              _showClientDetail(t);
+            },
+          ),
+          fila(
+            key: const Key('accion_reportar'),
+            icono: Icons.gavel_outlined,
+            titulo: 'Reportar un problema',
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
+            },
+          ),
+          fila(
+            key: const Key('accion_soporte'),
+            icono: Icons.headset_mic_outlined,
+            titulo: 'Escribir a soporte',
+            detalle: 'Abre un ticket con este viaje.',
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => NuevoTicketScreen(viaje: t.toJson(), categoriaInicial: 'viaje')),
+              );
+            },
+          ),
+          if (puedeCancelar)
+            fila(
+              key: const Key('accion_cancelar'),
+              icono: Icons.cancel_outlined,
+              titulo: 'Cancelar viaje',
+              color: ColoresApp.rojo,
               onTap: () {
                 Navigator.pop(ctx);
-                _showClientDetail(t);
+                _cancelTrip(t);
               },
             ),
-            ListTile(
-              key: const Key('accion_reportar'),
-              leading: const Icon(Icons.gavel_outlined, color: ColoresApp.azul),
-              title: const Text('Reportar un problema'),
+          if (pideCancelacion)
+            fila(
+              key: const Key('accion_solicitar_cancelacion'),
+              icono: Icons.report_problem_outlined,
+              titulo: 'Solicitar cancelación',
+              detalle: 'En este estado la cancelación requiere aprobación.',
+              color: ColoresApp.rojo,
               onTap: () {
                 Navigator.pop(ctx);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => DisputeScreen(trip: t.toJson(), role: 'conductor')));
+                if (!_isCancelling) _requestCancellation(t);
               },
             ),
-            ListTile(
-              key: const Key('accion_soporte'),
-              leading: const Icon(Icons.headset_mic_outlined, color: ColoresApp.azul),
-              title: const Text('Escribir a soporte'),
-              subtitle: const Text('Abre un ticket con este viaje.'),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => NuevoTicketScreen(viaje: t.toJson(), categoriaInicial: 'viaje')),
-                );
-              },
-            ),
-            if (puedeCancelar)
-              ListTile(
-                key: const Key('accion_cancelar'),
-                leading: const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626)),
-                title: const Text('Cancelar viaje', style: TextStyle(color: Color(0xFFDC2626))),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _cancelTrip(t);
-                },
-              ),
-            if (pideCancelacion)
-              ListTile(
-                key: const Key('accion_solicitar_cancelacion'),
-                leading: const Icon(Icons.report_problem_outlined, color: Color(0xFFDC2626)),
-                title: const Text('Solicitar cancelación', style: TextStyle(color: Color(0xFFDC2626))),
-                subtitle: const Text('En este estado la cancelación requiere aprobación.'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (!_isCancelling) _requestCancellation(t);
-                },
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -2636,89 +2636,74 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       _requestCancellation(t);
       return;
     }
-    final motivoCtrl = TextEditingController();
+    // Campo de la hoja: vive en el State (se libera en dispose) porque la hoja
+    // sigue animándose al cerrar y un dispose inmediato rompía su TextField.
+    final motivoCtrl = _motivoCancelacion..clear();
     String? motivoSeleccionado;
     String? justificacion;
 
-    final confirmado = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          // Con el teclado abierto, "Cancelar viaje" quedaba encima del campo
-          // de justificación: el contenido ahora se desplaza.
-          scrollable: true,
-          title: const Text('Cancelar viaje'),
-          content: Column(
+    try {
+      // Hoja inferior del prototipo: motivos como tarjetas-radio, justificación,
+      // aviso de la penalización y botón rojo. Sube con el teclado (HojaApp).
+      final confirmado = await mostrarHojaApp<bool>(
+        context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.shade200)),
-                child: Row(children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text('El cliente ser\u00e1 notificado. Esta acci\u00f3n ser\u00e1 revisada.', style: TextStyle(fontSize: 13, color: Colors.orange.shade900, fontWeight: FontWeight.w500))),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              const Text('Motivo de cancelaci\u00f3n:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              const SizedBox(height: 8),
-              RadioGroup<String>(
-                groupValue: motivoSeleccionado,
-                onChanged: (v) => setDialogState(() => motivoSeleccionado = v),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final m in const ['Problema con el cliente', 'Veh\u00edculo no disponible', 'Emergencia', 'Otro'])
-                      RadioListTile<String>(
-                        title: Text(m, style: const TextStyle(fontSize: 14)),
-                        value: m,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                  ],
+              const TituloHoja(titulo: '¿Por qué cancelas?', detalle: 'El cliente verá el motivo. Elige uno.'),
+              const SizedBox(height: 12),
+              for (final m in const ['Problema con el cliente', 'Vehículo no disponible', 'Emergencia', 'Otro']) ...[
+                OpcionRadio(
+                  texto: m,
+                  elegida: motivoSeleccionado == m,
+                  onTap: () => setDialogState(() => motivoSeleccionado = m),
                 ),
-              ),
-              if (motivoSeleccionado != null) ...[
                 const SizedBox(height: 8),
+              ],
+              if (motivoSeleccionado != null) ...[
+                const SizedBox(height: 4),
+                const Text('Cuéntanos un poco más', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.etiquetaCampo)),
+                const SizedBox(height: 6),
                 TextField(
                   controller: motivoCtrl,
                   maxLines: 3,
-                  decoration: const InputDecoration(
-                    hintText: 'Justificaci\u00f3n (m\u00ednimo 10 caracteres)',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(12),
-                  ),
+                  maxLength: 300,
+                  decoration: const InputDecoration(hintText: 'Mínimo 10 caracteres', counterText: ''),
                   onChanged: (v) {
                     justificacion = v.trim();
                     setDialogState(() {});
                   },
                 ),
+                const SizedBox(height: 12),
               ],
+              const CajaAviso(texto: 'Cancelar resta 0,5 a tu calificación. El cliente será notificado.'),
+              const SizedBox(height: 12),
+              BotonPrincipal(
+                texto: 'Sí, cancelar viaje',
+                color: ColoresApp.rojo,
+                onPressed: (motivoSeleccionado != null && justificacion != null && justificacion!.length >= 10)
+                    ? () => Navigator.pop(ctx, true)
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              BotonSecundario(
+                texto: 'Volver al viaje',
+                color: ColoresApp.textoOscuro,
+                colorBorde: ColoresApp.borde,
+                onPressed: () => Navigator.pop(ctx, false),
+              ),
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Volver')),
-            ElevatedButton(
-              onPressed: (motivoSeleccionado != null && justificacion != null && justificacion!.length >= 10)
-                  ? () => Navigator.pop(ctx, true)
-                  : null,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white),
-              child: const Text('Cancelar viaje'),
-            ),
-          ],
         ),
-      ),
-    );
+      );
 
-    if (confirmado != true || motivoSeleccionado == null || justificacion == null || justificacion!.length < 10) {
-      return;
-    }
+      if (confirmado != true || motivoSeleccionado == null || justificacion == null || justificacion!.length < 10) {
+        return;
+      }
 
-    FraudDetectionService.instance.checkCancellation(ApiClient.instance.userId ?? '');
-
-    try {
+      FraudDetectionService.instance.checkCancellation(ApiClient.instance.userId ?? '');
       final desc = motivoCtrl.text.trim();
       final motivo = desc.isNotEmpty ? '$motivoSeleccionado: $desc' : motivoSeleccionado;
       await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.cancelTrip(t.id, motivo: motivo, justificacion: justificacion));

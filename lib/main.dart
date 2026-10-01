@@ -28,6 +28,7 @@ import 'screens/shared/tickets/tickets_navegacion.dart' show abrirTicketSoporteG
 import 'screens/home_by_role.dart';
 import 'screens/cliente/viaje_navegacion.dart' show abrirViajeGlobal;
 import 'screens/conductor/support_screen.dart' show abrirConversacionGlobal;
+import 'screens/shared/ui_compartida.dart' show temaApp;
 
 final GlobalKey<NavigatorState> _navigatorKey = navegadorGlobal;
 
@@ -346,11 +347,7 @@ class MainApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
-        useMaterial3: true,
-        fontFamily: 'InstrumentSans',
-      ),
+      theme: temaApp(),
       home: ApiClient.instance.token != null
           ? _homeScreenByRole()
           : const AuthScreen(),

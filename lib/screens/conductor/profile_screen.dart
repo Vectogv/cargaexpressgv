@@ -7,7 +7,8 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/driver_location_service.dart';
 import '../../widgets/media_image.dart';
-import '../shared/ui_compartida.dart' show BotonPrincipal, ColoresApp, TarjetaBlanca, cifrasTabulares;
+import '../shared/ui_compartida.dart'
+    show BotonPrincipal, BotonSecundario, ColoresApp, DialogoApp, TarjetaBlanca, TituloHoja, cifrasTabulares, mostrarHojaApp;
 import '../user/auth_estilos.dart' show AvisoErrorAuth;
 import '../user/auth_screen.dart';
 import 'documents_screen.dart';
@@ -58,6 +59,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {
       // Silencioso: las estadísticas son secundarias al perfil.
     }
+  }
+
+  /// Pide confirmación antes de salir: si está conectado deja de recibir viajes.
+  Future<void> _confirmarLogout() async {
+    final salir = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DialogoApp(
+        icono: Icons.logout_rounded,
+        colorIcono: ColoresApp.rojo,
+        titulo: '¿Cerrar sesión?',
+        cuerpo: 'Si estás conectado, dejarás de recibir solicitudes.',
+        textoPrincipal: 'Cerrar sesión',
+        colorPrincipal: ColoresApp.rojo,
+        onPrincipal: () => Navigator.pop(ctx, true),
+        textoSecundario: 'Cancelar',
+      ),
+    );
+    if (salir == true && mounted) await _logout();
   }
 
   Future<void> _logout() async {
@@ -115,48 +134,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final tipo = _conductor?['tipoVehiculo'] as String? ?? 'No especificado';
     final capacidad = _conductor?['capacidad'] as String? ?? 'No especificada';
     final foto = _conductor?['fotoVehiculo'] as String?;
+    final color = _conductor?['color'] as String?;
+    final tienePlaca = _conductor?['placa'] is String && (_conductor!['placa'] as String).isNotEmpty;
 
     // Hoja inferior en vez del diálogo chico: la foto necesita ancho.
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Vehículo', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
-              const SizedBox(height: 12),
-              // Sin foto subida, MediaImage muestra su placeholder por defecto.
-              MediaImage(path: foto, height: 180, width: double.infinity, fit: BoxFit.cover, borderRadius: BorderRadius.circular(12)),
-              const SizedBox(height: 12),
-              _infoRow('Placa', placa),
-              _infoRow('Tipo', tipo.isEmpty ? tipo : tipo[0].toUpperCase() + tipo.substring(1)),
-              _infoRow('Capacidad', capacidad),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
-              ),
-            ],
-          ),
-        ),
+    mostrarHojaApp<void>(
+      context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const TituloHoja(titulo: 'Vehículo'),
+          const SizedBox(height: 12),
+          // Sin foto subida, MediaImage muestra su placeholder por defecto.
+          MediaImage(path: foto, height: 150, width: double.infinity, fit: BoxFit.cover, borderRadius: BorderRadius.circular(14)),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _cajaDato('Placa', placa, placa: tienePlaca)),
+            const SizedBox(width: 10),
+            Expanded(child: _cajaDato('Tipo', tipo.isEmpty ? tipo : tipo[0].toUpperCase() + tipo.substring(1))),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _cajaDato('Capacidad', capacidad)),
+            const SizedBox(width: 10),
+            // Solo si el servidor manda el color; si no, la caja queda vacía.
+            Expanded(child: color != null && color.isNotEmpty ? _cajaDato('Color', color) : const SizedBox()),
+          ]),
+          const SizedBox(height: 16),
+          BotonSecundario(texto: 'Cerrar', color: ColoresApp.textoOscuro, colorBorde: ColoresApp.borde, onPressed: () => Navigator.pop(ctx)),
+        ],
       ),
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  /// Caja gris del prototipo: etiqueta 12 en mayúsculas + valor 15/600.
+  /// Con [placa], el valor sale como placa amarilla con borde oscuro.
+  Widget _cajaDato(String label, String value, {bool placa = false}) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(color: ColoresApp.fondoItem, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 14, color: Colors.black54)),
-          const SizedBox(width: 12),
-          Flexible(child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+          Text(label.toUpperCase(),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: .5, color: ColoresApp.grisClaro)),
+          const SizedBox(height: 6),
+          if (placa)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: ColoresApp.placaFondo,
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: ColoresApp.placaTexto, width: 1.5),
+              ),
+              child: Text(value,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: ColoresApp.placaTexto)),
+            )
+          else
+            Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
         ],
       ),
     );
@@ -220,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 12),
                       TarjetaBlanca(
                         padding: EdgeInsets.zero,
-                        child: _buildMenuItem(Icons.logout_rounded, 'Cerrar sesión', _logout, color: ColoresApp.rojo, divisor: false),
+                        child: _buildMenuItem(Icons.logout_rounded, 'Cerrar sesión', _confirmarLogout, color: ColoresApp.rojo, divisor: false),
                       ),
                     ],
                   ),
@@ -412,10 +448,10 @@ class _EditarPerfilConductorScreenState extends State<_EditarPerfilConductorScre
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(titulo, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+            Text(titulo, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
             if (detalle != null) ...[
               const SizedBox(height: 2),
-              Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+              Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.gris)),
             ],
             const SizedBox(height: 12),
             ...hijos,
@@ -425,12 +461,11 @@ class _EditarPerfilConductorScreenState extends State<_EditarPerfilConductorScre
 
   Widget _campo(TextEditingController c, String label, int max,
       {TextInputType tipo = TextInputType.text, String? error, bool enabled = true, String? ayuda}) {
-    OutlineInputBorder borde(Color color, [double ancho = 1]) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: color, width: ancho));
+    // Bordes y relleno vienen del tema (campos de 52, radio 14, foco azul de 2).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: ColoresApp.etiquetaCampo)),
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.etiquetaCampo)),
         const SizedBox(height: 6),
         TextField(
           key: ValueKey('campo_$label'),
@@ -438,21 +473,8 @@ class _EditarPerfilConductorScreenState extends State<_EditarPerfilConductorScre
           keyboardType: tipo,
           enabled: enabled && !_guardando,
           inputFormatters: [LengthLimitingTextInputFormatter(max)],
-          style: TextStyle(fontSize: 15, color: enabled ? ColoresApp.textoOscuro : ColoresApp.textoSecundario),
-          decoration: InputDecoration(
-            isDense: true,
-            filled: true,
-            fillColor: enabled ? Colors.white : ColoresApp.fondo,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            enabledBorder: borde(ColoresApp.bordeCampo),
-            disabledBorder: borde(ColoresApp.borde),
-            focusedBorder: borde(ColoresApp.azul, 2),
-            errorBorder: borde(ColoresApp.rojoSesion),
-            focusedErrorBorder: borde(ColoresApp.rojoSesion, 2),
-            errorText: error,
-            helperText: ayuda,
-            helperStyle: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
-          ),
+          style: TextStyle(fontSize: 15, color: enabled ? ColoresApp.textoOscuro : ColoresApp.grisClaro),
+          decoration: InputDecoration(errorText: error, helperText: ayuda),
         ),
       ],
     );

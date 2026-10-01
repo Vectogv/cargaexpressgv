@@ -109,12 +109,12 @@ void main() {
       await avanzar(tester, 1);
       await tester.tap(find.byKey(const Key('accion_cancelar')));
       await avanzar(tester, 1);
-      expect(find.text('Motivo de cancelación:'), findsOneWidget);
+      expect(find.text('¿Por qué cancelas?'), findsOneWidget);
       await tester.tap(find.text('Problema con el cliente'));
       await avanzar(tester, 0.5);
       await tester.enterText(find.byType(TextField).last, 'Llamé tres veces y no contesta');
       await avanzar(tester, 0.5);
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Cancelar viaje'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sí, cancelar viaje'));
       await avanzar(tester, 0.3);
       // El backend avisa por socket mientras la pantalla aún se está cerrando.
       cancelado();
@@ -143,7 +143,7 @@ void main() {
       await tester.enterText(find.byType(TextField).last, 'Se pinchó una llanta');
       await avanzar(tester, 0.5);
 
-      final boton = find.widgetWithText(ElevatedButton, 'Cancelar viaje');
+      final boton = find.widgetWithText(FilledButton, 'Sí, cancelar viaje');
       await tester.ensureVisible(find.byType(TextField).last);
       await avanzar(tester, 0.3);
       final campo = tester.getRect(find.byType(TextField).last);

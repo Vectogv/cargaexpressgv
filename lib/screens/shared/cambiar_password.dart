@@ -3,6 +3,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../user/auth_estilos.dart';
 import 'soporte_contacto.dart';
+import 'ui_compartida.dart' show ColoresApp, DialogoApp;
 
 /// Diálogo para cambiar la contraseña (PUT /api/users/password), compartido
 /// entre el cliente y el conductor. Mismo patrón de "Editar perfil" en
@@ -73,48 +74,80 @@ class _DialogoCambiarPasswordState extends State<_DialogoCambiarPassword> {
     }
   }
 
-  Widget _campo(Key key, TextEditingController c, String label) {
+  /// Ojo para ver/ocultar cada campo (índice 0 actual, 1 nueva, 2 confirmar).
+  final _ver = [false, false, false];
+
+  Widget _campo(int i, Key key, TextEditingController c, String label) {
     return TextField(
       key: key,
       controller: c,
-      obscureText: true,
+      obscureText: !_ver[i],
       enabled: !_guardando,
-      decoration: decoracionCampoAuth(label: label, icono: Icons.lock_outline_rounded),
+      onChanged: (_) => setState(() {}),
+      decoration: decoracionCampoAuth(
+        label: label,
+        icono: Icons.lock_outline_rounded,
+        sufijo: IconButton(
+          tooltip: _ver[i] ? 'Ocultar' : 'Mostrar',
+          icon: Icon(_ver[i] ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AuthColores.gris),
+          onPressed: () => setState(() => _ver[i] = !_ver[i]),
+        ),
+      ),
     );
+  }
+
+  /// Pista en vivo debajo de los campos. No bloquea el botón: al guardar se
+  /// validan los mismos límites y se muestra el error completo.
+  Widget _pista() {
+    final nueva = _nueva.text;
+    final confirmar = _confirmar.text;
+    String texto;
+    Color color;
+    if (nueva.isEmpty) {
+      texto = 'Mínimo $_minimoNueva caracteres.';
+      color = ColoresApp.grisClaro;
+    } else if (nueva.length < _minimoNueva) {
+      texto = 'La nueva debe tener al menos $_minimoNueva caracteres.';
+      color = ColoresApp.rojo;
+    } else if (confirmar.isEmpty) {
+      texto = 'Repite la nueva contraseña.';
+      color = ColoresApp.grisClaro;
+    } else if (confirmar != nueva) {
+      texto = 'Las contraseñas no coinciden.';
+      color = ColoresApp.rojo;
+    } else {
+      texto = 'Listo para guardar.';
+      color = ColoresApp.verdeOscuro;
+    }
+    return Text(texto, style: TextStyle(fontSize: 13, color: color));
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: !_guardando,
-      child: AlertDialog(
-        title: const Text('Cambiar contraseña'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _campo(const Key('campo_password_actual'), _actual, 'Contraseña actual'),
-              const SizedBox(height: 14),
-              _campo(const Key('campo_password_nueva'), _nueva, 'Nueva contraseña'),
-              const SizedBox(height: 14),
-              _campo(const Key('campo_password_confirmar'), _confirmar, 'Confirmar contraseña'),
-              if (_error != null) ...[
-                const SizedBox(height: 14),
-                AvisoErrorAuth(mensaje: _error!),
-              ],
-            ],
-          ),
+      child: DialogoApp(
+        desplazable: true,
+        icono: Icons.lock_outline_rounded,
+        titulo: 'Cambiar contraseña',
+        contenido: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _campo(0, const Key('campo_password_actual'), _actual, 'Contraseña actual'),
+            const SizedBox(height: 14),
+            _campo(1, const Key('campo_password_nueva'), _nueva, 'Nueva contraseña'),
+            const SizedBox(height: 14),
+            _campo(2, const Key('campo_password_confirmar'), _confirmar, 'Confirmar contraseña'),
+            const SizedBox(height: 8),
+            if (_error == null) _pista() else AvisoErrorAuth(mensaje: _error!),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: _guardando ? null : () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: _guardando ? null : _guardar,
-            child: Text(_guardando ? 'Guardando…' : 'Guardar'),
-          ),
-        ],
+        textoPrincipal: 'Guardar',
+        cargando: _guardando,
+        onPrincipal: _guardar,
+        textoSecundario: 'Cancelar',
+        onSecundario: () => Navigator.pop(context, false),
       ),
     );
   }
