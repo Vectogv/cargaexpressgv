@@ -540,7 +540,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'En l\u00ednea';
   }
 
-  void _navigate(int index) {
+  Future<void> _navigate(int index) async {
     // Sin el menú lateral, Mis ofertas / Soporte / Ajustes viven en Perfil y
     // el chat se abre desde el viaje en curso.
     final routes = <int, Widget>{
@@ -554,7 +554,9 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     final route = routes[index];
     if (route != null) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => route));
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => route));
+      // Al volver (p. ej. de Ganancias tras pagar), la deuda puede haber cambiado.
+      if (mounted) unawaited(_cargarDeuda());
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Próximamente disponible'), duration: Duration(seconds: 2)),

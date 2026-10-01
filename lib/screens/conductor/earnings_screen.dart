@@ -222,7 +222,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     },
                   )
                 : RefreshIndicator(
-                    onRefresh: () async { setState(() => _loading = true); await _loadData(); },
+                    // Sin spinner de pantalla: la deuda debe poder pasar a "Al día" en su sitio.
+                    onRefresh: _loadData,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       // Espacio para la barra de navegación del teléfono: el
