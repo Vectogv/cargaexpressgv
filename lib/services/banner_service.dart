@@ -9,17 +9,26 @@ class BannerPlataforma {
   final bool activo;
   final String texto;
   final String? link;
+  final String? imagenUrl;
 
-  const BannerPlataforma({required this.activo, required this.texto, this.link});
+  const BannerPlataforma({required this.activo, required this.texto, this.link, this.imagenUrl});
 
   static const vacio = BannerPlataforma(activo: false, texto: '');
 
-  bool get visible => activo && texto.isNotEmpty;
+  /// La gerencia sube una imagen (texto y enlace son opcionales): basta con
+  /// una de las dos cosas para mostrarlo.
+  bool get visible => activo && (texto.isNotEmpty || imagenUrl != null);
 
   factory BannerPlataforma.fromJson(Map<String, dynamic> json) {
     final texto = (json['texto'] ?? '').toString().trim();
     final link = (json['link'] ?? '').toString().trim();
-    return BannerPlataforma(activo: json['activo'] == true, texto: texto, link: link.isEmpty ? null : link);
+    final imagen = (json['imagenUrl'] ?? '').toString().trim();
+    return BannerPlataforma(
+      activo: json['activo'] == true,
+      texto: texto,
+      link: link.isEmpty ? null : link,
+      imagenUrl: imagen.isEmpty ? null : imagen,
+    );
   }
 }
 

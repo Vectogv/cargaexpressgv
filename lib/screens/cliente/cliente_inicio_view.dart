@@ -5,6 +5,7 @@ import '../../contracts/trip_status.dart';
 import '../../core/formato_dinero.dart';
 import '../../services/banner_service.dart';
 import '../../services/config_cliente_service.dart';
+import '../../widgets/media_image.dart';
 import '../shared/ui_compartida.dart';
 import 'confirmar_entrega_screen.dart' show avisoConfirmacionPendiente;
 
@@ -231,26 +232,40 @@ class _BannerPlataforma extends StatelessWidget {
             onTap: banner.link == null ? null : () => launchUrl(Uri.parse(banner.link!), mode: LaunchMode.externalApplication),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: ColoresApp.azulTenue,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.2)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.campaign_outlined, color: ColoresApp.azul, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      banner.texto,
-                      style: const TextStyle(fontSize: 13, color: ColoresApp.azulOscuro, height: 1.4, fontWeight: FontWeight.w500),
+                  if (banner.imagenUrl != null)
+                    AspectRatio(
+                      aspectRatio: 16 / 7,
+                      child: MediaImage(path: banner.imagenUrl, placeholder: const SizedBox.shrink()),
                     ),
-                  ),
-                  if (banner.link != null) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.chevron_right_rounded, color: ColoresApp.azul, size: 20),
-                  ],
+                  if (banner.texto.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.campaign_outlined, color: ColoresApp.azul, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              banner.texto,
+                              style: const TextStyle(fontSize: 13, color: ColoresApp.azulOscuro, height: 1.4, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          if (banner.link != null) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.chevron_right_rounded, color: ColoresApp.azul, size: 20),
+                          ],
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
