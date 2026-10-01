@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../services/socket_service_client.dart';
 import 'en_disputa_screen.dart';
 import 'mi_version_screen.dart';
@@ -108,6 +109,17 @@ class _EnDisputaWrapperState extends State<EnDisputaWrapper> {
                       destino: widget.destino ?? '',
                     ),
                   ),
+                );
+              }
+            } on ApiException catch (e) {
+              if (!mounted) return;
+              // 422: la disputa ya fue resuelta; se muestra la resolución.
+              if (e.statusCode == 422 && e.message.contains('resuelta')) {
+                Navigator.pop(context);
+                _fetchAndShowResolucion();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('No se pudo enviar. ${e.message}')),
                 );
               }
             } catch (e) {

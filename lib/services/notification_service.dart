@@ -180,6 +180,11 @@ class NotificationService {
         if (id != null) return id;
       }
     }
+    // Respaldo: el servidor a veces solo trae "ticket #N" en el título.
+    if (esTipoTicket(txt(raw['tipo']) ?? txt(raw['type']))) {
+      final m = RegExp(r'#(\d+)').firstMatch(txt(raw['titulo']) ?? txt(raw['title']) ?? '');
+      if (m != null) return m.group(1);
+    }
     return null;
   }
 

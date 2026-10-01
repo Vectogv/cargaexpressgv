@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../core/formato_dinero.dart';
 import '../shared/ui_compartida.dart';
+import '../../widgets/error_carga.dart';
 import '../cliente/viaje_detalle_screen.dart';
 
 class TripHistoryScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   bool _loading = true;
   bool _loadingMore = false;
+  bool _error = false;
   int _page = 1;
   bool _hasMore = true;
   static const int _pageSize = 10;
@@ -50,7 +52,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   }
 
   Future<void> _fetchHistory({bool isLoadMore = false}) async {
-    if (!isLoadMore) setState(() => _loading = true);
+    if (!isLoadMore) setState(() { _loading = true; _error = false; });
     try {
       final data = await ApiClient.instance.getTripHistory(
         page: _page,
@@ -64,7 +66,15 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      if (isLoadMore) {
+        _page--;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo cargar más historial')));
+      }
+      setState(() {
+        _loading = false;
+        _error = !isLoadMore && _history.isEmpty;
+      });
     }
   }
 
@@ -83,6 +93,8 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _error
+          ? ErrorCarga(titulo: 'No se pudo cargar el historial', onReintentar: _fetchHistory)
           : _history.isEmpty
           ? Center(
               child: Column(

@@ -9,6 +9,7 @@ import '../../services/api/payment_service.dart';
 import 'aviso_cuenta_pago.dart' show formatoDinero, numeroDe;
 import '../../core/formato_dinero.dart';
 import '../shared/ui_compartida.dart';
+import '../../widgets/error_carga.dart';
 
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -29,6 +30,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
   int _histPage = 0;
 
   bool _loading = true;
+  bool _error = false;
   bool _loadingMore = false;
   bool _uploading = false;
   bool _downloadingPdf = false;
@@ -62,10 +64,12 @@ class _EarningsScreenState extends State<EarningsScreen> {
           _histTotal = (historyData['total'] as num?)?.toInt() ?? _history.length;
           _histPage = 1;
           _loading = false;
+          _error = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      // Sin datos previos se muestra el error con "Reintentar" (no ceros falsos).
+      if (mounted) setState(() { _loading = false; _error = _earnings == null; });
     }
   }
 
@@ -188,6 +192,14 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
+                : _error
+                ? ErrorCarga(
+                    titulo: 'No se pudieron cargar tus ganancias',
+                    onReintentar: () {
+                      setState(() { _loading = true; _error = false; });
+                      _loadData();
+                    },
+                  )
                 : RefreshIndicator(
                     onRefresh: () async { setState(() => _loading = true); await _loadData(); },
                     child: SingleChildScrollView(

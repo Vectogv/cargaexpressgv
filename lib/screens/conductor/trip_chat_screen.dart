@@ -4,6 +4,7 @@ import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/socket_service_client.dart';
+import '../../widgets/error_carga.dart';
 import '../shared/ui_compartida.dart';
 
 class TripChatScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
   final ScrollController _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _loading = true;
+  bool _loadError = false;
   Map<String, dynamic>? _activeTrip;
   bool _canChat = false;
   bool _isTyping = false;
@@ -93,7 +95,18 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
         if (mounted) setState(() => _loading = false);
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() { _loading = false; _loadError = true; });
+    }
+  }
+
+  /// Reintento de la carga inicial (el sondeo y el socket ya quedaron armados
+  /// si el viaje se obtuvo).
+  void _reintentarCarga() {
+    setState(() { _loading = true; _loadError = false; });
+    if (_activeTrip != null && _pollTimer != null) {
+      _fetchMessages();
+    } else {
+      _initTrip();
     }
   }
 
@@ -113,7 +126,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
             _messages.add({
               'text': msgText,
               'isSent': false,
-              'time': _formatTime(data['timestamp']),
+              'time': _formatTime(data['createdAt'] ?? data['timestamp']),
               'id': msgId,
             });
           });
@@ -198,11 +211,13 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
         setState(() {
           _messages = [...msgs, ...localPending];
           _loading = false;
+          _loadError = false;
         });
       }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollDown());
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      // El sondeo de 4 s es silencioso: solo se muestra error en la carga inicial.
+      if (mounted && _loading) setState(() { _loading = false; _loadError = true; });
     }
   }
 
@@ -231,12 +246,14 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
         }
       });
       _saveCache();
-    } catch (_) {
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         for (final m in _messages) {
           if (m['id'] == msgId) m['status'] = 'failed';
         }
       });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
     }
   }
 
@@ -279,8 +296,10 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
     setState(() => msg['status'] = 'sending');
     ApiClient.instance.sendTripMessage(_tripId, text).then((_) {
       if (mounted) setState(() => msg['status'] = 'sent');
-    }).catchError((_) {
-      if (mounted) setState(() => msg['status'] = 'failed');
+    }).catchError((Object e) {
+      if (!mounted) return;
+      setState(() => msg['status'] = 'failed');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensajeDeError(e))));
     });
   }
 
@@ -313,7 +332,9 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : !_canChat
+                : _loadError
+                    ? ErrorCarga(titulo: 'No se pudo cargar el chat', onReintentar: _reintentarCarga)
+                    : !_canChat
                     ? _buildChatUnavailable()
                     : _messages.isEmpty
                         ? _buildEmptyChat()

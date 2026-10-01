@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/sos_service.dart';
+import '../../widgets/error_carga.dart' show mensajeDeError;
 
 class SOSAlertScreen extends StatefulWidget {
   final String? tripId;
@@ -47,7 +48,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _sending = false);
-        _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+        _snack('Error: ${mensajeDeError(e)}');
       }
     }
   }

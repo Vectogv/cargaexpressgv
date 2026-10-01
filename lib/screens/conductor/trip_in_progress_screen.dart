@@ -515,7 +515,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
               }
             } catch (e) {
               LoggerService.instance.error('trip_in_progress: disputeTrip error', e);
-              if (mounted) _snack('Error al abrir disputa.');
+              if (mounted) _snack(e is ApiException ? e.message : 'Error al abrir disputa.');
             }
           }
         });

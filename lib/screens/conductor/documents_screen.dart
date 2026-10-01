@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
+import '../../widgets/error_carga.dart';
 import '../../services/socket_service_client.dart';
 import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
 
@@ -17,6 +18,7 @@ class DocumentsScreen extends StatefulWidget {
 class _DocumentsScreenState extends State<DocumentsScreen> {
   Map<String, dynamic>? _conductor;
   bool _loading = true;
+  bool _error = false;
   String? _uploadingDoc;
   StreamSubscription<Map<String, dynamic>>? _verificationSub;
 
@@ -72,10 +74,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         setState(() {
           _conductor = data['conductor'] as Map<String, dynamic>?;
           _loading = false;
+          _error = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() { _loading = false; _error = _conductor == null; });
     }
   }
 
@@ -397,6 +400,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _error
+          ? ErrorCarga(
+              titulo: 'No se pudieron cargar tus documentos',
+              onReintentar: () {
+                setState(() { _loading = true; _error = false; });
+                _loadStatus();
+              },
+            )
           : Column(
               children: [
                 _buildStatusBanner(),

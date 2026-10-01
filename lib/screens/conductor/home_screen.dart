@@ -307,7 +307,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       CacheService.instance.clearActiveTrip();
     } catch (_) {
-      CacheService.instance.clearActiveTrip();
+      // Fallo de red: se conserva la caché y el último viaje conocido.
+      return;
     }
     if (mounted) {
       setState(() => _activeTrip = null);
