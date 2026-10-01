@@ -83,6 +83,16 @@ void main() {
     );
   });
 
+  testWidgets('yaCalificado del servidor oculta "Calificar viaje" aunque el teléfono no lo recuerde', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa((_) => jsonResp({...viaje, 'id': 't-nuevo', 'yaCalificado': true}), () async {
+      await tester.pumpWidget(const MaterialApp(home: ViajeDetalleScreen(tripId: 't-nuevo')));
+      await avanzar(tester);
+      expect(find.text('Calle 1'), findsOneWidget);
+      expect(find.text('Calificar viaje'), findsNothing);
+    });
+  });
+
   group('como conductor', () {
     Map<String, dynamic> cerradoHace(Duration d) => {
           ...viaje,

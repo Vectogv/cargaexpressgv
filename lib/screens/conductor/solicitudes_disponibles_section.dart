@@ -134,9 +134,11 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
                     style: ElevatedButton.styleFrom(
                       backgroundColor: ColoresApp.verde,
                       foregroundColor: Colors.white,
+                      elevation: 0,
+                      minimumSize: const Size.fromHeight(46),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Conectarme'),
+                    child: const Text('Conectarme', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   ),
           )
         else if (visibles.isEmpty)
@@ -231,29 +233,36 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
     required String detalle,
     Widget? accion,
   }) {
+    // El botón va debajo del texto: al lado dejaba la columna tan angosta que
+    // el título se partía ("Estás desc/onectado").
     return TarjetaBlanca(
       key: key,
       padding: const EdgeInsets.all(18),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: Icon(icono, color: color, size: 28),
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+                child: Icon(icono, color: color, size: 28),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
+                    const SizedBox(height: 4),
+                    Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario, height: 1.4)),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
-                const SizedBox(height: 4),
-                Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario, height: 1.4)),
-              ],
-            ),
-          ),
-          if (accion != null) ...[const SizedBox(width: 8), accion],
+          if (accion != null) ...[const SizedBox(height: 14), accion],
         ],
       ),
     );

@@ -34,7 +34,7 @@ void main() {
     });
   });
 
-  test('cuerpo de actualización: sin nombre vacío; vacíos opcionales -> null; sin email', () {
+  test('cuerpo de actualización: sin nombre ni teléfono vacíos; contacto vacío -> null; sin email', () {
     final body = cuerpoActualizacionPerfil(
       nombre: '  ',
       apellido: 'Pérez',
@@ -45,8 +45,8 @@ void main() {
     expect(body.containsKey('nombre'), isFalse);
     expect(body.containsKey('email'), isFalse);
     expect(body['apellido'], 'Pérez');
-    expect(body['telefono'], isNull);
-    expect(body.containsKey('telefono'), isTrue);
+    // El validador del servidor no admite telefono: null (daría 422).
+    expect(body.containsKey('telefono'), isFalse);
     expect(body['contactoEmergenciaNombre'], 'Luis');
     expect(body['contactoEmergenciaTelefono'], isNull);
   });

@@ -113,7 +113,7 @@ class _EnDisputaWrapperState extends State<EnDisputaWrapper> {
             } catch (e) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error al enviar: $e')),
+                  SnackBar(content: Text('No se pudo enviar. ${e.toString().replaceFirst("Exception: ", "")}')),
                 );
               }
             } finally {

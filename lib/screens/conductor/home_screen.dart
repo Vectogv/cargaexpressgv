@@ -795,7 +795,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(children: [
                   const Icon(Icons.person, color: Colors.white70, size: 18),
                   const SizedBox(width: 8),
-                  Text(nombre, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                  Expanded(child: Text(nombre, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700))),
                 ]),
                 const SizedBox(height: 16),
                 _buildRouteRow(Icons.circle_outlined, 'Salida', origen?['direccion'] as String? ?? ''),

@@ -41,11 +41,12 @@ String? validarTelefono(String valor, {bool opcional = false}) {
   return null;
 }
 
-/// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre y
-/// apellido vacíos no se envían (no se borran); teléfono y contacto de
-/// emergencia vacíos se envían como null (el backend los acepta nulos). El
-/// email no se envía: es el usuario de inicio de sesión y no se edita aquí.
-/// Lo usan el perfil del cliente y el del conductor.
+/// Cuerpo de PUT /api/users/profile (app/validators/profile.ts): nombre,
+/// apellido y teléfono vacíos no se envían (no se borran; el teléfono no
+/// admite null en el servidor); el contacto de emergencia vacío se envía como
+/// null (ahí sí se puede limpiar). El email no se envía: es el usuario de
+/// inicio de sesión y no se edita aquí. Lo usan el perfil del cliente y el del
+/// conductor.
 Map<String, dynamic> cuerpoActualizacionPerfil({
   required String nombre,
   required String apellido,
@@ -57,7 +58,7 @@ Map<String, dynamic> cuerpoActualizacionPerfil({
   return {
     if (nombre.trim().isNotEmpty) 'nombre': nombre.trim(),
     if (apellido.trim().isNotEmpty) 'apellido': apellido.trim(),
-    'telefono': opcional(telefono),
+    if (telefono.trim().isNotEmpty) 'telefono': telefono.trim(),
     'contactoEmergenciaNombre': opcional(contactoNombre),
     'contactoEmergenciaTelefono': opcional(contactoTelefono),
   };

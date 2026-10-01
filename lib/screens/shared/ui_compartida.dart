@@ -68,6 +68,11 @@ class TarjetaBlanca extends StatelessWidget {
   }
 }
 
+/// Texto de los botones con la letra del tema (ver [BotonPrincipal]).
+TextStyle _estiloTextoBoton(BuildContext context, double tamano) =>
+    (Theme.of(context).textTheme.labelLarge ?? const TextStyle())
+        .copyWith(fontSize: tamano, fontWeight: FontWeight.w600, letterSpacing: 0);
+
 /// Botón principal (relleno) de 52 px con icono opcional y estado de carga.
 class BotonPrincipal extends StatelessWidget {
   final String texto;
@@ -94,8 +99,14 @@ class BotonPrincipal extends StatelessWidget {
       foregroundColor: Colors.white,
       disabledBackgroundColor: color.withValues(alpha: 0.4),
       disabledForegroundColor: Colors.white,
+      // Material pone 24 dp a cada lado: en filas de 3 botones (360 dp) el
+      // texto salía cortado ("Sem…"). Siempre ocupan todo el ancho, así que
+      // el padding solo cuenta cuando el texto está justo.
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      // Un TextStyle suelto reemplaza el del tema entero (Material lo usa tal
+      // cual) y el botón salía en Roboto, no en la letra de la app.
+      textStyle: _estiloTextoBoton(context, 16),
     );
     final habilitado = cargando ? null : onPressed;
     final Widget contenido = cargando
@@ -135,8 +146,9 @@ class BotonSecundario extends StatelessWidget {
     final estilo = OutlinedButton.styleFrom(
       foregroundColor: color,
       side: BorderSide(color: color, width: 1.5),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      textStyle: _estiloTextoBoton(context, 15),
     );
     final habilitado = cargando ? null : onPressed;
     final Widget contenido = cargando

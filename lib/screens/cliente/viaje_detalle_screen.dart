@@ -47,7 +47,9 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     try {
       final data = await ApiClient.instance.getTripDetail(widget.tripId);
       final reportado = await ReportService.yaReportado(widget.tripId);
-      final calificado = await TripService.yaCalificado(widget.tripId);
+      // El servidor manda yaCalificado; el recuerdo local cubre el caso en que
+      // la respuesta no lo traiga.
+      final calificado = data['yaCalificado'] == true || await TripService.yaCalificado(widget.tripId);
       if (mounted) {
         setState(() {
           _trip = data;

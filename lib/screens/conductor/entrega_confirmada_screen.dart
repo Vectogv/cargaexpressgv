@@ -207,12 +207,16 @@ class EntregaConfirmadaScreen extends StatelessWidget {
                   color: labelColor,
                   fontWeight:
                       bold ? FontWeight.w700 : FontWeight.w400)),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 15,
-                  color: valueColor,
-                  fontWeight:
-                      bold ? FontWeight.w800 : FontWeight.w600)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    fontSize: 15,
+                    color: valueColor,
+                    fontWeight:
+                        bold ? FontWeight.w800 : FontWeight.w600)),
+          ),
         ],
       ),
     );

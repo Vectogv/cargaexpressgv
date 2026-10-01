@@ -280,9 +280,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _todayStat('${horasOnline.toStringAsFixed(1)}h', 'Online'),
+              _todayStat('${horasOnline.toStringAsFixed(1)}h', 'En línea'),
               _todayStat(_pesos(gananciasHoy), 'Bruto'),
-              _todayStat(calificacion > 0 ? calificacion.toStringAsFixed(1) : '--', 'Rating'),
+              _todayStat(calificacion > 0 ? calificacion.toStringAsFixed(1) : '--', 'Calificación'),
             ],
           ),
         ],

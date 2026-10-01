@@ -155,7 +155,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(fontSize: 14, color: Colors.black54)),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 12),
+          Flexible(child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
         ],
       ),
     );
