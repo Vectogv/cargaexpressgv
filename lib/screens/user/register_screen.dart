@@ -5,6 +5,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../home_by_role.dart';
 import 'auth_estilos.dart';
+import 'google_login.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -200,7 +201,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 26),
+                    // Google solo crea cuentas de cliente: el conductor necesita
+                    // cédula, placa y documentos del formulario.
+                    if (!_esConductor) ...[
+                      const SizedBox(height: 16),
+                      const BotonGoogleAuth(),
+                      const SeparadorAuth(texto: 'o con tu correo'),
+                    ] else
+                      const SizedBox(height: 26),
                     _TituloSeccion(paso: 2, titulo: 'Datos personales', total: _esConductor ? 3 : 2),
                     const SizedBox(height: 12),
                     TarjetaAuth(

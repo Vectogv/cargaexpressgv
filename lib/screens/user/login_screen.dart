@@ -4,6 +4,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
 import '../home_by_role.dart';
 import 'auth_estilos.dart';
+import 'google_login.dart';
 import 'recuperar_password_screen.dart';
 import 'register_screen.dart';
 
@@ -193,6 +194,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
+                  const SeparadorAuth(),
+                  const BotonGoogleAuth(),
                   const SizedBox(height: 16),
                   EnlaceAuth(
                     botonKey: const Key('link_registro'),

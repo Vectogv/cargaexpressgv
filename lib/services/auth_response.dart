@@ -10,6 +10,8 @@ class AuthResponse {
   /// usuario con rol cliente/conductor, no un valor de `rol`.
   final bool esModerador;
   final String? zonaModerador;
+  /// Solo en el login con Google: faltan teléfono o edad y la app los pide.
+  final bool perfilCompleto;
 
   AuthResponse({
     required this.token,
@@ -21,6 +23,7 @@ class AuthResponse {
     this.rol,
     this.esModerador = false,
     this.zonaModerador,
+    this.perfilCompleto = true,
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
@@ -34,6 +37,7 @@ class AuthResponse {
       rol: json['rol'] as String?,
       esModerador: json['esModerador'] == true,
       zonaModerador: json['zonaModerador'] as String?,
+      perfilCompleto: json['perfilCompleto'] != false,
     );
   }
-}
+}

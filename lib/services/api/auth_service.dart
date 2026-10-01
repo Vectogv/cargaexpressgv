@@ -15,6 +15,13 @@ class AuthService {
     return AuthResponse.fromJson(data);
   }
 
+  /// Entrar con Google: el servidor valida el idToken y crea un cliente si el
+  /// correo es nuevo.
+  static Future<AuthResponse> google(String idToken) async {
+    final data = await HttpClient.post('/api/auth/google', body: {'idToken': idToken});
+    return AuthResponse.fromJson(data);
+  }
+
   static Future<AuthResponse> refreshToken(String refreshToken) async {
     final data = await HttpClient.post('/api/auth/refresh-token', body: {'refreshToken': refreshToken});
     return AuthResponse.fromJson(data);

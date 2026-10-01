@@ -74,6 +74,14 @@ class ApiClient {
     return auth;
   }
 
+  Future<AuthResponse> loginGoogle(String idToken) async {
+    final auth = await AuthService.google(idToken);
+    await _saveTokens(auth.token, auth.refreshToken);
+    await saveProfile(auth);
+    unawaited(MapConfig.ensureLoaded());
+    return auth;
+  }
+
   Future<AuthResponse> register(Map<String, dynamic> body) async {
     final auth = await AuthService.register(body);
     await _saveTokens(auth.token, auth.refreshToken);
