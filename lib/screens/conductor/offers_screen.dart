@@ -184,7 +184,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       children: [
         Icon(icono, size: 64, color: Colors.grey.shade300),
         const SizedBox(height: 12),
-        Text(titulo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.black45)),
+        Text(titulo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: Colors.black45)),
         const SizedBox(height: 6),
         Text(detalle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.black38)),
         if (accion != null) ...[const SizedBox(height: 16), Center(child: accion)],
@@ -228,33 +228,35 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       child: TarjetaBlanca(
         radio: 14,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Flexible(child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFFFF8F00).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: ColoresApp.naranja.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.timer_outlined, size: 14, color: Color(0xFFFF8F00)),
+                const Icon(Icons.timer_outlined, size: 14, color: ColoresApp.naranja),
                 const SizedBox(width: 4),
-                Text(
+                Flexible(child: Text(
                   restante != null ? 'Vence en ${formatoCuentaRegresiva(restante)}' : 'Esperando al cliente',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFFFF8F00), fontWeight: FontWeight.w700),
-                ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: ColoresApp.naranja, fontWeight: FontWeight.w700),
+                )),
               ]),
-            ),
-            const Spacer(),
-            Text(_dinero(o.monto), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            )),
+            const SizedBox(width: 8),
+            Text(_dinero(o.monto), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
           ]),
           const SizedBox(height: 10),
           Row(children: [
             const Icon(Icons.trip_origin, size: 16, color: ColoresApp.verde),
             const SizedBox(width: 8),
-            Expanded(child: Text(o.origen, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+            Expanded(child: Text(o.origen, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
           ]),
           const SizedBox(height: 6),
           Row(children: [
             const Icon(Icons.location_on, size: 16, color: Colors.red),
             const SizedBox(width: 8),
-            Expanded(child: Text(o.destino, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario))),
+            Expanded(child: Text(o.destino, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario))),
           ]),
         ]),
       ),
@@ -272,7 +274,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           children: [
             Icon(Icons.local_shipping, size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 12),
-            const Text('Sin viaje activo', style: TextStyle(fontSize: 16, color: Colors.black45)),
+            const Text('Sin viaje activo', style: TextStyle(fontSize: 15, color: Colors.black45)),
             const SizedBox(height: 6),
             const Text('Tus ofertas aceptadas aparecerán aquí', style: TextStyle(fontSize: 13, color: Colors.black38)),
           ],
@@ -333,8 +335,8 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     Color c;
     String label;
     switch (estado) {
-      case TripStatus.aceptado: c = const Color(0xFFFF8F00); label = 'Aceptado — Dirígete al origen'; break;
-      case TripStatus.enCamino: c = const Color(0xFFFF8F00); label = 'En camino al origen'; break;
+      case TripStatus.aceptado: c = ColoresApp.naranja; label = 'Aceptado — Dirígete al origen'; break;
+      case TripStatus.enCamino: c = ColoresApp.naranja; label = 'En camino al origen'; break;
       case TripStatus.llegada: c = ColoresApp.verde; label = 'Llegada al origen'; break;
       case TripStatus.enCurso: c = ColoresApp.azul; label = 'En curso — Realizando entrega'; break;
       case TripStatus.entregado: c = ColoresApp.verde; label = 'Entregado'; break;
@@ -364,7 +366,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
           children: [
             Icon(Icons.history, size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 12),
-            const Text('Sin viajes anteriores', style: TextStyle(fontSize: 16, color: Colors.black45)),
+            const Text('Sin viajes anteriores', style: TextStyle(fontSize: 15, color: Colors.black45)),
           ],
         ),
       );
@@ -402,8 +404,8 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     Color c;
     String label;
     switch (estado) {
-      case TripStatus.aceptado: c = const Color(0xFFFF8F00); label = 'Aceptado'; break;
-      case TripStatus.enCamino: c = const Color(0xFFFF8F00); label = 'En camino'; break;
+      case TripStatus.aceptado: c = ColoresApp.naranja; label = 'Aceptado'; break;
+      case TripStatus.enCamino: c = ColoresApp.naranja; label = 'En camino'; break;
       case TripStatus.llegada: c = ColoresApp.verde; label = 'Llegada'; break;
       case TripStatus.enCurso: c = ColoresApp.azul; label = 'En curso'; break;
       case TripStatus.entregado: c = ColoresApp.verde; label = 'Entregado'; break;
@@ -417,7 +419,7 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-      child: Text(label, style: TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w600)),
+      child: Text(label, style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w600)),
     );
   }
 }

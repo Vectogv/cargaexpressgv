@@ -75,7 +75,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(titulo, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 14),
             if (conTitulo) ...[
               TextField(key: const Key('grupo_campo_titulo'), controller: t, maxLength: 120, decoration: decoracionCampoAuth(label: 'Asunto', icono: Icons.subject)),
@@ -126,7 +126,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
         builder: (_) => ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           children: [
-            const Text('Mis inquietudes a Gerencia', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text('Mis inquietudes a Gerencia', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 10),
             if (lista.isEmpty) const Text('Aún no has enviado inquietudes.', style: TextStyle(color: ColoresApp.textoSecundario)),
             for (final i in lista.whereType<Map<String, dynamic>>())
@@ -224,7 +224,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
           Row(children: [
             const Icon(Icons.groups_rounded, color: ColoresApp.azul),
             const SizedBox(width: 8),
-            Expanded(child: Text('Conductores de $zona', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro))),
+            Expanded(child: Text('Conductores de $zona', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro))),
             _Etiqueta(key: const Key('grupo_rol'), texto: _esLider ? 'Líder' : 'Conductor', color: _esLider ? ColoresApp.ambar : ColoresApp.azul),
           ]),
           const Divider(height: 24, color: ColoresApp.divisor),
@@ -257,7 +257,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Herramientas de líder', style: TextStyle(fontWeight: FontWeight.w800, color: ColoresApp.naranjaAviso)),
+            const Text('Herramientas de líder', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.naranjaAviso)),
             const SizedBox(height: 10),
             BotonSecundario(texto: 'Escribir a Gerencia', icono: Icons.send_outlined, onPressed: _enviarInquietud),
             const SizedBox(height: 8),
@@ -271,7 +271,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
         child: Row(children: [
           Icon(icono, size: 18, color: ColoresApp.textoSecundario),
           const SizedBox(width: 6),
-          Text(texto, style: const TextStyle(fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro)),
+          Expanded(child: Text(texto, style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro))),
         ]),
       );
 
@@ -289,7 +289,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
             const SizedBox(height: 4),
             Text('${c['contenido'] ?? ''}', style: const TextStyle(height: 1.35)),
             const SizedBox(height: 6),
-            Text(tiempoRelativoTicket(DateTime.tryParse('${c['createdAt']}')?.toLocal()), style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+            Text(tiempoRelativoTicket(DateTime.tryParse('${c['createdAt']}')?.toLocal()), style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
           ]),
         ),
       );
@@ -307,7 +307,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
               child: Text('${autor?['nombre'] ?? 'Grupo'} ${autor?['apellido'] ?? ''}'.trim(),
                   style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
             ),
-            Text(tiempoRelativoTicket(DateTime.tryParse('${a['createdAt']}')?.toLocal()), style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+            Text(tiempoRelativoTicket(DateTime.tryParse('${a['createdAt']}')?.toLocal()), style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
             if (_esLider)
               PopupMenuButton<String>(
                 key: Key('grupo_menu_aviso_${a['id']}'),
@@ -401,7 +401,7 @@ class _GrupoConductoresScreenState extends State<GrupoConductoresScreen> {
             Text('$nombre · ${tiempoRelativoTicket(DateTime.tryParse('${c['createdAt']}')?.toLocal())}',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ColoresApp.textoSecundario)),
             const SizedBox(height: 2),
-            Text('${c['contenido'] ?? ''}', style: const TextStyle(fontSize: 14, height: 1.3)),
+            Text('${c['contenido'] ?? ''}', style: const TextStyle(fontSize: 13, height: 1.3)),
           ]),
         ),
         if (c['puedeBorrar'] == true)

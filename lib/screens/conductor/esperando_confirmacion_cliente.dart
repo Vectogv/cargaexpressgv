@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 
 /// Estado del conductor tras solicitar el cierre (`esperando_confirmacion` /
 /// `pendiente_confirmacion`). Sólo el cliente puede confirmar la entrega
@@ -25,39 +26,30 @@ class EsperandoConfirmacionCliente extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1565C0).withValues(alpha: 0.06),
+        color: ColoresApp.azul.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1565C0).withValues(alpha: 0.25)),
+        border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(children: [
-            Icon(Icons.hourglass_top_rounded, size: 20, color: Color(0xFF1565C0)),
+            Icon(Icons.hourglass_top_rounded, size: 20, color: ColoresApp.azul),
             SizedBox(width: 8),
             Expanded(
               child: Text(
                 'Esperando que el cliente confirme la entrega',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E)),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro),
               ),
             ),
           ]),
           const SizedBox(height: 6),
           Text(
             'Si el cliente no confirma en $minutos, un moderador revisará el servicio.',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF757575), height: 1.4),
+            style: const TextStyle(fontSize: 12, color: ColoresApp.grisClaro, height: 1.4),
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: cargando ? null : onActualizar,
-              icon: cargando
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh, size: 18),
-              label: const Text('Actualizar'),
-            ),
-          ),
+          BotonSecundario(texto: 'Actualizar', icono: Icons.refresh, cargando: cargando, onPressed: onActualizar),
         ],
       ),
     );

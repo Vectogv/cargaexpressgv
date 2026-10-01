@@ -68,7 +68,7 @@ class DisputaEnRevisionScreen extends StatelessWidget {
                   'Te notificaremos cuando haya\nuna resolución.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: ColoresApp.textoSecundario,
                     height: 1.6,
                   ),
@@ -88,38 +88,11 @@ class DisputaEnRevisionScreen extends StatelessWidget {
               const SizedBox(height: 16),
               _TripInfoRow(label: 'Origen', value: origen),
               const SizedBox(height: 4),
-              const Divider(color: Color(0xFFF2F2F2), height: 1),
+              const Divider(color: ColoresApp.fondo, height: 1),
               const SizedBox(height: 12),
               _TripInfoRow(label: 'Destino', value: destino),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton(
-                  onPressed: onVerDetalles,
-                  style: ButtonStyle(
-                    foregroundColor: WidgetStateProperty.resolveWith(
-                      (states) => states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
-                    ),
-                    side: WidgetStateProperty.resolveWith(
-                      (states) => BorderSide(
-                        color: states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
-                        width: 1.5,
-                      ),
-                    ),
-                    shape: WidgetStateProperty.all(
-                      RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                  child: const Text(
-                    'Ver detalles',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
+              BotonSecundario(texto: 'Ver detalles', onPressed: onVerDetalles),
             ],
           ),
         ),
@@ -144,8 +117,8 @@ class _TripInfoRow extends StatelessWidget {
           child: Text(
             label,
             style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF888888),
+              fontSize: 13,
+              color: ColoresApp.chevron,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -155,8 +128,8 @@ class _TripInfoRow extends StatelessWidget {
           child: Text(
             value,
             style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF111111),
+              fontSize: 13,
+              color: ColoresApp.placaTexto,
               fontWeight: FontWeight.w500,
             ),
           ),

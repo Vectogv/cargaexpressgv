@@ -28,7 +28,7 @@ class EnDisputaScreen extends StatelessWidget {
               const Text(
                 'En disputa',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: ColoresApp.textoOscuro,
                 ),
@@ -54,58 +54,9 @@ class EnDisputaScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: onEnviarMiVersion,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ColoresApp.azul,
-                    disabledBackgroundColor: ColoresApp.divisor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    'Enviar mi versión',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
+              BotonPrincipal(texto: 'Enviar mi versión', onPressed: onEnviarMiVersion),
               const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-              child: OutlinedButton(
-                onPressed: onVerDetalles,
-                style: ButtonStyle(
-                  foregroundColor: WidgetStateProperty.resolveWith(
-                    (states) => states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
-                  ),
-                  side: WidgetStateProperty.resolveWith(
-                    (states) => BorderSide(
-                      color: states.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
-                      width: 1.5,
-                    ),
-                  ),
-                  shape: WidgetStateProperty.all(
-                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                  child: const Text(
-                    'Ver detalles de la disputa',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
+              BotonSecundario(texto: 'Ver detalles de la disputa', onPressed: onVerDetalles),
             ],
           ),
         ),
@@ -121,7 +72,7 @@ class _DisputeIcon extends StatelessWidget {
       width: 80,
       height: 80,
       decoration: const BoxDecoration(
-        color: Color(0xFFD32F2F),
+        color: ColoresApp.rojo,
         shape: BoxShape.circle,
       ),
       child: const Center(

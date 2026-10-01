@@ -104,7 +104,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                   const SizedBox(height: 12),
                   const Text(
                     'Sin viajes anteriores',
-                    style: TextStyle(fontSize: 16, color: Colors.black45),
+                    style: TextStyle(fontSize: 15, color: Colors.black45),
                   ),
                 ],
               ),
@@ -174,10 +174,14 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
               const SizedBox(height: 8),
               Text(
                 origen?['direccion'] as String? ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13),
               ),
               Text(
                 destino?['direccion'] as String? ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 13,
                   color: ColoresApp.textoSecundario,
@@ -186,19 +190,22 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Text(
-                    _formatDate(t['createdAt'] as String?),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: ColoresApp.textoSecundario,
+                  Expanded(
+                    child: Text(
+                      _formatDate(t['createdAt'] as String?),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: ColoresApp.textoSecundario,
+                      ),
                     ),
                   ),
-                  const Spacer(),
                   if (estado == 'finalizado')
                     Text(
                       'Neto: ${formatearPesos(precio - (precio * 0.1 * 100).round() / 100)}',
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: ColoresApp.verde,
                       ),
@@ -251,7 +258,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w600),
+        style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w600),
       ),
     );
   }

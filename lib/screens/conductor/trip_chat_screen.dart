@@ -34,7 +34,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
   StreamSubscription<bool>? _connectionSub;
   StreamSubscription<Map<String, dynamic>>? _tripStateSub;
 
-  static const Color _bubbleReceived = Color(0xFFFFFFFF);
+  static const Color _bubbleReceived = Colors.white;
 
   @override
   void initState() {
@@ -362,7 +362,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
         children: [
           Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 12),
-          const Text('Chat no disponible', style: TextStyle(fontSize: 16, color: Colors.black45)),
+          const Text('Chat no disponible', style: TextStyle(fontSize: 15, color: Colors.black45)),
           const SizedBox(height: 6),
           const Text('El chat está disponible solo durante viajes en curso', style: TextStyle(fontSize: 13, color: Colors.black38)),
         ],
@@ -409,8 +409,8 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
           if (_canChat)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFF4CAF50).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-              child: const Text('En curso', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+              decoration: BoxDecoration(color: ColoresApp.verde.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+              child: const Text('En curso', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ColoresApp.verde)),
             ),
         ],
       ),
@@ -435,7 +435,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
               backgroundColor: ColoresApp.azulOscuro.withValues(alpha: 0.2),
               child: Text(
                 _initials(_activeTrip?['cliente']?['nombre'] as String? ?? '?'),
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(width: 8),
@@ -458,7 +458,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                 ),
                 child: Text(
                   msg['text'] as String? ?? msg['mensaje'] as String? ?? '',
-                  style: TextStyle(color: isSent ? Colors.white : ColoresApp.textoOscuro, fontSize: 14, height: 1.4),
+                  style: TextStyle(color: isSent ? Colors.white : ColoresApp.textoOscuro, fontSize: 13, height: 1.4),
                 ),
               ),
               const SizedBox(height: 4),
@@ -466,7 +466,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Los del backend traen `createdAt`; los locales, `time`.
-                  Text(msg['time'] as String? ?? _formatTime(msg['createdAt']), style: TextStyle(fontSize: 10, color: ColoresApp.textoSecundario)),
+                  Text(msg['time'] as String? ?? _formatTime(msg['createdAt']), style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
                   const SizedBox(width: 4),
                   if (isSent)
                     Icon(
@@ -477,8 +477,8 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                       size: 14,
                       color: status == 'failed' ? Colors.red :
                              status == 'sending' ? ColoresApp.textoSecundario :
-                             status == 'read' ? const Color(0xFF1A3C6E) :
-                             const Color(0xFF1A3C6E).withValues(alpha: 0.5),
+                             status == 'read' ? ColoresApp.azulOscuro :
+                             ColoresApp.azulOscuro.withValues(alpha: 0.5),
                     ),
                 ],
               ),
@@ -501,7 +501,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
             backgroundColor: ColoresApp.azulOscuro.withValues(alpha: 0.2),
             child: Text(
               _initials(_activeTrip?['cliente']?['nombre'] as String? ?? '?'),
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(width: 8),
@@ -543,11 +543,11 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
                 controller: _messageController,
                 decoration: InputDecoration(
                   hintText: 'Escribe un mensaje...',
-                  hintStyle: TextStyle(color: ColoresApp.textoSecundario, fontSize: 14),
+                  hintStyle: TextStyle(color: ColoresApp.textoSecundario, fontSize: 13),
                   isDense: true,
                   border: InputBorder.none,
                 ),
-                style: const TextStyle(fontSize: 14),
+                style: const TextStyle(fontSize: 13),
                 minLines: 1,
                 maxLines: 4,
                 textCapitalization: TextCapitalization.sentences,
@@ -564,7 +564,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
             onTap: _sendMessage,
             child: Container(
               width: 42, height: 42,
-              decoration: const BoxDecoration(color: Color(0xFF1A3C6E), shape: BoxShape.circle),
+              decoration: const BoxDecoration(color: ColoresApp.azulOscuro, shape: BoxShape.circle),
               child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),

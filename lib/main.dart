@@ -22,6 +22,7 @@ import 'services/session_events.dart';
 import 'services/driver_location_service.dart';
 import 'core/navegador_global.dart';
 import 'screens/user/auth_screen.dart';
+import 'screens/user/intro_screen.dart';
 import 'screens/user/google_login.dart' show CompletarPerfilScreen;
 import 'screens/shared/cuenta_no_activa_dialog.dart' show mostrarCuentaSuspendidaDialog;
 import 'screens/shared/tickets/tickets_navegacion.dart' show abrirTicketSoporteGlobal;
@@ -350,7 +351,10 @@ class MainApp extends StatelessWidget {
       theme: temaApp(),
       home: ApiClient.instance.token != null
           ? _homeScreenByRole()
-          : const AuthScreen(),
+          // La intro solo la primera vez, antes de cualquier sesión.
+          : ApiClient.instance.introVista
+              ? const AuthScreen()
+              : const IntroScreen(),
     );
   }
 }

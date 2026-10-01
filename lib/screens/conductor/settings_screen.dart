@@ -113,19 +113,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSwitchItem(String label, bool value, ValueChanged<bool> onChanged) {
     return SwitchListTile(
-      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      title: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
       value: value,
       onChanged: onChanged,
-      activeTrackColor: const Color(0xFF1565C0).withValues(alpha: 0.5),
-      activeThumbColor: const Color(0xFF1565C0),
+      activeTrackColor: ColoresApp.azul.withValues(alpha: 0.5),
+      activeThumbColor: ColoresApp.azul,
       dense: true,
     );
   }
 
   Widget _buildInfoItem(String label, String value) {
     return ListTile(
-      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-      trailing: Text(value, style: TextStyle(fontSize: 14, color: ColoresApp.textoSecundario)),
+      title: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+      trailing: Text(value, style: TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
       dense: true,
     );
   }
@@ -133,7 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildLinkItem(IconData icon, String label, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, size: 22, color: ColoresApp.textoSecundario),
-      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      title: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: onTap,
       dense: true,

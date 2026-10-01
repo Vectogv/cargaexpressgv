@@ -45,7 +45,7 @@ class DisputaIniciadaScreen extends StatelessWidget {
                       'El cliente ha reportado un problema\ncon la entrega.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         color: ColoresApp.textoSecundario,
                         height: 1.5,
                       ),
@@ -77,35 +77,13 @@ class DisputaIniciadaScreen extends StatelessWidget {
                       child: Text(
                         motivo,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           color: ColoresApp.textoOscuro,
                         ),
                       ),
                     ),
                     const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: onVerDetalles,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ColoresApp.azul,
-                          disabledBackgroundColor: ColoresApp.divisor,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: const Text(
-                          'Ver detalles',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
+                    BotonPrincipal(texto: 'Ver detalles', onPressed: onVerDetalles),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -133,9 +111,9 @@ class _WarningIcon extends StatelessWidget {
             child: Text(
               '!',
               style: TextStyle(
-                fontSize: 28,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFFD32F2F),
+                color: ColoresApp.rojo,
               ),
             ),
           ),
@@ -146,7 +124,7 @@ class _WarningIcon extends StatelessWidget {
 }
 
 class _TrianglePainter extends CustomPainter {
-  static const Color _fill = Color(0xFFFFEBEE);
+  static const Color _fill = ColoresApp.rojoFondo;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -189,7 +167,7 @@ class _BottomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+        border: Border(top: BorderSide(color: ColoresApp.divisor)),
         color: Colors.white,
       ),
       padding: const EdgeInsets.only(bottom: 8),
@@ -233,13 +211,13 @@ class _NavBarItem extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 24, color: disabled ? const Color(0xFFD1D5DB) : const Color(0xFF555555)),
+              Icon(icon, size: 24, color: disabled ? ColoresApp.bordeCampo : ColoresApp.gris),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 11,
-                  color: disabled ? const Color(0xFFD1D5DB) : const Color(0xFF555555),
+                  fontSize: 12,
+                  color: disabled ? ColoresApp.bordeCampo : ColoresApp.gris,
                   fontWeight: FontWeight.w500,
                 ),
               ),

@@ -32,6 +32,7 @@ class ApiClient {
   static const String _esModeradorKey = 'auth_es_moderador';
   static const String _zonaModeradorKey = 'auth_zona_moderador';
   static const String _perfilCompletoKey = 'auth_perfil_completo';
+  static const String introVistaKey = 'intro_vista';
 
   String? _token;
   String? _refreshToken;
@@ -43,7 +44,10 @@ class ApiClient {
   bool _esModerador = false;
   String? _zonaModerador;
   bool _perfilCompleto = true;
+  bool _introVista = false;
 
+  /// La animación de entrada ya se vio (o ya hubo una sesión): no se repite.
+  bool get introVista => _introVista;
   String? get token => _token;
   /// false tras entrar con Google sin teléfono/edad: la app los pide antes del
   /// inicio, también si se cerró la app en esa pantalla.
@@ -70,6 +74,14 @@ class ApiClient {
     _esModerador = prefs.getBool(_esModeradorKey) ?? false;
     _zonaModerador = prefs.getString(_zonaModeradorKey);
     _perfilCompleto = prefs.getBool(_perfilCompletoKey) ?? true;
+    _introVista = prefs.getBool(introVistaKey) ?? false;
+  }
+
+  Future<void> marcarIntroVista() async {
+    if (_introVista) return;
+    _introVista = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(introVistaKey, true);
   }
 
   Future<void> marcarPerfilCompleto() async {
@@ -177,6 +189,8 @@ class ApiClient {
     if (refreshToken != null) {
       await prefs.setString(_refreshTokenKey, refreshToken);
     }
+    // Login, registro o Google con éxito: la intro ya no hace falta.
+    await marcarIntroVista();
     // Conectar el socket apenas exista sesión (cubre login/registro en frío,
     // donde init() se ejecutó sin token y nunca conectó).
     SocketServiceClient.instance.forceReconnect();

@@ -228,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Icon(Icons.error_outline, size: 64, color: Colors.grey.shade300),
                         const SizedBox(height: 12),
-                        const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 16, color: Colors.black54)),
+                        const Text('No pudimos cargar tu perfil', style: TextStyle(fontSize: 15, color: Colors.black54)),
                         const SizedBox(height: 6),
                         Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
                         const SizedBox(height: 16),
@@ -287,7 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   radius: 44,
                   backgroundColor: ColoresApp.azulOscuro,
                   foregroundColor: Colors.white,
-                  fontSize: 28,
+                  fontSize: 22,
                   border: Border.all(color: ColoresApp.borde, width: 2),
                 ),
                 Positioned(
@@ -310,7 +310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             nombre.isNotEmpty ? nombre : 'Sin nombre',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro),
           ),
           const SizedBox(height: 4),
           Text(email, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
@@ -355,9 +355,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(valor, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color, fontFeatures: cifrasTabulares)),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(valor, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: color, fontFeatures: cifrasTabulares))),
           const SizedBox(height: 2),
-          Text(etiqueta, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
+          Text(etiqueta, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
         ],
       ),
     );

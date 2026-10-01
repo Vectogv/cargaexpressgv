@@ -181,10 +181,10 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         centerTitle: true,
         title: const Text(
           'Nueva solicitud',
-          style: TextStyle(color: Color(0xFF111827), fontSize: 17, fontWeight: FontWeight.w700),
+          style: TextStyle(color: ColoresApp.textoOscuro, fontSize: 17, fontWeight: FontWeight.w700),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF111827), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: ColoresApp.textoOscuro, size: 20),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -223,9 +223,9 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        color: ColoresApp.verdeFondo,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        border: Border.all(color: ColoresApp.borde),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,16 +234,20 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
             children: [
               const Icon(Icons.person_outline_rounded, size: 15, color: ColoresApp.textoSecundario),
               const SizedBox(width: 6),
-              const Text(
+              const Flexible(child: Text(
                 'Precio propuesto por el cliente',
                 style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
-              ),
+              )),
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            precio,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: ColoresApp.verde),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              precio,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: ColoresApp.verde),
+            ),
           ),
         ],
       ),
@@ -302,7 +306,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
               const SizedBox(height: 2),
               Text(
                 value,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: ColoresApp.textoOscuro),
               ),
             ],
           ),
@@ -319,7 +323,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         children: [
           Text(label, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF111827))),
+          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: ColoresApp.textoOscuro)),
         ],
       ),
     );
@@ -332,9 +336,9 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
+        color: ColoresApp.naranjaFondo,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFED7AA)),
+        border: Border.all(color: ColoresApp.naranjaBorde),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -342,7 +346,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           const Expanded(
             child: Text(
               'La solicitud expirará en',
-              style: TextStyle(fontSize: 14, color: Color(0xFF92400E)),
+              style: TextStyle(fontSize: 13, color: ColoresApp.naranjaAviso),
             ),
           ),
           const SizedBox(width: 8),
@@ -350,7 +354,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
             _timerLabel,
             style: const TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: ColoresApp.naranja,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
@@ -386,7 +390,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
             _showOfferSheet();
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2563EB),
+            backgroundColor: ColoresApp.azul,
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 52),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -405,7 +409,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
                     ],
                     Text(
                       _placa == null ? 'Cargando...' : 'Hacer oferta',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),

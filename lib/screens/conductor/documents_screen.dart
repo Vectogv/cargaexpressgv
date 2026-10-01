@@ -150,7 +150,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('¿Es correcto este documento?', style: TextStyle(fontSize: 14)),
+              const Text('¿Es correcto este documento?', style: TextStyle(fontSize: 13)),
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -165,7 +165,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, backgroundColor: const Color(0xFF1A3C6E)),
+              style: ElevatedButton.styleFrom(foregroundColor: Colors.white, backgroundColor: ColoresApp.azulOscuro),
               child: const Text('Sí, subir', style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -256,7 +256,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   width: double.infinity,
                   placeholder: Container(
                     height: 300,
-                    color: const Color(0xFFF2F2F7),
+                    color: ColoresApp.fondo,
                     child: const Center(child: Text('Imagen no disponible', style: TextStyle(color: Colors.black45))),
                   ),
                 ),
@@ -387,10 +387,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF1A1A2E)),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: ColoresApp.textoOscuro),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Documentos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+        title: const Text('Documentos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -432,7 +432,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           children: [
             Icon(Icons.verified, color: ColoresApp.verde, size: 20),
             const SizedBox(width: 8),
-            const Text('Documentos aprobados', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
+            const Expanded(child: Text('Documentos aprobados', style: TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.verdeOscuro))),
           ],
         ),
       );
@@ -490,14 +490,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(doc.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(doc.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   if (vence != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         _vencida(vence) ? 'Vencido el ${_fechaLegible(vence)}' : 'Vence el ${_fechaLegible(vence)}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: _vencida(vence) ? ColoresApp.rojo : ColoresApp.verde,
                         ),
@@ -506,7 +506,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   if (estado == 'rechazado' && nota != null && nota.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(nota, style: TextStyle(fontSize: 11, color: ColoresApp.rojo.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      child: Text(nota, style: TextStyle(fontSize: 12, color: ColoresApp.rojo.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ),
                   if (estado != 'no_subido') ...[
                     const SizedBox(height: 6),
@@ -521,7 +521,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                           placeholder: Container(
                             height: 56,
                             width: 80,
-                            color: const Color(0xFFF2F2F7),
+                            color: ColoresApp.fondo,
                             child: const Center(child: Icon(Icons.image, size: 24, color: Colors.black26)),
                           ),
                         ),

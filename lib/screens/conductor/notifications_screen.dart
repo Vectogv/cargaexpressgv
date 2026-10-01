@@ -77,39 +77,39 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Color _colorForTipo(String? tipo) {
     switch (tipo) {
-      case 'nuevo_viaje': return const Color(0xFF1565C0);
-      case 'viaje_aceptado': return const Color(0xFFFF8F00);
-      case 'viaje_completado': return const Color(0xFF2E7D32);
+      case 'nuevo_viaje': return ColoresApp.azul;
+      case 'viaje_aceptado': return ColoresApp.naranja;
+      case 'viaje_completado': return ColoresApp.verdeOscuro;
       case 'viaje_cancelado': return Colors.red;
       case 'pago_recibido': return const Color(0xFF6A1B9A);
       case 'mensaje': return const Color(0xFF00897B);
-      case 'documentacion': return const Color(0xFFE65100);
-      case 'disputa_cierre': return const Color(0xFFD97706);
-      case 'suspension_por_pago': return const Color(0xFFC62828);
-      case 'busqueda_sin_conductor': return const Color(0xFFDC2626);
+      case 'documentacion': return ColoresApp.naranja;
+      case 'disputa_cierre': return ColoresApp.naranja;
+      case 'suspension_por_pago': return ColoresApp.rojo;
+      case 'busqueda_sin_conductor': return ColoresApp.rojo;
       case 'ticket_mensaje':
       case 'ticket_estado':
-        return const Color(0xFF2563EB);
-      default: return const Color(0xFF757575);
+        return ColoresApp.azul;
+      default: return ColoresApp.grisClaro;
     }
   }
 
   Color _bgForTipo(String? tipo) {
     switch (tipo) {
-      case 'nuevo_viaje': return const Color(0xFFE3F2FD);
-      case 'viaje_aceptado': return const Color(0xFFFFF8E1);
-      case 'viaje_completado': return const Color(0xFFE8F5E9);
-      case 'viaje_cancelado': return const Color(0xFFFFEBEE);
+      case 'nuevo_viaje': return ColoresApp.azulTenue;
+      case 'viaje_aceptado': return ColoresApp.naranjaFondo;
+      case 'viaje_completado': return ColoresApp.verdeFondo;
+      case 'viaje_cancelado': return ColoresApp.rojoFondo;
       case 'pago_recibido': return const Color(0xFFF3E5F5);
       case 'mensaje': return const Color(0xFFE0F2F1);
-      case 'documentacion': return const Color(0xFFFBE9E7);
-      case 'disputa_cierre': return const Color(0xFFFEF3C7);
-      case 'suspension_por_pago': return const Color(0xFFFFEBEE);
-      case 'busqueda_sin_conductor': return const Color(0xFFFFEBEE);
+      case 'documentacion': return ColoresApp.rojoFondo;
+      case 'disputa_cierre': return ColoresApp.naranjaFondo;
+      case 'suspension_por_pago': return ColoresApp.rojoFondo;
+      case 'busqueda_sin_conductor': return ColoresApp.rojoFondo;
       case 'ticket_mensaje':
       case 'ticket_estado':
-        return const Color(0xFFEFF6FF);
-      default: return const Color(0xFFF5F5F5);
+        return ColoresApp.azulTenue;
+      default: return ColoresApp.fondo;
     }
   }
 
@@ -144,7 +144,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             Text(
               _error ? 'No pudimos cargar tus notificaciones' : 'Sin notificaciones',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.black54),
+              style: const TextStyle(fontSize: 15, color: Colors.black54),
             ),
             if (_error) ...[
               const SizedBox(height: 12),
@@ -230,7 +230,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Text(
                     notif['titulo'] as String? ?? '',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: leido ? FontWeight.w500 : FontWeight.w700,
                       color: ColoresApp.textoOscuro,
                       height: 1.4,
@@ -241,7 +241,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     Text(notif['mensaje'] as String, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ],
                   const SizedBox(height: 4),
-                  Text(_formatDate(notif['createdAt'] as String?), style: TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+                  Text(_formatDate(notif['createdAt'] as String?), style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
                 ],
               ),
             ),
@@ -250,7 +250,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 width: 9,
                 height: 9,
                 margin: const EdgeInsets.only(top: 4),
-                decoration: const BoxDecoration(color: Color(0xFF1565C0), shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: ColoresApp.azul, shape: BoxShape.circle),
               ),
           ],
         ),

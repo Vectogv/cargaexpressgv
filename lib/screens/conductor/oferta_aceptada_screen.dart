@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 import 'package:latlong2/latlong.dart';
 import '../../contracts/trip_status.dart';
 import '../../models/trip.dart';
@@ -173,7 +174,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(widget.cliente.nombre),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.phone, size: 48, color: Color(0xFF2563EB)),
+          const Icon(Icons.phone, size: 48, color: ColoresApp.azul),
           const SizedBox(height: 12),
           Text(telefono, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         ]),

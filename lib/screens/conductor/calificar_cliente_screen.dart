@@ -24,7 +24,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
   int _estrellas = 5;
   final TextEditingController _comentarioCtrl = TextEditingController();
 
-  static const Color _greenDark = Color(0xFF15803D);
+  static const Color _greenDark = ColoresApp.verdeOscuro;
 
   static const List<String> _labels = [
     '', 'Malo', 'Regular', 'Bueno', 'Muy bueno', 'Excelente'
@@ -74,14 +74,14 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
       title: const Text(
         'Califica a tu cliente',
         style: TextStyle(
-          color: Color(0xFF111827),
+          color: ColoresApp.textoOscuro,
           fontSize: 17,
           fontWeight: FontWeight.w700,
         ),
       ),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded,
-            color: Color(0xFF111827), size: 20),
+            color: ColoresApp.textoOscuro, size: 20),
         onPressed: () => Navigator.of(context).maybePop(),
       ),
     );
@@ -108,7 +108,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
             path: widget.avatarUrl,
             name: widget.nombreCliente,
             radius: 28,
-            backgroundColor: const Color(0xFFD1FAE5),
+            backgroundColor: ColoresApp.verdeFondo,
             foregroundColor: _greenDark,
             fontSize: 17,
           ),
@@ -119,7 +119,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
               children: [
                 Text(widget.nombreCliente,
                     style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
                         color: ColoresApp.textoOscuro)),
                 const SizedBox(height: 4),
@@ -163,7 +163,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Icon(
                   filled ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: filled ? ColoresApp.ambar : const Color(0xFFD1D5DB),
+                  color: filled ? ColoresApp.ambar : ColoresApp.bordeCampo,
                   size: 44,
                 ),
               ),
@@ -177,7 +177,7 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
             _labels[_estrellas],
             key: ValueKey(_estrellas),
             style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: ColoresApp.textoSecundario),
           ),
@@ -191,10 +191,10 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
       controller: _comentarioCtrl,
       maxLines: 4,
       minLines: 3,
-      style: const TextStyle(fontSize: 14, color: ColoresApp.textoOscuro),
+      style: const TextStyle(fontSize: 13, color: ColoresApp.textoOscuro),
       decoration: InputDecoration(
         hintText: 'Escribe un comentario (opcional)',
-        hintStyle: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 14),
+        hintStyle: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 13),
         contentPadding: const EdgeInsets.all(14),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -217,28 +217,11 @@ class _CalificarClienteScreenState extends State<CalificarClienteScreen> {
         color: Colors.white,
         border: Border(top: BorderSide(color: ColoresApp.divisor)),
       ),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: widget.onEnviar == null
-              ? null
-              : () => widget.onEnviar!(_estrellas, _comentarioCtrl.text.trim()),
-          style: ElevatedButton.styleFrom(foregroundColor: Colors.white, 
-            backgroundColor: ColoresApp.azul,
-            disabledBackgroundColor: ColoresApp.divisor,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-            elevation: 0,
-          ),
-          child: const Text(
-            'Enviar calificación',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700),
-          ),
-        ),
+      child: BotonPrincipal(
+        texto: 'Enviar calificación',
+        onPressed: widget.onEnviar == null
+            ? null
+            : () => widget.onEnviar!(_estrellas, _comentarioCtrl.text.trim()),
       ),
     );
   }

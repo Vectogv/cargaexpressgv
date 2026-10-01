@@ -31,12 +31,12 @@ class EntregaConfirmadaScreen extends StatelessWidget {
     this.onCalificarCliente,
   });
 
-  static const Color _greenDark = Color(0xFF15803D);
+  static const Color _greenDark = ColoresApp.verdeOscuro;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: ColoresApp.fondoItem,
       body: Column(
         children: [
           _buildBanner(),
@@ -83,8 +83,8 @@ class EntregaConfirmadaScreen extends StatelessWidget {
             '¡Entrega confirmada!',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
@@ -93,7 +93,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 13,
               height: 1.5,
             ),
           ),
@@ -123,9 +123,9 @@ class EntregaConfirmadaScreen extends StatelessWidget {
             path: avatarUrl,
             name: nombreCliente,
             radius: 26,
-            backgroundColor: const Color(0xFFD1FAE5),
+            backgroundColor: ColoresApp.verdeFondo,
             foregroundColor: _greenDark,
-            fontSize: 16,
+            fontSize: 15,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -134,7 +134,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
             children: [
               Text(nombreCliente,
                   style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: ColoresApp.textoOscuro)),
               const SizedBox(height: 4),
@@ -192,8 +192,8 @@ class EntregaConfirmadaScreen extends StatelessWidget {
   Widget _buildFinRow(
     String label,
     String value, {
-    Color labelColor = const Color(0xFF6B7280),
-    Color valueColor = const Color(0xFF111827),
+    Color labelColor = ColoresApp.grisClaro,
+    Color valueColor = ColoresApp.textoOscuro,
     bool bold = false,
   }) {
     return Padding(
@@ -201,12 +201,12 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
+          Flexible(child: Text(label,
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 15,
                   color: labelColor,
                   fontWeight:
-                      bold ? FontWeight.w700 : FontWeight.w400)),
+                      bold ? FontWeight.w700 : FontWeight.w400))),
           const SizedBox(width: 12),
           Flexible(
             child: Text(value,
@@ -215,7 +215,7 @@ class EntregaConfirmadaScreen extends StatelessWidget {
                     fontSize: 15,
                     color: valueColor,
                     fontWeight:
-                        bold ? FontWeight.w800 : FontWeight.w600)),
+                        bold ? FontWeight.w700 : FontWeight.w600)),
           ),
         ],
       ),
@@ -233,37 +233,15 @@ class EntregaConfirmadaScreen extends StatelessWidget {
       child: Column(
         children: [
           if (onCalificarCliente != null) ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onCalificarCliente,
-                style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: ColoresApp.verde,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.star_rounded, color: Colors.white),
-                label: const Text('Calificar al cliente',
-                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
+            BotonPrincipal(
+              texto: 'Calificar al cliente',
+              icono: Icons.star_rounded,
+              color: ColoresApp.verde,
+              onPressed: onCalificarCliente,
             ),
             const SizedBox(height: 10),
           ],
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: onVerResumen,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                side: const BorderSide(color: ColoresApp.verde, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Ver resumen del viaje',
-                  style: TextStyle(color: _greenDark, fontSize: 15, fontWeight: FontWeight.w700)),
-            ),
-          ),
+          BotonSecundario(texto: 'Ver resumen del viaje', color: ColoresApp.verdeOscuro, onPressed: onVerResumen),
           const SizedBox(height: 4),
           SizedBox(
             width: double.infinity,

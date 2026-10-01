@@ -65,7 +65,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
     this.textoAccion = 'Voy en camino a recoger',
   });
 
-  static const Color _greenDark = Color(0xFF15803D);
+  static const Color _greenDark = ColoresApp.verdeOscuro;
 
   bool get _busy => isStarting || isCancelling;
 
@@ -150,9 +150,9 @@ class ViajeAceptadoScreen extends StatelessWidget {
           path: avatarUrl,
           name: nombreCliente,
           radius: 26,
-          backgroundColor: const Color(0xFFD1FAE5),
+          backgroundColor: ColoresApp.verdeFondo,
           foregroundColor: _greenDark,
-          fontSize: 16,
+          fontSize: 15,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -162,7 +162,7 @@ class ViajeAceptadoScreen extends StatelessWidget {
               Text(nombreCliente,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
               const SizedBox(height: 3),
               Row(
                 children: [
@@ -219,9 +219,9 @@ class ViajeAceptadoScreen extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: destacada ? FontWeight.w700 : FontWeight.w500,
-                    color: destacada ? ColoresApp.textoOscuro : const Color(0xFF374151),
+                    color: destacada ? ColoresApp.textoOscuro : ColoresApp.gris,
                   )),
             ],
           ),
@@ -234,9 +234,9 @@ class ViajeAceptadoScreen extends StatelessWidget {
     return Row(
       children: [
         const Expanded(
-          child: Text('Precio acordado', style: TextStyle(fontSize: 14, color: ColoresApp.textoSecundario)),
+          child: Text('Precio acordado', style: TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
         ),
-        Text(precioAcordado, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro)),
+        Text(precioAcordado, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/ui_compartida.dart';
 import '../../services/sos_service.dart';
 import '../../widgets/error_carga.dart' show mensajeDeError;
 
@@ -17,7 +18,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
   bool _sending = false;
   bool _sent = false;
 
-  static const Color _bgDark = Color(0xFF0D1B2E);
+  static const Color _bgDark = ColoresApp.textoOscuro;
 
   @override
   void initState() {
@@ -83,7 +84,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
                         : 'Se enviará tu ubicación\nal equipo de soporte de CargaExpress.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       color: Colors.white.withValues(alpha: 0.85),
                       height: 1.5,
                       fontWeight: FontWeight.w500,
@@ -178,8 +179,8 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
                     : const Text(
                         'SOS',
                         style: TextStyle(
-                          color: Colors.white, fontSize: 32,
-                          fontWeight: FontWeight.w900, letterSpacing: 2,
+                          color: Colors.white, fontSize: 22,
+                          fontWeight: FontWeight.w700, letterSpacing: 2,
                         ),
                       ),
               ),
@@ -200,12 +201,12 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF0D1B2E),
+              foregroundColor: ColoresApp.textoOscuro,
               padding: const EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               elevation: 0,
             ),
-            child: const Text('Cerrar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            child: const Text('Cerrar', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           ),
         ),
       );
@@ -225,7 +226,7 @@ class _SOSAlertScreenState extends State<SOSAlertScreen>
           ),
           child: _sending
               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-              : const Text('Activar alerta SOS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              : const Text('Activar alerta SOS', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         ),
       ),
     );

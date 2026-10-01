@@ -56,7 +56,7 @@ class HacerOfertaScreen extends StatefulWidget {
 }
 
 class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
-  static const Color _chipBorder = Color(0xFFBFDBFE);
+  static const Color _chipBorder = ColoresApp.borde;
 
   late double _ofertaActual;
   late TextEditingController _controller;
@@ -188,14 +188,14 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
       title: const Text(
         'Hacer oferta',
         style: TextStyle(
-          color: Color(0xFF111827),
+          color: ColoresApp.textoOscuro,
           fontSize: 17,
           fontWeight: FontWeight.w700,
         ),
       ),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded,
-            color: Color(0xFF111827), size: 20),
+            color: ColoresApp.textoOscuro, size: 20),
         onPressed: () => Navigator.of(context).maybePop(),
       ),
     );
@@ -206,9 +206,9 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        color: ColoresApp.verdeFondo,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        border: Border.all(color: ColoresApp.borde),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,18 +218,18 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
               const Icon(Icons.person_outline_rounded,
                   size: 14, color: ColoresApp.textoSecundario),
               const SizedBox(width: 5),
-              const Text(
+              const Flexible(child: Text(
                 'Precio propuesto por el cliente',
                 style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
-              ),
+              )),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             widget.precioCliente,
             style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
               color: ColoresApp.verde,
             ),
           ),
@@ -247,7 +247,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF111827),
+            color: ColoresApp.textoOscuro,
           ),
         ),
         const SizedBox(height: 10),
@@ -259,14 +259,14 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           style: const TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
+            color: ColoresApp.textoOscuro,
           ),
           decoration: InputDecoration(
             prefixText: '\$',
             prefixStyle: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF111827),
+              color: ColoresApp.textoOscuro,
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -325,7 +325,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF111827),
+            color: ColoresApp.textoOscuro,
           ),
         ),
         const SizedBox(height: 10),
@@ -334,10 +334,10 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
           maxLines: 4,
           minLines: 4,
           textInputAction: TextInputAction.newline,
-          style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
+          style: const TextStyle(fontSize: 13, color: ColoresApp.textoOscuro),
           decoration: InputDecoration(
             hintText: 'Escribe un mensaje al cliente...',
-            hintStyle: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 14),
+            hintStyle: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 13),
             contentPadding: const EdgeInsets.all(14),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -407,7 +407,7 @@ class _HacerOfertaScreenState extends State<HacerOfertaScreen> {
               child: const Text(
                 'Cancelar',
                 style: TextStyle(
-                  color: Color(0xFF374151),
+                  color: ColoresApp.gris,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),

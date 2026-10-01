@@ -70,7 +70,7 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                     const Text(
                       'Describe tu versión de los hechos',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: ColoresApp.textoOscuro,
                       ),
@@ -86,7 +86,7 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                         controller: _controller,
                         maxLines: 6,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           color: ColoresApp.textoSecundario,
                           height: 1.55,
                         ),
@@ -102,7 +102,7 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
                     const Text(
                       'Fotos / Videos (opcional)',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: ColoresApp.textoOscuro,
                       ),
@@ -144,31 +144,10 @@ class _MiVersionScreenState extends State<MiVersionScreen> {
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: widget.onSubmit == null
-                      ? null
-                      : () => widget.onSubmit!(_controller.text.trim()),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ColoresApp.azul,
-                    disabledBackgroundColor: ColoresApp.divisor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    'Enviar evidencia',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+              child: BotonPrincipal(
+                  texto: 'Enviar evidencia',
+                  onPressed: widget.onSubmit == null ? null : () => widget.onSubmit!(_controller.text.trim()),
                 ),
-              ),
             ),
           ],
         ),

@@ -58,6 +58,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _deuda;
   EstadoPagoConductor get _estadoPago => estadoPagoConductor(_deuda);
 
+  /// La deuda pasó a "al día" en esta pantalla: el aviso sigue en su sitio
+  /// para que se desvanezca y muestre "Al día" (ver `TransicionAlDia`).
+  bool _pagoAlDia = false;
+
+  void _ponerDeuda(Map<String, dynamic>? nueva) {
+    final antes = _estadoPago;
+    _deuda = nueva;
+    if (antes != EstadoPagoConductor.alDia && _deuda != null) {
+      _pagoAlDia = _estadoPago == EstadoPagoConductor.alDia;
+    }
+  }
+
   /// Viaje que ocupa al conductor. `pendiente_confirmacion` sólo espera la
   /// confirmación del cliente (el backend no lo cuenta como ocupado): puede
   /// conectarse y tomar otro viaje mientras tanto.
@@ -134,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       // Puede quedar saldo (viajes terminados durante la revisión): la cuenta
       // queda activa y el aviso de deuda sigue con lo que falta.
-      setState(() => _deuda = deudaTrasPagoConfirmado(_deuda, data));
+      setState(() => _ponerDeuda(deudaTrasPagoConfirmado(_deuda, data)));
       unawaited(_cargarDeuda());
       _snack(mensajePagoConfirmado(data));
     });
@@ -338,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _cargarDeuda() async {
     try {
       final deuda = await ApiClient.instance.getDebt();
-      if (mounted) setState(() => _deuda = deuda);
+      if (mounted) setState(() => _ponerDeuda(deuda));
     } catch (e) {
       debugPrint('Error cargando deuda: $e');
     }
@@ -616,7 +628,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(saludo,
-                            style: const TextStyle(color: ColoresApp.textoOscuro, fontSize: 18, fontWeight: FontWeight.w800),
+                            style: const TextStyle(color: ColoresApp.textoOscuro, fontSize: 17, fontWeight: FontWeight.w700),
                             overflow: TextOverflow.ellipsis),
                         Text(vehiculo.isEmpty ? _statusLabel() : vehiculo,
                             style: const TextStyle(color: ColoresApp.textoSecundario, fontSize: 13),
@@ -633,7 +645,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text('Viaje activo',
-                          style: TextStyle(color: ColoresApp.verde, fontSize: 11, fontWeight: FontWeight.w700)),
+                          style: TextStyle(color: ColoresApp.verde, fontSize: 12, fontWeight: FontWeight.w700)),
                     ),
                   ValueListenableBuilder<int>(
                     valueListenable: NotificationService.instance.unread,
@@ -680,7 +692,7 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(4),
               decoration: const BoxDecoration(color: ColoresApp.rojo, shape: BoxShape.circle),
               child: Text(sinLeer > 9 ? '9+' : '$sinLeer',
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
             ),
           ),
       ],
@@ -779,24 +791,24 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Container(
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Flexible(child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: ColoresApp.verde.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       const Icon(Icons.trip_origin, size: 14, color: Colors.white),
                       const SizedBox(width: 4),
-                      Text(estadoLabel, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      Flexible(child: Text(estadoLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600))),
                     ]),
-                  ),
-                  const Spacer(),
-                  Text('ID: ${t['id']}', style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                  )),
+                  const SizedBox(width: 8),
+                  Text('ID: ${t['id']}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
                 ]),
                 const SizedBox(height: 20),
                 Row(children: [
                   const Icon(Icons.person, color: Colors.white70, size: 18),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(nombre, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700))),
+                  Expanded(child: Text(nombre, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700))),
                 ]),
                 const SizedBox(height: 16),
                 _buildRouteRow(Icons.circle_outlined, 'Salida', origen?['direccion'] as String? ?? ''),
@@ -808,7 +820,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () => _abrirViaje(t),
                     icon: const Icon(Icons.map_rounded, size: 22),
-                    label: const Text('Ver viaje en el mapa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    label: const Text('Ver viaje en el mapa', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: ColoresApp.azulOscuro,
@@ -831,8 +843,8 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(width: 10),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
-          Text(address, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+          Text(address, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
         ]),
       ),
     ]);
@@ -926,7 +938,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: () => _navigate(10),
       );
     }
-    if (pago == EstadoPagoConductor.conDeuda) return AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos);
+    if (pago == EstadoPagoConductor.conDeuda || _pagoAlDia) return AvisoCuentaPago(deuda: _deuda, onAbrirPagos: _abrirPagos);
     return null;
   }
 
@@ -970,13 +982,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+                    child: Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(label, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -1033,11 +1045,11 @@ class _AvisoRegistro extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+                      Text(titulo, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
                       const SizedBox(height: 3),
-                      Text(detalle, style: const TextStyle(fontSize: 12.5, color: ColoresApp.textoSecundario, height: 1.35)),
+                      Text(detalle, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario, height: 1.35)),
                       const SizedBox(height: 4),
-                      Text('Ir a Documentación', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color)),
+                      Text('Ir a Documentación', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
                     ],
                   ),
                 ),
@@ -1090,7 +1102,7 @@ class _MapaPlegableState extends State<_MapaPlegable> {
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text('Tu ubicación en el mapa',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
                   ),
                   Icon(_plegado ? Icons.expand_more_rounded : Icons.expand_less_rounded, color: ColoresApp.chevron),
                 ],

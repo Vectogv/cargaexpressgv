@@ -18,9 +18,9 @@ class DisputeScreen extends StatefulWidget {
 }
 
 class _DisputeScreenState extends State<DisputeScreen> {
-  static const Color _primaryDark = Color(0xFF1A3C6E);
-  static const Color _textDark = Color(0xFF1A1A2E);
-  static const Color _textGrey = Color(0xFF757575);
+  static const Color _primaryDark = ColoresApp.azulOscuro;
+  static const Color _textDark = ColoresApp.textoOscuro;
+  static const Color _textGrey = ColoresApp.grisClaro;
   static const Color _bgLight = Color(0xFFF5F7FA);
 
   final _descCtrl = TextEditingController();
@@ -162,7 +162,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
               ]),
             ),
             const SizedBox(height: 20),
-            const Text('Informaci\u00f3n del viaje', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            const Text('Informaci\u00f3n del viaje', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
@@ -180,7 +180,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text('Tipo de disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            const Text('Tipo de disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 8),
             RadioGroup<String>(
               groupValue: _selectedType,
@@ -194,7 +194,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                         const SizedBox(width: 10),
                         // Expanded: en pantallas angostas el texto largo se
                         // salía de la fila.
-                        Expanded(child: Text(type['label'] as String, style: const TextStyle(fontSize: 14))),
+                        Expanded(child: Text(type['label'] as String, style: const TextStyle(fontSize: 13))),
                       ]),
                       value: type['id'] as String,
                       dense: true,
@@ -204,7 +204,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Descripci\u00f3n', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            const Text('Descripci\u00f3n', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 8),
             TextField(
               controller: _descCtrl,
@@ -217,7 +217,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
             ),
             const SizedBox(height: 16),
             if (widget.role != 'conductor') ...[
-              const Text('Evidencias (fotos)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              const Text('Evidencias (fotos)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
               const SizedBox(height: 8),
               SizedBox(
                 height: 80,
@@ -250,7 +250,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                       child: _uploading
                         ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
                         : IconButton(
-                            icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF1A3C6E)),
+                            icon: const Icon(Icons.camera_alt_outlined, color: ColoresApp.azulOscuro),
                             onPressed: _addPhoto,
                           ),
                     ),
@@ -258,7 +258,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 ),
               ),
             ] else ...[
-              const Text('Evidencias', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              const Text('Evidencias', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -269,7 +269,7 @@ class _DisputeScreenState extends State<DisputeScreen> {
                 ),
                 child: const Text(
                   'Si necesitas adjuntar evidencias, el administrador te las solicitar\u00e1 durante la revisi\u00f3n de la disputa.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF757575)),
+                  style: TextStyle(fontSize: 12, color: ColoresApp.grisClaro),
                 ),
               ),
             ],
@@ -282,20 +282,11 @@ class _DisputeScreenState extends State<DisputeScreen> {
       // formulario y quedaba tapado o había que desplazarse para verlo.
       bottomNavigationBar: BarraInferiorFija(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: SizedBox(
-          width: double.infinity, height: 50,
-          child: ElevatedButton(
-            onPressed: _submitting ? null : _submitDispute,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-            child: _submitting
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Text('Enviar disputa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-          ),
+        child: BotonPrincipal(
+          texto: 'Enviar disputa',
+          color: ColoresApp.rojo,
+          cargando: _submitting,
+          onPressed: _submitDispute,
         ),
       ),
     );

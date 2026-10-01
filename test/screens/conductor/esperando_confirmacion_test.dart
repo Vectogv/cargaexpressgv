@@ -35,7 +35,7 @@ void main() {
         ),
       ),
     ));
-    await tester.tap(find.text('Actualizar'));
+    await tester.tap(find.byType(OutlinedButton));
     expect(actualizaciones, 0);
   });
 }

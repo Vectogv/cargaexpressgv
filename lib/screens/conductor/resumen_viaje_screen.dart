@@ -72,14 +72,14 @@ class ResumenViajeScreen extends StatelessWidget {
       title: const Text(
         'Resumen del viaje',
         style: TextStyle(
-          color: Color(0xFF111827),
+          color: ColoresApp.textoOscuro,
           fontSize: 17,
           fontWeight: FontWeight.w700,
         ),
       ),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded,
-            color: Color(0xFF111827), size: 20),
+            color: ColoresApp.textoOscuro, size: 20),
         onPressed: () => Navigator.of(context).maybePop(),
       ),
     );
@@ -123,25 +123,25 @@ class ResumenViajeScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          Flexible(child: Text(
             row.label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: row.labelColor ?? ColoresApp.textoSecundario,
               fontWeight:
                   row.bold ? FontWeight.w700 : FontWeight.w400,
             ),
-          ),
+          )),
           const SizedBox(width: 16),
           Flexible(
             child: Text(
               row.value,
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 color: row.valueColor ?? ColoresApp.textoOscuro,
                 fontWeight:
-                    row.bold ? FontWeight.w800 : FontWeight.w500,
+                    row.bold ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ),
@@ -161,22 +161,11 @@ class ResumenViajeScreen extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          child: SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: FilledButton(
-              // Sin callback quedaba deshabilitado (gris) y no hacía nada:
-              // por defecto vuelve al inicio (primera ruta).
-              onPressed: onVolverInicio ?? () => Navigator.of(context).popUntil((r) => r.isFirst),
-              style: FilledButton.styleFrom(
-                backgroundColor: ColoresApp.azul,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text(
-                'Volver al inicio',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-            ),
+          child: BotonPrincipal(
+            texto: 'Volver al inicio',
+            // Sin callback quedaba deshabilitado (gris) y no hacía nada:
+            // por defecto vuelve al inicio (primera ruta).
+            onPressed: onVolverInicio ?? () => Navigator.of(context).popUntil((r) => r.isFirst),
           ),
         ),
       ),

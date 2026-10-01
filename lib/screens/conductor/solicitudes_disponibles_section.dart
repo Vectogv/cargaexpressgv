@@ -205,7 +205,7 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
                   decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(12)),
                   child: Text('$total',
                       key: const Key('solicitudes_total'),
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
               ],
             ],
@@ -254,7 +254,7 @@ class _SolicitudesDisponiblesSectionState extends State<SolicitudesDisponiblesSe
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
+                    Text(titulo, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro)),
                     const SizedBox(height: 4),
                     Text(detalle, style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario, height: 1.4)),
                   ],
@@ -386,8 +386,12 @@ class SolicitudDisponibleCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(dinero(precio),
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(dinero(precio),
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+                ),
               ),
               if (oferta == null)
                 ElevatedButton(
@@ -399,7 +403,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Ofertar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                  child: const Text('Ofertar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
             ],
           ),
@@ -494,9 +498,9 @@ class SolicitudDisponibleCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(titulo, style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+              Text(titulo, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
               Text(texto,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
             ]),

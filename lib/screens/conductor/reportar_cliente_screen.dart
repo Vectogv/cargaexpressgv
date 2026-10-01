@@ -105,9 +105,9 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
+                  color: ColoresApp.rojoFondo,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFECACA), width: 1),
+                  border: Border.all(color: ColoresApp.borde, width: 1),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,12 +116,12 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
+                        color: ColoresApp.rojoFondo,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
                         Icons.flag_outlined,
-                        color: Color(0xFFEF4444),
+                        color: ColoresApp.rojo,
                         size: 22,
                       ),
                     ),
@@ -130,8 +130,8 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                       child: Text(
                         _aviso,
                         style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF374151),
+                          fontSize: 13,
+                          color: ColoresApp.gris,
                           height: 1.5,
                           fontWeight: FontWeight.w500,
                         ),
@@ -146,7 +146,7 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF374151),
+                  color: ColoresApp.gris,
                 ),
               ),
               const SizedBox(height: 8),
@@ -154,17 +154,17 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
+                  color: ColoresApp.fondoItem,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                  border: Border.all(color: ColoresApp.borde, width: 1),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _motivo,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF6B7280)),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: ColoresApp.grisClaro),
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: Colors.black,
                       fontWeight: FontWeight.w400,
                     ),
@@ -184,7 +184,7 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF374151),
+                  color: ColoresApp.gris,
                 ),
               ),
               const SizedBox(height: 8),
@@ -192,20 +192,20 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                 controller: _descController,
                 maxLines: 5,
                 minLines: 4,
-                style: const TextStyle(fontSize: 14, color: Colors.black, height: 1.5),
+                style: const TextStyle(fontSize: 13, color: Colors.black, height: 1.5),
                 decoration: InputDecoration(
                   hintText: 'Cuéntanos qué pasó con el cliente...',
-                  hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                  hintStyle: const TextStyle(color: ColoresApp.chevron, fontSize: 13),
                   filled: true,
-                  fillColor: const Color(0xFFF9FAFB),
+                  fillColor: ColoresApp.fondoItem,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                    borderSide: const BorderSide(color: ColoresApp.borde, width: 1),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+                    borderSide: const BorderSide(color: ColoresApp.rojo, width: 1.5),
                   ),
                 ),
               ),
@@ -224,7 +224,7 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
           child: ElevatedButton(
             onPressed: _submitting ? null : _submit,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: ColoresApp.rojo,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -235,7 +235,7 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Text(
                     'Enviar reporte',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                   ),
           ),
         ),

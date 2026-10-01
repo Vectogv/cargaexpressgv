@@ -196,7 +196,7 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: Color(0xFF111827)),
+            icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: ColoresApp.textoOscuro),
             onPressed: () => Navigator.of(context).maybePop(),
           ),
         ),
@@ -206,12 +206,12 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Color(0xFFDC2626)),
+                const Icon(Icons.error_outline, size: 48, color: ColoresApp.rojo),
                 const SizedBox(height: 16),
                 const Text(
                   'Error al cargar la información\ndel viaje.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Color(0xFF111827)),
+                  style: TextStyle(fontSize: 15, color: ColoresApp.textoOscuro),
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(

@@ -30,21 +30,6 @@ class ResolucionScreen extends StatelessWidget {
       _resultadoCrudo == null ? 'Disputa resuelta' : etiquetaResultado(_resultadoCrudo);
 
 
-  static ButtonStyle _outlineStyle() => ButtonStyle(
-    foregroundColor: WidgetStateProperty.resolveWith(
-      (s) => s.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
-    ),
-    side: WidgetStateProperty.resolveWith(
-      (s) => BorderSide(
-        color: s.contains(WidgetState.disabled) ? ColoresApp.divisor : ColoresApp.azul,
-        width: 1.5,
-      ),
-    ),
-    shape: WidgetStateProperty.all(
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ),
-  );
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -99,44 +84,16 @@ class ResolucionScreen extends StatelessWidget {
                     // Mensaje del backend (p. ej. "Quedas bajo observación").
                     if (_texto(disputa['mensaje']) != null) ...[
                       const SizedBox(height: 8),
-                      Text(_texto(disputa['mensaje'])!, style: TextStyle(fontSize: 14, color: ColoresApp.chevron, height: 1.4)),
+                      Text(_texto(disputa['mensaje'])!, style: TextStyle(fontSize: 13, color: ColoresApp.chevron, height: 1.4)),
                     ],
                     if (_texto(disputa['problema']) != null)
                       ..._seccion('Problema reportado', etiquetaProblemaDisputa(disputa['problema'])),
                     if (_texto(disputa['comentarioAdmin']) != null)
                       ..._seccion('Comentario del administrador', _texto(disputa['comentarioAdmin'])!),
                     const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton(
-                        onPressed: onVerDetalle,
-                        style: _outlineStyle(),
-                        child: const Text(
-                          'Ver detalle',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
+                    BotonSecundario(texto: 'Ver detalle', onPressed: onVerDetalle),
                     const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton(
-                        onPressed: onVolverInicio,
-                        style: _outlineStyle(),
-                        child: const Text(
-                          'Volver al inicio',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
+                    BotonSecundario(texto: 'Volver al inicio', onPressed: onVolverInicio),
                   ],
                 ),
               ),
@@ -163,7 +120,7 @@ class ResolucionScreen extends StatelessWidget {
         Text(
           texto,
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             color: ColoresApp.textoSecundario,
             height: 1.55,
           ),
@@ -175,10 +132,10 @@ class ResolucionScreen extends StatelessWidget {
     final enContra = _resultadoCrudo == DisputaResultado.favorCliente;
     final icon = aFavor ? Icons.check_rounded : (enContra ? Icons.close_rounded : Icons.info_outline_rounded);
     final gradientColors = aFavor
-        ? const [Color(0xFF2E7D32), Color(0xFF43A047)]
+        ? const [ColoresApp.verdeOscuro, ColoresApp.verde]
         : enContra
-            ? const [Color(0xFFC62828), Color(0xFFE53935)]
-            : const [Color(0xFF1565C0), Color(0xFF1E88E5)];
+            ? const [ColoresApp.rojo, ColoresApp.rojo]
+            : const [ColoresApp.azul, ColoresApp.azul];
 
     return Container(
       width: double.infinity,
@@ -211,7 +168,7 @@ class ResolucionScreen extends StatelessWidget {
           const Text(
             'Resolución',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
