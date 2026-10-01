@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/http_client.dart';
 
@@ -18,6 +19,9 @@ class BannerPlataforma {
   /// La gerencia sube una imagen (texto y enlace son opcionales): basta con
   /// una de las dos cosas para mostrarlo.
   bool get visible => activo && (texto.isNotEmpty || imagenUrl != null);
+
+  /// Identifica el anuncio: si gerencia sube otro el mismo día, vuelve a salir.
+  String get clave => '${imagenUrl ?? ''}|$texto|${link ?? ''}';
 
   factory BannerPlataforma.fromJson(Map<String, dynamic> json) {
     final texto = (json['texto'] ?? '').toString().trim();
@@ -63,6 +67,23 @@ class BannerService {
     _consultado = DateTime.now();
     return banner.value;
   }
+
+  static const _kVisto = 'anuncio_visto';
+
+  /// El anuncio sale una vez al día (el vencimiento por días lo aplica el
+  /// servidor: pasado el límite llega con `activo: false`).
+  Future<bool> tocaMostrarHoy(BannerPlataforma b, {DateTime? ahora}) async {
+    if (!b.visible) return false;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kVisto) != _marca(b, ahora ?? DateTime.now());
+  }
+
+  Future<void> marcarVisto(BannerPlataforma b, {DateTime? ahora}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kVisto, _marca(b, ahora ?? DateTime.now()));
+  }
+
+  static String _marca(BannerPlataforma b, DateTime d) => '${d.year}-${d.month}-${d.day}|${b.clave}';
 
   @visibleForTesting
   void reiniciarParaTest() {

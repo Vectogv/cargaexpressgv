@@ -66,8 +66,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     NotificationService.instance.refresh();
     // Plazo de confirmación que muestra la tarjeta de entrega por confirmar.
     ConfigClienteService.instance.cargar();
-    // Banner de la gerencia (Configuración → Banner en el panel).
-    BannerService.instance.cargar();
+    // Anuncio de la gerencia (Configuración → Banner en el panel): ventana, una vez al día.
+    _mostrarAnuncio();
     _sondeo = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted && _activeTrip != null && ModalRoute.of(context)?.isCurrent == true) _loadActiveTrip();
     });
@@ -112,7 +112,15 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     if (state == AppLifecycleState.resumed) {
       _loadActiveTrip();
       _loadDeuda();
+      // Si la app quedó abierta de un día para otro, el anuncio vuelve a salir.
+      _mostrarAnuncio();
     }
+  }
+
+  void _mostrarAnuncio() {
+    BannerService.instance.cargar().then((_) {
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) mostrarAnuncioDelDia(context);
+    });
   }
 
   @override

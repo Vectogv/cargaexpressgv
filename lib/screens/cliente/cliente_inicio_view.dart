@@ -173,7 +173,6 @@ class ClienteInicioView extends StatelessWidget {
           const SizedBox(height: 4),
           Text(_subtitulo(estado), style: const TextStyle(fontSize: 15, color: _kGris)),
           const SizedBox(height: 20),
-          const _BannerPlataforma(),
           if (cargando)
             const _CargandoCard()
           else ...[
@@ -213,65 +212,82 @@ class ClienteInicioView extends StatelessWidget {
   }
 }
 
-/// Banner que la gerencia configura desde el panel (Configuración → Banner).
-/// Se oculta solo si no está activo o no tiene texto; sin toque si no trae
-/// enlace.
-class _BannerPlataforma extends StatelessWidget {
-  const _BannerPlataforma();
+/// Muestra el anuncio de gerencia (Configuración → Banner) como ventana con
+/// una X arriba a la derecha, una vez al día. Tocarlo abre el enlace, si hay.
+Future<void> mostrarAnuncioDelDia(BuildContext context) async {
+  final banner = BannerService.instance.banner.value;
+  if (!await BannerService.instance.tocaMostrarHoy(banner) || !context.mounted) return;
+  await BannerService.instance.marcarVisto(banner);
+  if (!context.mounted) return;
+  await showDialog<void>(context: context, builder: (_) => AnuncioDialog(banner: banner));
+}
+
+class AnuncioDialog extends StatelessWidget {
+  final BannerPlataforma banner;
+  const AnuncioDialog({super.key, required this.banner});
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<BannerPlataforma>(
-      valueListenable: BannerService.instance.banner,
-      builder: (_, banner, _) {
-        if (!banner.visible) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 20),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: banner.link == null ? null : () => launchUrl(Uri.parse(banner.link!), mode: LaunchMode.externalApplication),
-            child: Container(
-              width: double.infinity,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: ColoresApp.azulTenue,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (banner.imagenUrl != null)
-                    AspectRatio(
-                      aspectRatio: 16 / 7,
-                      child: MediaImage(path: banner.imagenUrl, placeholder: const SizedBox.shrink()),
+    final link = banner.link;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      clipBehavior: Clip.antiAlias,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Stack(
+        children: [
+          InkWell(
+            onTap: link == null ? null : () => launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // La imagen completa, sin recortar.
+                if (banner.imagenUrl != null)
+                  Flexible(
+                    child: ColoredBox(
+                      color: ColoresApp.azulOscuro,
+                      child: MediaImage(path: banner.imagenUrl, fit: BoxFit.contain, placeholder: const SizedBox(height: 200)),
                     ),
-                  if (banner.texto.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.campaign_outlined, color: ColoresApp.azul, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              banner.texto,
-                              style: const TextStyle(fontSize: 13, color: ColoresApp.azulOscuro, height: 1.4, fontWeight: FontWeight.w500),
-                            ),
+                  ),
+                if (banner.texto.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(16, banner.imagenUrl == null ? 48 : 14, 16, 16),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.campaign_outlined, color: ColoresApp.azul, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            banner.texto,
+                            style: const TextStyle(fontSize: 14, color: ColoresApp.azulOscuro, height: 1.4, fontWeight: FontWeight.w500),
                           ),
-                          if (banner.link != null) ...[
-                            const SizedBox(width: 6),
-                            const Icon(Icons.chevron_right_rounded, color: ColoresApp.azul, size: 20),
-                          ],
-                        ],
-                      ),
+                        ),
+                        if (link != null) const Icon(Icons.chevron_right_rounded, color: ColoresApp.azul),
+                      ],
                     ),
-                ],
+                  ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              elevation: 2,
+              child: IconButton(
+                key: const Key('cerrar_anuncio'),
+                tooltip: 'Cerrar',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.close_rounded, color: _kTexto, size: 20),
+                onPressed: () => Navigator.of(context).pop(),
               ),
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
