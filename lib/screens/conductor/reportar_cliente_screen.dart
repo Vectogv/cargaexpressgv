@@ -194,7 +194,7 @@ class _ReportarClienteScreenState extends State<ReportarClienteScreen> {
                 minLines: 4,
                 style: const TextStyle(fontSize: 14, color: Colors.black, height: 1.5),
                 decoration: InputDecoration(
-                  hintText: 'Cuéntanos qué pasó con el conductor...',
+                  hintText: 'Cuéntanos qué pasó con el cliente...',
                   hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
