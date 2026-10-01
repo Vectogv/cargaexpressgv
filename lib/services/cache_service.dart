@@ -193,10 +193,9 @@ class CacheService {
 
   Future<void> clearAll() async {
     try {
-      await Hive.box(_tripsBox).clear();
-      await Hive.box(_profileBox).clear();
-      await Hive.box(_notificationsBox).clear();
-      await Hive.box(_chatBox).clear();
+      for (final nombre in [_tripsBox, _profileBox, _notificationsBox, _chatBox]) {
+        if (Hive.isBoxOpen(nombre)) await Hive.box(nombre).clear();
+      }
     } catch (e) {
       LoggerService.instance.error('CacheService.clearAll error', e);
     }

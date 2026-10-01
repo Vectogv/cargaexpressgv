@@ -113,20 +113,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final auth = await ApiClient.instance.register(body);
-      if (mounted) {
-        // El registro ya autentica (guarda tokens y perfil): ir directo al
-        // home del rol en lugar de pedir un segundo login.
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuenta creada exitosamente')));
-        final home = homeDestinoFor(rol: auth.rol, esModerador: auth.esModerador);
-        if (home == HomeDestino.ninguno) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-          );
-        } else {
-          abrirInicioComoRaiz(context, homeScreenFor(home));
-        }
+      if (!mounted) {
+        // La pantalla se cerró mientras se registraba: no dejar sesión huérfana.
+        await ApiClient.instance.logout();
+        return;
       }
+      final home = homeDestinoFor(rol: auth.rol, esModerador: auth.esModerador);
+      if (home == HomeDestino.ninguno) {
+        // Rol sin pantalla en la app: cerrar la sesión que dejó el registro.
+        await ApiClient.instance.logout();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+        return;
+      }
+      // El registro ya autentica (guarda tokens y perfil): ir directo al
+      // home del rol en lugar de pedir un segundo login.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuenta creada exitosamente')));
+      abrirInicioComoRaiz(context, homeScreenFor(home));
     } catch (e) {
       final msg = e is ApiException ? e.message : e.toString().replaceFirst('Exception: ', '');
       if (mounted) setState(() => _error = msg);
@@ -205,7 +211,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     // cédula, placa y documentos del formulario.
                     if (!_esConductor) ...[
                       const SizedBox(height: 16),
-                      const BotonGoogleAuth(),
+                      BotonGoogleAuth(deshabilitado: _loading),
                       const SeparadorAuth(texto: 'o con tu correo'),
                     ] else
                       const SizedBox(height: 26),
@@ -265,6 +271,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               teclado: TextInputType.phone,
                               maxLength: LimitesUsuario.telefono,
                               autofill: AutofillHints.telephoneNumber,
+                              validator: (v) => validarTelefono(v ?? '', opcional: true),
                             ),
                             _campo(
                               controller: _edadCtrl,

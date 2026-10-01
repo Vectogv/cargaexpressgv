@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cargaexpress/screens/cliente/home_screen.dart';
+import 'package:cargaexpress/screens/user/auth_screen.dart';
 import 'package:cargaexpress/screens/user/google_login.dart';
 import 'package:cargaexpress/services/api_client.dart';
 import 'package:cargaexpress/services/session_monitor_service.dart';
@@ -70,6 +72,9 @@ void main() {
       expect(find.byType(CompletarPerfilScreen), findsOneWidget);
       final google = log.firstWhere((r) => r.url.path == '/api/auth/google');
       expect(jsonDecode(google.body), {'idToken': idToken});
+      // Si cierra la app aquí, al volver a abrirla se le piden otra vez.
+      await ApiClient.instance.init();
+      expect(ApiClient.instance.perfilCompleto, isFalse);
 
       // Menor de edad: no se envía nada.
       await tester.enterText(find.byKey(const Key('campo_telefono_google')), '3001234567');
@@ -84,7 +89,42 @@ void main() {
       final put = log.firstWhere((r) => r.method == 'PUT');
       expect(jsonDecode(put.body), {'telefono': '3001234567', 'edad': 30});
       expect(find.byType(ClienteHomeScreen), findsOneWidget);
+      expect(ApiClient.instance.perfilCompleto, isTrue);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('auth_perfil_completo'), isNull);
       await _limpiar(tester);
     }, log: log);
+  });
+
+  testWidgets('"Usar otra cuenta" cierra la sesión y vuelve al login', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/auth/google') {
+        return jsonResp({
+          'token': 'tk',
+          'refreshToken': 'rt',
+          'id': 'u2',
+          'nombre': 'Luis',
+          'email': 'luis@gmail.com',
+          'rol': 'conductor',
+          'perfilCompleto': false,
+        });
+      }
+      return jsonResp({'data': []});
+    }, () async {
+      await tester.pumpWidget(_boton(() async => idToken));
+      await tester.tap(find.byKey(const Key('btn_google')));
+      await avanzar(tester);
+      expect(find.byType(CompletarPerfilScreen), findsOneWidget);
+      // Conductor: no se le dice "para que el conductor pueda llamarte".
+      expect(find.textContaining('conductor pueda llamarte'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('btn_otra_cuenta_google')));
+      await avanzar(tester);
+      expect(find.byType(AuthScreen), findsOneWidget);
+      expect(ApiClient.instance.token, isNull);
+      expect(ApiClient.instance.perfilCompleto, isTrue);
+      await _limpiar(tester);
+    });
   });
 }

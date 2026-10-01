@@ -18,6 +18,8 @@ void main() {
     late HttpServer server;
     var refreshFails = false;
     var authExpiredEvents = 0;
+    var refreshCalls = 0;
+    Completer<void>? refreshGate;
 
     setUpAll(() async {
       SharedPreferences.setMockInitialValues({});
@@ -54,6 +56,8 @@ void main() {
             'rol': 'cliente',
           });
         } else if (method == 'POST' && path == '/api/auth/refresh-token') {
+          refreshCalls++;
+          if (refreshGate != null) await refreshGate!.future;
           if (refreshFails) {
             await respond(401, {'message': 'Refresh token invalido'});
           } else {
@@ -84,6 +88,8 @@ void main() {
     setUp(() {
       refreshFails = false;
       authExpiredEvents = 0;
+      refreshCalls = 0;
+      refreshGate = null;
     });
 
     test('401 dispara refresh y reintenta la petición con el token nuevo',
@@ -125,6 +131,36 @@ void main() {
       // Esperar el evento de sesión expirada (entrega asíncrona del stream).
       await expired.future.timeout(const Duration(seconds: 2));
       await sub.cancel();
+    });
+
+    test('401 sin token no intenta refrescar ni emite sesión expirada', () async {
+      final client = ApiClient.instance;
+      await client.clearTokens();
+      try {
+        await client.getTripHistory();
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(refreshCalls, 0);
+      expect(authExpiredEvents, 0);
+    });
+
+    test('cerrar sesión durante un refresco no revive la sesión', () async {
+      final client = ApiClient.instance;
+      await client.clearTokens();
+      await client.login('cliente@test.com', '123456');
+
+      refreshGate = Completer<void>();
+      final peticion = client.getTripHistory().then((_) {}, onError: (_) {});
+      while (refreshCalls == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      await client.clearTokens();
+      refreshGate!.complete();
+      await peticion;
+
+      expect(client.token, isNull);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('auth_token'), isNull);
     });
   });
 }

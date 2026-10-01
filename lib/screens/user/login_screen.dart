@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passCtrl = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
+  bool _googleCargando = false;
   bool _intentado = false;
   String? _error;
 
@@ -48,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_googleCargando) return;
 
     setState(() => _loading = true);
     try {
@@ -55,21 +57,24 @@ class _LoginScreenState extends State<LoginScreen> {
         _emailCtrl.text.trim(),
         _passCtrl.text,
       );
-      if (mounted) {
-        final destino = homeDestinoFor(
-          rol: auth.rol,
-          esModerador: auth.esModerador,
-        );
-        if (destino == HomeDestino.ninguno) {
-          // Rol sin pantalla en la app: no dejar una sesión "colgada".
-          await ApiClient.instance.logout();
-          if (!mounted) return;
-          setState(() => _error = 'Tu cuenta no tiene un rol habilitado en la app. Contacta a soporte.');
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bienvenido ${auth.nombre}')));
-        abrirInicioComoRaiz(context, homeScreenFor(destino));
+      if (!mounted) {
+        // La pantalla se cerró mientras entraba: no dejar una sesión huérfana.
+        await ApiClient.instance.logout();
+        return;
       }
+      final destino = homeDestinoFor(
+        rol: auth.rol,
+        esModerador: auth.esModerador,
+      );
+      if (destino == HomeDestino.ninguno) {
+        // Rol sin pantalla en la app: no dejar una sesión "colgada".
+        await ApiClient.instance.logout();
+        if (!mounted) return;
+        setState(() => _error = 'Tu cuenta no tiene un rol habilitado en la app. Contacta a soporte.');
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bienvenido ${auth.nombre}')));
+      abrirInicioComoRaiz(context, homeScreenFor(destino));
     } catch (e) {
       if (mounted) setState(() => _error = _mensajeError(e));
     } finally {
@@ -187,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               texto: 'Iniciar sesión',
                               textoCargando: 'Ingresando...',
                               cargando: _loading,
-                              onPressed: _login,
+                              onPressed: _googleCargando ? null : _login,
                             ),
                           ],
                         ),
@@ -195,7 +200,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SeparadorAuth(),
-                  const BotonGoogleAuth(),
+                  BotonGoogleAuth(
+                    deshabilitado: _loading,
+                    onCargando: (v) => setState(() => _googleCargando = v),
+                  ),
                   const SizedBox(height: 16),
                   EnlaceAuth(
                     botonKey: const Key('link_registro'),

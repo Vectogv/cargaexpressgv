@@ -12,6 +12,8 @@ import 'api/driver_service.dart';
 import 'api/profile_service.dart';
 import 'api/dispute_service.dart';
 import 'api/favorite_service.dart';
+import 'cache_service.dart';
+import 'google_auth.dart';
 import 'map_config.dart';
 import 'socket_service_client.dart';
 
@@ -29,6 +31,7 @@ class ApiClient {
   static const String _rolKey = 'auth_rol';
   static const String _esModeradorKey = 'auth_es_moderador';
   static const String _zonaModeradorKey = 'auth_zona_moderador';
+  static const String _perfilCompletoKey = 'auth_perfil_completo';
 
   String? _token;
   String? _refreshToken;
@@ -39,8 +42,12 @@ class ApiClient {
   String? _rol;
   bool _esModerador = false;
   String? _zonaModerador;
+  bool _perfilCompleto = true;
 
   String? get token => _token;
+  /// false tras entrar con Google sin teléfono/edad: la app los pide antes del
+  /// inicio, también si se cerró la app en esa pantalla.
+  bool get perfilCompleto => _perfilCompleto;
   String? get userId => _userId;
   String? get nombre => _nombre;
   String? get apellido => _apellido;
@@ -62,6 +69,13 @@ class ApiClient {
     _rol = prefs.getString(_rolKey);
     _esModerador = prefs.getBool(_esModeradorKey) ?? false;
     _zonaModerador = prefs.getString(_zonaModeradorKey);
+    _perfilCompleto = prefs.getBool(_perfilCompletoKey) ?? true;
+  }
+
+  Future<void> marcarPerfilCompleto() async {
+    _perfilCompleto = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_perfilCompletoKey);
   }
 
   // --- Auth ---
@@ -111,6 +125,8 @@ class ApiClient {
     }
     try {
       final auth = await AuthService.refreshToken(current);
+      // Se cerró sesión (u otra sesión entró) mientras esto volaba: no revivirla.
+      if (_refreshToken != current) return auth;
       // El endpoint de refresh (según el contrato) sólo devuelve token/refreshToken.
       // Actualizamos únicamente los tokens y conservamos el perfil en memoria.
       if (auth.token.isNotEmpty) _token = auth.token;
@@ -150,6 +166,7 @@ class ApiClient {
           .timeout(const Duration(seconds: 5));
     } catch (_) {}
     await clearTokens();
+    unawaited(cerrarSesionGoogle());
   }
 
   Future<void> _saveTokens(String token, String? refreshToken) async {
@@ -173,17 +190,22 @@ class ApiClient {
     _rol = auth.rol;
     _esModerador = auth.esModerador;
     _zonaModerador = auth.zonaModerador;
+    _perfilCompleto = auth.perfilCompleto;
     final prefs = await SharedPreferences.getInstance();
-    if (auth.id != null) await prefs.setString(_userIdKey, auth.id!);
-    if (auth.nombre != null) await prefs.setString(_nombreKey, auth.nombre!);
-    if (auth.apellido != null) await prefs.setString(_apellidoKey, auth.apellido!);
-    if (auth.email != null) await prefs.setString(_emailKey, auth.email!);
-    if (auth.rol != null) await prefs.setString(_rolKey, auth.rol!);
+    // Un campo ausente borra el de la sesión anterior (no lo hereda).
+    Future<void> guardar(String key, String? v) =>
+        v != null ? prefs.setString(key, v) : prefs.remove(key);
+    await guardar(_userIdKey, auth.id);
+    await guardar(_nombreKey, auth.nombre);
+    await guardar(_apellidoKey, auth.apellido);
+    await guardar(_emailKey, auth.email);
+    await guardar(_rolKey, auth.rol);
     await prefs.setBool(_esModeradorKey, auth.esModerador);
-    if (auth.zonaModerador != null) {
-      await prefs.setString(_zonaModeradorKey, auth.zonaModerador!);
+    await guardar(_zonaModeradorKey, auth.zonaModerador);
+    if (auth.perfilCompleto) {
+      await prefs.remove(_perfilCompletoKey);
     } else {
-      await prefs.remove(_zonaModeradorKey);
+      await prefs.setBool(_perfilCompletoKey, false);
     }
   }
 
@@ -207,6 +229,10 @@ class ApiClient {
     await prefs.remove(_rolKey);
     await prefs.remove(_esModeradorKey);
     await prefs.remove(_zonaModeradorKey);
+    await prefs.remove(_perfilCompletoKey);
+    _perfilCompleto = true;
+    // Viaje, perfil, avisos y chat en caché eran del usuario que sale.
+    await CacheService.instance.clearAll();
     // Cerrar el socket de la sesión anterior para no recibir eventos con
     // un token inválido ni mezclar usuarios.
     SocketServiceClient.instance.disconnect();

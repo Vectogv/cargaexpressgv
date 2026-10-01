@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:cargaexpress/services/api_client.dart';
 import 'package:cargaexpress/services/cache_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 
 void main() {
@@ -26,6 +28,16 @@ void main() {
       await Hive.deleteBoxFromDisk('chat');
       await Hive.deleteBoxFromDisk('preferences');
       tempDir.deleteSync(recursive: true);
+    });
+
+    test('cerrar sesión borra el viaje y el perfil del usuario anterior', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      cache.cacheActiveTrip({'_id': '7'});
+      cache.cacheProfile({'id': 'u1'});
+      await ApiClient.instance.clearTokens();
+      expect(cache.getCachedActiveTrip(), isNull);
+      expect(cache.getCachedProfile(), isNull);
     });
 
     group('profile', () {

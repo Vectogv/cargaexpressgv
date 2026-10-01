@@ -56,7 +56,9 @@ class HttpClient {
   }) async {
     final tokenUsed = ApiClient.instance.token;
     var res = await _send(request, timeout);
-    if (res.statusCode == 401 && auth) {
+    // Sin token no hay sesión que renovar ni que dar por "expirada" (p. ej.
+    // una petición que salió justo después de cerrar sesión).
+    if (res.statusCode == 401 && auth && (tokenUsed != null || isBackgroundIsolate)) {
       if (isBackgroundIsolate) {
         // El isolate principal pudo haber rotado los tokens: releerlos.
         await ApiClient.instance.reloadTokens();

@@ -1,42 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart';
+import '../../services/google_auth.dart';
 import '../home_by_role.dart';
 import 'auth_estilos.dart';
-
-/// ID de cliente web de Firebase (app-cargaexpress). No es secreto: Google lo
-/// pone en el idToken y el servidor lo compara.
-const _googleWebClientId = '848686850284-bi6477mo5t1ok3tgrha0vvnfmqcdcfma.apps.googleusercontent.com';
-
-bool _googleIniciado = false;
-
-/// Pide la cuenta de Google y devuelve su idToken, o null si el usuario cancela.
-Future<String?> _idTokenDeGoogle() async {
-  final google = GoogleSignIn.instance;
-  if (!_googleIniciado) {
-    await google.initialize(serverClientId: _googleWebClientId);
-    _googleIniciado = true;
-  }
-  try {
-    final cuenta = await google.authenticate();
-    return cuenta.authentication.idToken;
-  } on GoogleSignInException catch (e) {
-    if (e.code == GoogleSignInExceptionCode.canceled ||
-        e.code == GoogleSignInExceptionCode.interrupted) {
-      return null;
-    }
-    rethrow;
-  }
-}
+import 'auth_screen.dart';
 
 /// Botón "Continuar con Google" del login y del registro. Una cuenta nueva
 /// queda como cliente; si faltan teléfono o edad se piden antes del inicio.
 class BotonGoogleAuth extends StatefulWidget {
   /// Para pruebas: reemplaza el selector de cuentas de Google.
   final Future<String?> Function()? obtenerIdToken;
-  const BotonGoogleAuth({super.key, this.obtenerIdToken});
+
+  /// Mientras el formulario de correo está entrando, no se puede usar Google.
+  final bool deshabilitado;
+
+  /// Avisa al formulario para que no entre al mismo tiempo.
+  final ValueChanged<bool>? onCargando;
+  const BotonGoogleAuth({super.key, this.obtenerIdToken, this.deshabilitado = false, this.onCargando});
 
   @override
   State<BotonGoogleAuth> createState() => _BotonGoogleAuthState();
@@ -46,16 +30,23 @@ class _BotonGoogleAuthState extends State<BotonGoogleAuth> {
   bool _cargando = false;
   String? _error;
 
+  void _setCargando(bool v) {
+    setState(() => _cargando = v);
+    widget.onCargando?.call(v);
+  }
+
   Future<void> _entrar() async {
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+    _setCargando(true);
+    setState(() => _error = null);
     try {
-      final idToken = await (widget.obtenerIdToken ?? _idTokenDeGoogle)();
+      final idToken = await (widget.obtenerIdToken ?? idTokenDeGoogle)();
       if (idToken == null) return; // Canceló el selector.
       final auth = await ApiClient.instance.loginGoogle(idToken);
-      if (!mounted) return;
+      if (!mounted) {
+        // La pantalla se cerró mientras entraba: no dejar una sesión huérfana.
+        await ApiClient.instance.logout();
+        return;
+      }
       final destino = homeDestinoFor(rol: auth.rol, esModerador: auth.esModerador);
       if (destino == HomeDestino.ninguno) {
         await ApiClient.instance.logout();
@@ -72,12 +63,24 @@ class _BotonGoogleAuthState extends State<BotonGoogleAuth> {
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
-    } catch (_) {
+    } on GoogleSignInException catch (e) {
+      debugPrint('Google: ${e.code} ${e.description}');
+      if (mounted) setState(() => _error = _mensajeGoogle(e.code));
+    } catch (e) {
+      debugPrint('Google: $e');
       if (mounted) setState(() => _error = 'No se pudo entrar con Google. Intenta de nuevo.');
     } finally {
-      if (mounted) setState(() => _cargando = false);
+      if (mounted) _setCargando(false);
     }
   }
+
+  static String _mensajeGoogle(GoogleSignInExceptionCode code) => switch (code) {
+        GoogleSignInExceptionCode.clientConfigurationError ||
+        GoogleSignInExceptionCode.providerConfigurationError =>
+          'El inicio con Google no está disponible en esta versión. Usa tu correo.',
+        GoogleSignInExceptionCode.uiUnavailable => 'Actualiza los servicios de Google de tu celular e intenta de nuevo.',
+        _ => 'No se pudo entrar con Google. Intenta de nuevo.',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +91,7 @@ class _BotonGoogleAuthState extends State<BotonGoogleAuth> {
           height: 52,
           child: OutlinedButton.icon(
             key: const Key('btn_google'),
-            onPressed: _cargando ? null : _entrar,
+            onPressed: _cargando || widget.deshabilitado ? null : _entrar,
             style: OutlinedButton.styleFrom(
               foregroundColor: AuthColores.texto,
               backgroundColor: Colors.white,
@@ -173,6 +176,7 @@ class _CompletarPerfilScreenState extends State<CompletarPerfilScreen> {
         'telefono': _telCtrl.text.trim(),
         'edad': int.parse(_edadCtrl.text.trim()),
       });
+      await ApiClient.instance.marcarPerfilCompleto();
       if (mounted) abrirInicioComoRaiz(context, homeScreenFor(widget.destino));
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -183,8 +187,19 @@ class _CompletarPerfilScreenState extends State<CompletarPerfilScreen> {
     }
   }
 
+  Future<void> _usarOtraCuenta() async {
+    setState(() => _guardando = true);
+    await ApiClient.instance.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+      (_) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final esCliente = widget.destino == HomeDestino.cliente;
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -211,9 +226,11 @@ class _CompletarPerfilScreenState extends State<CompletarPerfilScreen> {
                     style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AuthColores.texto, letterSpacing: -0.5),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Necesitamos tu teléfono para que el conductor pueda llamarte, y tu edad (debes ser mayor de 18).',
-                    style: TextStyle(fontSize: 15, color: AuthColores.gris, height: 1.35),
+                  Text(
+                    esCliente
+                        ? 'Necesitamos tu teléfono para que el conductor pueda llamarte, y tu edad (debes ser mayor de 18).'
+                        : 'Necesitamos tu teléfono y tu edad (debes ser mayor de 18).',
+                    style: const TextStyle(fontSize: 15, color: AuthColores.gris, height: 1.35),
                   ),
                   const SizedBox(height: 22),
                   TarjetaAuth(
@@ -235,6 +252,7 @@ class _CompletarPerfilScreenState extends State<CompletarPerfilScreen> {
                           controller: _edadCtrl,
                           enabled: !_guardando,
                           keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
                           textInputAction: TextInputAction.done,
                           validator: (v) => validarEdad(v ?? ''),
                           onFieldSubmitted: (_) => _guardando ? null : _guardar(),
@@ -251,6 +269,12 @@ class _CompletarPerfilScreenState extends State<CompletarPerfilScreen> {
                           textoCargando: 'Guardando...',
                           cargando: _guardando,
                           onPressed: _guardar,
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          key: const Key('btn_otra_cuenta_google'),
+                          onPressed: _guardando ? null : _usarOtraCuenta,
+                          child: const Text('Usar otra cuenta'),
                         ),
                       ],
                     ),

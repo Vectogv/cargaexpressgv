@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../contracts/validacion_usuario.dart' show validarEmail;
 import '../../services/api/auth_service.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../shared/cambiar_password.dart' show mostrarAyudaPasswordOlvidada;
@@ -17,7 +18,9 @@ class RecuperarPasswordScreen extends StatefulWidget {
 }
 
 class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
+  // Igual que resetPasswordValidator del servidor (8 a 72).
   static const int _minimoPassword = 8;
+  static const int _maximoPassword = 72;
 
   late final _email = TextEditingController(text: widget.email);
   final _codigo = TextEditingController();
@@ -52,8 +55,9 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
 
   Future<void> _enviarCodigo() async {
     final email = _email.text.trim();
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      setState(() => _error = 'Escribe un correo válido');
+    final errorEmail = validarEmail(email);
+    if (errorEmail != null) {
+      setState(() => _error = errorEmail);
       return;
     }
     await _ejecutar(() async {
@@ -71,6 +75,10 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
     }
     if (_nueva.text.length < _minimoPassword) {
       setState(() => _error = 'La nueva contraseña debe tener al menos $_minimoPassword caracteres');
+      return;
+    }
+    if (_nueva.text.length > _maximoPassword) {
+      setState(() => _error = 'La nueva contraseña puede tener máximo $_maximoPassword caracteres');
       return;
     }
     if (_nueva.text != _confirmar.text) {
@@ -168,6 +176,18 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
                             key: const Key('btn_reenviar_codigo'),
                             onPressed: _cargando ? null : _enviarCodigo,
                             child: const Text('Reenviar código'),
+                          ),
+                        if (_codigoEnviado)
+                          TextButton(
+                            key: const Key('btn_cambiar_correo'),
+                            onPressed: _cargando
+                                ? null
+                                : () => setState(() {
+                                      _codigoEnviado = false;
+                                      _codigo.clear();
+                                      _error = null;
+                                    }),
+                            child: const Text('Cambiar correo'),
                           ),
                       ],
                     ),

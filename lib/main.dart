@@ -19,8 +19,10 @@ import 'services/app_lifecycle_service.dart';
 import 'services/error_handler_service.dart';
 import 'services/session_monitor_service.dart';
 import 'services/session_events.dart';
+import 'services/driver_location_service.dart';
 import 'core/navegador_global.dart';
 import 'screens/user/auth_screen.dart';
+import 'screens/user/google_login.dart' show CompletarPerfilScreen;
 import 'screens/shared/cuenta_no_activa_dialog.dart' show mostrarCuentaSuspendidaDialog;
 import 'screens/shared/tickets/tickets_navegacion.dart' show abrirTicketSoporteGlobal;
 import 'screens/home_by_role.dart';
@@ -44,7 +46,14 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// Misma función de ruteo por rol que usan el login y el registro
 /// (`screens/home_by_role.dart`), para que restaurar la sesión lleve a la
 /// misma pantalla que iniciar sesión.
-Widget _homeScreenByRole() => homeScreenFor(homeDestinoForSession());
+Widget _homeScreenByRole() {
+  final destino = homeDestinoForSession();
+  // Entró con Google y cerró la app antes de dar teléfono y edad.
+  if (!ApiClient.instance.perfilCompleto && destino != HomeDestino.ninguno) {
+    return CompletarPerfilScreen(destino: destino, nombre: ApiClient.instance.nombre);
+  }
+  return homeScreenFor(destino);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -179,6 +188,7 @@ Future<void> _onSessionEvent(SessionEvent event) async {
   LoggerService.instance.info('Session event: ${event.type}');
 
   SessionMonitorService.instance.stop();
+  DriverLocationService.instance.stop();
   if (ApiClient.instance.token != null) {
     try {
       await ApiClient.instance.clearTokens();
