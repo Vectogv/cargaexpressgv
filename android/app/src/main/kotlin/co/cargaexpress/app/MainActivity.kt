@@ -1,4 +1,4 @@
-package com.example.cargaexpress
+package co.cargaexpress.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

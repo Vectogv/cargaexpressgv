@@ -7,6 +7,51 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:848686850284:android:97385b758f284f093d45c9",
+        "android_client_info": {
+          "package_name": "co.cargaexpress.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "848686850284-bh5aa0hhkt26sucatpubjmhfvqni4tki.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "co.cargaexpress.app",
+            "certificate_hash": "c07bbcedb6fa4a82e27bd8edb4dca347e9c53321"
+          }
+        },
+        {
+          "client_id": "848686850284-d09agodcm4kb6hsnvcb5rlsfofcoiila.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "co.cargaexpress.app",
+            "certificate_hash": "10c912b3a244409c1fbffbb43a03afa3fbd79b04"
+          }
+        },
+        {
+          "client_id": "848686850284-bi6477mo5t1ok3tgrha0vvnfmqcdcfma.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQPBGK0CuoidlFBewtH7Fk2C8Als1kwII"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "848686850284-bi6477mo5t1ok3tgrha0vvnfmqcdcfma.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:848686850284:android:d5c68a1b3b489b813d45c9",
         "android_client_info": {
           "package_name": "com.example.cargaexpress"

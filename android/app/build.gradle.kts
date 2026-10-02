@@ -16,7 +16,7 @@ val keyProps = Properties().apply {
 }
 
 android {
-    namespace = "com.example.cargaexpress"
+    namespace = "co.cargaexpress.app"
 
     // Se fuerza la compilación con Android SDK 36
     compileSdk = 36
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.cargaexpress"
+        applicationId = "co.cargaexpress.app"
 
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
