@@ -25,6 +25,7 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
   bool _loading = true;
   String? _error;
   String? _cancelandoId;
+  String? _pidiendoPlazoId;
   final _motivoCtrl = TextEditingController();
 
   @override
@@ -116,6 +117,55 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
     }
   }
 
+  Future<void> _pedirPlazo(Map<String, dynamic> r) async {
+    final id = idDeViaje(r);
+    if (id == null || _pidiendoPlazoId != null) return;
+    int? minutosSeleccionados;
+    final minutos = await mostrarHojaApp<int>(
+      context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const TituloHoja(titulo: '¿Cuánto más necesitas?', detalle: 'Solo puedes pedirlo una vez. El cliente debe aceptarlo.'),
+            const SizedBox(height: 12),
+            for (final m in const [15, 30, 60]) ...[
+              OpcionRadio(texto: '+$m min', elegida: minutosSeleccionados == m, onTap: () => setDialogState(() => minutosSeleccionados = m)),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 4),
+            BotonPrincipal(
+              key: const Key('reserva_confirmar_plazo'),
+              texto: 'Pedir',
+              onPressed: minutosSeleccionados != null ? () => Navigator.pop(ctx, minutosSeleccionados) : null,
+            ),
+            const SizedBox(height: 8),
+            BotonSecundario(texto: 'Volver', color: ColoresApp.textoOscuro, colorBorde: ColoresApp.borde, onPressed: () => Navigator.pop(ctx, null)),
+          ],
+        ),
+      ),
+    );
+    if (minutos == null || !mounted) return;
+    setState(() => _pidiendoPlazoId = id);
+    try {
+      final resp = await TripService.requestMorePlazo(id, minutos);
+      if (!mounted) return;
+      _snack('Se le pidió al cliente $minutos min más. Esperando su respuesta.');
+      setState(() {
+        _reservas = _reservas.map((x) => idDeViaje(x) != id
+            ? x
+            : {...x, 'plazoSolicitud': resp['plazoSolicitud'] ?? {'minutos': minutos, 'estado': 'pendiente'}}).toList();
+      });
+    } on ApiException catch (e) {
+      if (mounted) _snack(e.message);
+    } catch (e) {
+      if (mounted) _snack(mensajeDeError(e));
+    } finally {
+      if (mounted) setState(() => _pidiendoPlazoId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget cuerpo;
@@ -157,6 +207,7 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
     final nombre = [cliente?['nombre'], cliente?['apellido']].whereType<String>().join(' ').trim();
     final precio = (r['precioFinal'] ?? r['precioEstimado']) as num?;
     final fecha = formatoFechaHoraReserva(r['fechaProgramada']?.toString(), r['horaProgramada']?.toString());
+    final plazo = r['plazoSolicitud'] as Map<String, dynamic>?;
     return TarjetaBlanca(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
@@ -179,6 +230,23 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
         const SizedBox(height: 6),
         const Text('Verás la ubicación y el teléfono 45 min antes de la recogida.', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
         const SizedBox(height: 12),
+        if (plazo == null) ...[
+          SizedBox(
+            width: double.infinity,
+            child: BotonSecundario(
+              key: Key('reserva_plazo_$id'),
+              texto: 'Pedir más tiempo',
+              icono: Icons.schedule_rounded,
+              alto: 44,
+              cargando: _pidiendoPlazoId == id,
+              onPressed: _pidiendoPlazoId == null ? () => _pedirPlazo(r) : null,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ] else if (plazo['estado'] == 'pendiente') ...[
+          const Align(alignment: Alignment.centerLeft, child: ChipEstado.naranja('Esperando respuesta del cliente')),
+          const SizedBox(height: 8),
+        ],
         Row(children: [
           Expanded(
             child: BotonPrincipal(

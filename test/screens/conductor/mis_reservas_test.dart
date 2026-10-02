@@ -91,4 +91,67 @@ void main() {
       expect(find.text('Ana Cliente'), findsNothing);
     }, log: log);
   });
+
+  testWidgets('pedir más tiempo elige los minutos y manda el POST', (tester) async {
+    pantallaAlta(tester);
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      if (req.method == 'POST' && req.url.path.endsWith('/plazo')) {
+        return jsonResp({'plazoSolicitud': {'minutos': 30, 'estado': 'pendiente'}});
+      }
+      return jsonResp({'data': [_reserva]});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: MisReservasScreen()));
+      await avanzar(tester);
+      expect(find.byKey(const Key('reserva_plazo_70')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('reserva_plazo_70')));
+      await avanzar(tester);
+      expect(find.text('¿Cuánto más necesitas?'), findsOneWidget);
+
+      final confirmar = find.byKey(const Key('reserva_confirmar_plazo'));
+      expect(tester.widget<FilledButton>(find.descendant(of: confirmar, matching: find.byType(FilledButton))).enabled, isFalse);
+      await tester.tap(find.text('+30 min'));
+      await avanzar(tester, 0.3);
+      await tester.tap(confirmar);
+      await avanzar(tester);
+
+      final post = log.firstWhere((r) => r.method == 'POST');
+      expect(post.url.path, '/api/trips/70/plazo');
+      expect(jsonDecode(post.body), {'minutos': 30});
+      expect(find.text('Se le pidió al cliente 30 min más. Esperando su respuesta.'), findsOneWidget);
+      expect(find.text('Esperando respuesta del cliente'), findsOneWidget);
+      expect(find.byKey(const Key('reserva_plazo_70')), findsNothing);
+    }, log: log);
+  });
+
+  testWidgets('ya pedido el plazo muestra el chip y no el botón', (tester) async {
+    pantallaAlta(tester);
+    final reservaConPlazo = {..._reserva, 'plazoSolicitud': {'minutos': 15, 'estado': 'pendiente'}};
+    await conApiFalsa((_) => jsonResp({'data': [reservaConPlazo]}), () async {
+      await tester.pumpWidget(const MaterialApp(home: MisReservasScreen()));
+      await avanzar(tester);
+      expect(find.byKey(const Key('reserva_plazo_70')), findsNothing);
+      expect(find.text('Esperando respuesta del cliente'), findsOneWidget);
+    });
+  });
+
+  testWidgets('pedir más tiempo ya pedido (409) muestra el mensaje del servidor', (tester) async {
+    pantallaAlta(tester);
+    await conApiFalsa((req) {
+      if (req.method == 'POST' && req.url.path.endsWith('/plazo')) {
+        return errorResp(409, 'Ya pediste más tiempo para esta reserva.');
+      }
+      return jsonResp({'data': [_reserva]});
+    }, () async {
+      await tester.pumpWidget(const MaterialApp(home: MisReservasScreen()));
+      await avanzar(tester);
+      await tester.tap(find.byKey(const Key('reserva_plazo_70')));
+      await avanzar(tester);
+      await tester.tap(find.text('+15 min'));
+      await avanzar(tester, 0.3);
+      await tester.tap(find.byKey(const Key('reserva_confirmar_plazo')));
+      await avanzar(tester);
+      expect(find.text('Ya pediste más tiempo para esta reserva.'), findsOneWidget);
+    });
+  });
 }

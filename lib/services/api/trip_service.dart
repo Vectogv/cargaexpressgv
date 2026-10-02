@@ -107,6 +107,16 @@ class TripService {
     return HttpClient.post('/api/trips/$id/cancel', body: body, auth: true);
   }
 
+  /// El conductor pide más tiempo en una reserva (una sola vez por reserva).
+  static Future<Map<String, dynamic>> requestMorePlazo(dynamic id, int minutos) async {
+    return HttpClient.post('/api/trips/$id/plazo', body: {'minutos': minutos}, auth: true);
+  }
+
+  /// El cliente acepta o rechaza el plazo que pidió el conductor.
+  static Future<Map<String, dynamic>> responderPlazo(dynamic id, {required bool aceptar}) async {
+    return HttpClient.post('/api/trips/$id/plazo/responder', body: {'aceptar': aceptar}, auth: true);
+  }
+
   static Future<void> requestCancellation(dynamic id, {String? motivo, String? justificacion}) async {
     final body = <String, dynamic>{};
     if (motivo != null) body['motivo'] = motivo;
