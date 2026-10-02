@@ -287,6 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     await _fetchActiveTrip();
     if (!mounted) return;
+    unawaited(_loadStats()); // la calificación baja al cancelar
     _actualizarSolicitudes();
     if (_online && !_viajeOcupa && !_estadoPago.bloqueaConexion) {
       unawaited(DriverLocationService.instance.start());
@@ -555,8 +556,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final route = routes[index];
     if (route != null) {
       await Navigator.push(context, MaterialPageRoute(builder: (_) => route));
-      // Al volver (p. ej. de Ganancias tras pagar), la deuda puede haber cambiado.
-      if (mounted) unawaited(_cargarDeuda());
+      // Al volver (p. ej. de Ganancias tras pagar o de cancelar un viaje),
+      // la deuda y la calificación pueden haber cambiado.
+      if (mounted) {
+        unawaited(_cargarDeuda());
+        unawaited(_loadStats());
+      }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Próximamente disponible'), duration: Duration(seconds: 2)),
