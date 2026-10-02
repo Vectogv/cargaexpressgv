@@ -42,7 +42,7 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
   Future<void> _cargar() async {
     if (mounted && !_loading) setState(() { _loading = true; _error = null; });
     try {
-      final lista = await ApiClient.instance.getReservations(limit: 50);
+      final lista = await ApiClient.instance.getReservations(limit: 50, estado: 'reservado');
       if (mounted) setState(() { _reservas = lista; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = mensajeDeError(e); });
