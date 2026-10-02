@@ -12,6 +12,7 @@ import '../../services/solicitudes_disponibles_service.dart';
 import '../../widgets/vehiculo_mapa.dart' show TipoVehiculoMapa, tipoVehiculoMapaDe;
 import 'conductor_trip_detail_screen.dart';
 import 'offers_screen.dart';
+import '../cliente/rastreo_ui.dart' show formatoFechaHoraReserva;
 import '../../core/formato_dinero.dart';
 import '../shared/ui_compartida.dart';
 
@@ -321,7 +322,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
     final minutos = _num(v['tiempoEstimado'])?.toInt();
     final km = kmHastaRecogida(v, DriverLocationService.instance.lastLat, DriverLocationService.instance.lastLng);
     final restante = segundosRestantesSolicitud(v, ahora);
-    final programada = v['tipoProgramacion'] == 'programada';
+    final programada = esReservaProgramada(v);
     final vehiculoRequerido = v['tipoVehiculoRequerido']?.toString().trim();
     final oferta = solicitud.oferta;
 
@@ -348,6 +349,17 @@ class SolicitudDisponibleCard extends StatelessWidget {
                 _chip(Icons.timer_off_outlined, 'Por vencer', color: ColoresApp.rojo),
             ],
           ),
+          if (programada) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              const Icon(Icons.event_rounded, size: 14, color: ColoresApp.azulOscuro),
+              const SizedBox(width: 5),
+              Text(
+                'Recogida: ${formatoFechaHoraReserva(v['fechaProgramada']?.toString(), v['horaProgramada']?.toString()) ?? 'fecha por confirmar'}',
+                style: _estiloDato.copyWith(color: ColoresApp.azulOscuro, fontWeight: FontWeight.w600),
+              ),
+            ]),
+          ],
           if (km != null || (minutos != null && minutos > 0)) ...[
             const SizedBox(height: 8),
             Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 5, children: [

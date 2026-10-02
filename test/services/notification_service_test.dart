@@ -203,14 +203,15 @@ void main() {
     service.manejarToqueDePush({'tipo': 'viaje_estado', 'viajeId': '51'}, titulo: 'El conductor llegó');
     service.manejarToqueDePush({'tipo': 'viaje_cancelado', 'viajeId': '52'});
     service.manejarToqueDePush({'tipo': 'disputa_resuelta', 'viajeId': '53'});
-    expect(abiertos, ['51', '52', '53']);
+    service.manejarToqueDePush({'tipo': 'reserva', 'viajeId': '56'}, titulo: 'Reserva asignada');
+    expect(abiertos, ['51', '52', '53', '56']);
 
     // Sin viajeId, de otro tipo o sin sesión no abre nada.
     service.manejarToqueDePush({'tipo': 'viaje_estado'});
     service.manejarToqueDePush({'tipo': 'ticket_estado', 'viajeId': '54'});
     sesion = false;
     service.manejarToqueDePush({'tipo': 'viaje_estado', 'viajeId': '55'});
-    expect(abiertos, ['51', '52', '53']);
+    expect(abiertos, ['51', '52', '53', '56']);
   });
 
   test('normalizar saca el ticketId de la raíz o de data/datos (notification:new)', () {

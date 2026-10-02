@@ -2038,7 +2038,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           const Text('Cliente', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
         ]),
       ])),
-      if (TripStatus.chatHabilitado(estado))
+      if (TripStatus.chatHabilitado(estado, conConductor: true))
         _iconoRedondo(Icons.chat_bubble_outline_rounded, 'Chat', () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => TripChatScreen(trip: t.toJson())));
         }),

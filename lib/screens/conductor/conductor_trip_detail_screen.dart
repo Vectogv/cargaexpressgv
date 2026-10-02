@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../../contracts/solicitud.dart' show segundosRestantesSolicitud;
+import '../../contracts/solicitud.dart' show esReservaProgramada, segundosRestantesSolicitud;
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/server_clock.dart';
@@ -9,6 +9,7 @@ import '../../services/socket_service_client.dart';
 import '../../services/solicitudes_disponibles_service.dart';
 import 'hacer_oferta_screen.dart';
 import 'oferta_enviada_screen.dart';
+import '../cliente/rastreo_ui.dart' show formatoFechaHoraReserva;
 import '../../core/formato_dinero.dart';
 import '../shared/ui_compartida.dart';
 
@@ -38,6 +39,10 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
     super.initState();
     // Hora del servidor: el reloj del teléfono puede estar desfasado.
     _secondsLeft = segundosRestantesSolicitud(widget.trip, ServerClock.ahora());
+    _fetchProfile();
+    _setupSocketListeners();
+    // Una reserva no vence a los 15 min: la oferta vale 12 h.
+    if (_esReserva) return;
     _expireTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_secondsLeft <= 0) {
         t.cancel();
@@ -51,8 +56,6 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
         if (mounted) setState(() => _secondsLeft--);
       }
     });
-    _fetchProfile();
-    _setupSocketListeners();
   }
 
   void _setupSocketListeners() {
@@ -108,6 +111,7 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
   }
 
   dynamic get _tripId => widget.trip['_id'] ?? widget.trip['id'];
+  bool get _esReserva => esReservaProgramada(widget.trip);
 
   String get _timerLabel {
     final m = (_secondsLeft ~/ 60).toString().padLeft(2, '0');
@@ -143,6 +147,14 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
           monto: creada.montoValor ?? ofertaInicial,
           venceEn: creada.venceEn,
         );
+        if (_esReserva) {
+          // El cliente puede tardar horas: no se espera aquí.
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Oferta enviada. Te avisamos si el cliente la acepta (vale 12 h).'),
+          ));
+          Navigator.pop(context);
+          return;
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -343,17 +355,19 @@ class _ConductorTripDetailScreenState extends State<ConductorTripDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
-              'La solicitud expirará en',
-              style: TextStyle(fontSize: 13, color: ColoresApp.naranjaAviso),
+              _esReserva ? 'Reserva para' : 'La solicitud expirará en',
+              style: const TextStyle(fontSize: 13, color: ColoresApp.naranjaAviso),
             ),
           ),
           const SizedBox(width: 8),
           Text(
-            _timerLabel,
-            style: const TextStyle(
-              fontSize: 22,
+            _esReserva
+                ? (formatoFechaHoraReserva(widget.trip['fechaProgramada']?.toString(), widget.trip['horaProgramada']?.toString()) ?? 'Fecha por confirmar')
+                : _timerLabel,
+            style: TextStyle(
+              fontSize: _esReserva ? 16 : 22,
               fontWeight: FontWeight.w700,
               color: ColoresApp.naranja,
               fontFeatures: [FontFeature.tabularFigures()],

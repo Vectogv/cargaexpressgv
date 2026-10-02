@@ -98,11 +98,13 @@ class TripService {
     await HttpClient.post('/api/trips/$id/finalize', body: body, auth: true, idempotent: true, idempotencyKey: idempotencyKey);
   }
 
-  static Future<void> cancelTrip(dynamic id, {String? motivo, String? justificacion}) async {
+  /// Devuelve la respuesta del backend: al cancelar una reserva asignada el
+  /// conductor recibe `reabierta` y `penalizado` (-0,5 solo si faltan < 24 h).
+  static Future<Map<String, dynamic>> cancelTrip(dynamic id, {String? motivo, String? justificacion}) async {
     final body = <String, dynamic>{};
     if (motivo != null) body['motivo'] = motivo;
     if (justificacion != null) body['justificacion'] = justificacion;
-    await HttpClient.post('/api/trips/$id/cancel', body: body, auth: true);
+    return HttpClient.post('/api/trips/$id/cancel', body: body, auth: true);
   }
 
   static Future<void> requestCancellation(dynamic id, {String? motivo, String? justificacion}) async {

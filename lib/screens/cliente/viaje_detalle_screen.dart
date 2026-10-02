@@ -1,14 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../../contracts/calificacion.dart' show etiquetaCalificacionConductor;
 import '../../contracts/cancelacion.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
+import '../../services/api/offer_service.dart';
 import '../../services/api/trip_service.dart';
 import '../../services/report_service.dart';
+import '../../services/socket_service_client.dart';
 import '../../widgets/error_carga.dart';
 import '../conductor/reportar_cliente_screen.dart';
-import '../shared/ui_compartida.dart' show BotonSecundario, ColoresApp;
+import '../shared/ui_compartida.dart' show BotonPrincipal, BotonSecundario, ColoresApp, cifrasTabulares;
 import 'cancel_trip_screen.dart';
+import 'chat_screen.dart';
+import 'ofertas_recibidas_screen.dart' show intervaloSondeoOfertas;
+import 'rastreo_screen.dart';
 import '../../core/formato_dinero.dart';
 
 class ViajeDetalleScreen extends StatefulWidget {
@@ -35,10 +43,115 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   /// ([ReportService.yaReportado]) porque el detalle del backend no lo informa.
   bool _reportado = false;
 
+  // Reserva (`reservado`): sin conductor, se sondean las ofertas cada 5 s
+  // (respaldo del socket `new:offer`); con conductor, se relee el viaje cada
+  // 20 s para abrir el rastreo cuando el servidor la active (`aceptado`).
+  List<Map<String, dynamic>> _ofertas = [];
+  String? _aceptandoId;
+  Timer? _sondeo;
+  int _tick = 0;
+  final _subs = <StreamSubscription<Map<String, dynamic>>>[];
+
   @override
   void initState() {
     super.initState();
     _load();
+    if (!widget.comoConductor) {
+      final s = SocketServiceClient.instance;
+      _subs.addAll([
+        s.onNewOffer.listen((_) => _trasFrame(_cargarOfertas)),
+        s.onTripOfferReceived.listen((_) => _trasFrame(_cargarOfertas)),
+        s.onTripStatus.listen((d) {
+          if ((d['id'] ?? d['tripId'] ?? d['viajeId'])?.toString() == widget.tripId.toString()) _trasFrame(_refrescarReserva);
+        }),
+      ]);
+    }
+  }
+
+  @override
+  void dispose() {
+    _sondeo?.cancel();
+    for (final s in _subs) {
+      s.cancel();
+    }
+    super.dispose();
+  }
+
+  /// En segundo plano Flutter no pinta hasta el próximo toque: se fuerza.
+  void _trasFrame(VoidCallback fn) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => fn());
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  bool get _esReserva => !widget.comoConductor && _trip?['estado'] == TripStatus.reservado;
+  bool get _reservaSinConductor => _esReserva && _trip?['conductor'] == null;
+
+  void _ajustarSondeo() {
+    if (!_esReserva) {
+      _sondeo?.cancel();
+      _sondeo = null;
+      return;
+    }
+    _sondeo ??= Timer.periodic(intervaloSondeoOfertas, (_) {
+      _tick++;
+      if (_reservaSinConductor) _cargarOfertas();
+      if (_tick % 4 == 0) _refrescarReserva();
+    });
+    if (_reservaSinConductor) _cargarOfertas();
+  }
+
+  Future<void> _cargarOfertas() async {
+    if (!_reservaSinConductor) return;
+    try {
+      final lista = await OfferService.getOffers(widget.tripId);
+      if (mounted) setState(() => _ofertas = lista);
+    } catch (_) {
+      // Sin red: se reintenta en el próximo sondeo.
+    }
+  }
+
+  /// Relee la reserva sin spinner. Si el servidor ya la activó (`aceptado`),
+  /// abre el rastreo normal; si se canceló, el detalle lo muestra.
+  Future<void> _refrescarReserva() async {
+    if (!_esReserva) return;
+    try {
+      final data = await ApiClient.instance.getTripDetail(widget.tripId);
+      if (!mounted) return;
+      setState(() => _trip = data);
+      _ajustarSondeo();
+      if (_estaActivo(data['estado']?.toString())) _abrirRastreo();
+    } catch (_) {}
+  }
+
+  static bool _estaActivo(String? estado) =>
+      estado != null &&
+      !const {TripStatus.reservado, TripStatus.finalizado, TripStatus.cancelado, TripStatus.disputa, TripStatus.enDisputa}.contains(estado);
+
+  void _abrirRastreo() {
+    _sondeo?.cancel();
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RastreoScreen()));
+  }
+
+  Future<void> _aceptarOferta(Map<String, dynamic> oferta) async {
+    final id = (oferta['_id'] ?? oferta['id'])?.toString();
+    if (id == null || _aceptandoId != null) return;
+    setState(() => _aceptandoId = id);
+    try {
+      await OfferService.acceptOffer(widget.tripId, id);
+      if (!mounted) return;
+      _snack('Conductor asignado a tu reserva');
+      await _load();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _snack(e.message);
+      if (e.statusCode == 404 || e.statusCode == 409 || e.statusCode == 422) {
+        setState(() => _ofertas = _ofertas.where((o) => (o['_id'] ?? o['id'])?.toString() != id).toList());
+      }
+    } catch (e) {
+      if (mounted) _snack(mensajeDeError(e));
+    } finally {
+      if (mounted) setState(() => _aceptandoId = null);
+    }
   }
 
   /// Error de carga distinto de 404 (red, 5xx...): se ofrece reintentar.
@@ -60,6 +173,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
           _loading = false;
           _error = null;
         });
+        _ajustarSondeo();
       }
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -140,7 +254,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   String _estadoLabel(String estado) {
     switch (estado) {
       case 'buscando_conductor': return 'Buscando conductor';
-      case 'reservado': return 'Reservado';
+      case 'reservado': return _trip?['conductor'] != null ? 'Reserva con conductor asignado' : 'Reservado';
       case 'aceptado': return 'Aceptado';
       case 'en_curso': return 'En curso';
       case 'esperando_confirmacion': return 'Esperando confirmación';
@@ -214,6 +328,9 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
                       ] else if (_trip!['conductor'] != null) ...[
                         const SizedBox(height: 16),
                         _buildConductorSection(),
+                      ] else if (_reservaSinConductor) ...[
+                        const SizedBox(height: 16),
+                        _buildOfertasReservaSection(),
                       ],
                       if (!widget.comoConductor && _trip!['estado'] == TripStatus.reservado) ...[
                         const SizedBox(height: 16),
@@ -252,7 +369,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
             children: [
               Icon(Icons.circle, color: _estadoColor(estado), size: 12),
               const SizedBox(width: 8),
-              Text(_estadoLabel(estado), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _estadoColor(estado))),
+              Expanded(child: Text(_estadoLabel(estado), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _estadoColor(estado)))),
             ],
           ),
           const SizedBox(height: 8),
@@ -278,7 +395,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
         children: [
           const SizedBox(width: 20),
           const Text('Programado para: ', style: TextStyle(fontSize: 12, color: Colors.black45)),
-          Text('$fecha $hora', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          Expanded(child: Text('$fecha $hora', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -392,8 +509,87 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
               Text(_vehiculoTexto(conductor), style: const TextStyle(fontSize: 12, color: Colors.black45)),
             ])),
           ]),
+          if (_esReserva) ..._reservaConductorExtra(conductor),
         ],
       ),
+    );
+  }
+
+  /// Reserva asignada: solo chat. La ubicación y el teléfono llegan con el
+  /// rastreo, cuando el servidor la active 45 min antes de la recogida.
+  List<Widget> _reservaConductorExtra(Map<String, dynamic> conductor) {
+    final veh = conductor['vehiculo'] as Map<String, dynamic>?;
+    final placa = (veh?['placa'] ?? conductor['placa'])?.toString() ?? '';
+    return [
+      const SizedBox(height: 10),
+      Row(children: [
+        const Icon(Icons.star_rounded, color: ColoresApp.ambar, size: 16),
+        const SizedBox(width: 4),
+        Text(etiquetaCalificacionConductor(conductor),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro)),
+        const Spacer(),
+        if (placa.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: ColoresApp.placaFondo,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: ColoresApp.placaTexto),
+            ),
+            child: Text(placa.toUpperCase(),
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: ColoresApp.placaTexto, letterSpacing: 1, fontFeatures: cifrasTabulares)),
+          ),
+      ]),
+      const SizedBox(height: 10),
+      const Text('Verás su ubicación 45 min antes de la recogida.', style: TextStyle(fontSize: 12, color: Colors.black45)),
+      const SizedBox(height: 12),
+      BotonPrincipal(
+        key: const Key('reserva_chat'),
+        texto: 'Chat con el conductor',
+        icono: Icons.chat_bubble_outline_rounded,
+        alto: 44,
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(trip: _trip!))),
+      ),
+    ];
+  }
+
+  Widget _buildOfertasReservaSection() {
+    return _tarjeta('Ofertas para tu reserva', [
+      if (_ofertas.isEmpty)
+        const Text('Todavía no hay ofertas. Te avisamos cuando llegue una.', style: TextStyle(fontSize: 13, color: Colors.black45))
+      else
+        for (final o in _ofertas) _ofertaRow(o),
+    ]);
+  }
+
+  Widget _ofertaRow(Map<String, dynamic> o) {
+    final id = (o['_id'] ?? o['id'])?.toString();
+    final conductor = o['conductor'] as Map<String, dynamic>? ?? const {};
+    final monto = num.tryParse(o['monto']?.toString() ?? '') ?? 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(conductor['nombre'] as String? ?? 'Conductor', style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text('${_vehiculoTexto(conductor)} - ${etiquetaCalificacionConductor(conductor)}',
+              style: const TextStyle(fontSize: 12, color: Colors.black45)),
+          Text(formatearPesos(monto),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+        ])),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 100,
+          child: BotonPrincipal(
+            key: Key('reserva_aceptar_$id'),
+            texto: 'Aceptar',
+            alto: 40,
+            cargando: _aceptandoId == id,
+            onPressed: _aceptandoId == null ? () => _aceptarOferta(o) : null,
+          ),
+        ),
+      ]),
     );
   }
 

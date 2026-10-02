@@ -58,7 +58,7 @@ class NotificationService {
   void Function(String conversacionId)? abrirConversacion;
 
   static bool esTipoViaje(String? tipo) =>
-      tipo == 'viaje_estado' || tipo == 'viaje_cancelado' || tipo == 'disputa_resuelta';
+      tipo == 'viaje_estado' || tipo == 'viaje_cancelado' || tipo == 'disputa_resuelta' || tipo == 'reserva';
 
   final _controller = StreamController<Map<String, dynamic>>.broadcast();
   bool _initialized = false;

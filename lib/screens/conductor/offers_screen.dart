@@ -6,6 +6,7 @@ import '../../services/socket_service_client.dart';
 import '../../models/oferta_pendiente.dart';
 import '../../models/trip.dart';
 import '../../services/server_clock.dart';
+import 'mis_reservas_screen.dart';
 import 'oferta_aceptada_screen.dart';
 import 'trip_in_progress_screen.dart';
 import '../../core/formato_dinero.dart';
@@ -121,8 +122,9 @@ class _OffersScreenState extends State<OffersScreen> with SingleTickerProviderSt
       viaje = {'id': aceptada.viajeId, ...evento};
     }
     if (!mounted) return;
+    final reservada = viaje['estado'] == TripStatus.reservado;
     Navigator.pushReplacement(context, MaterialPageRoute(
-      builder: (_) => OfertaAceptadaScreen.desdeViaje(viaje, montoOferta: _dinero(monto)),
+      builder: (_) => reservada ? const MisReservasScreen() : OfertaAceptadaScreen.desdeViaje(viaje, montoOferta: _dinero(monto)),
     ));
   }
 

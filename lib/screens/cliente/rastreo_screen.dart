@@ -1882,7 +1882,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       trip: _trip,
       calificacion: etiquetaCalificacionConductor(conductor?.toJson()),
       distanciaViaje: _distanciaViaje(),
-      onChat: TripStatus.chatHabilitado(_status)
+      onChat: TripStatus.chatHabilitado(_status, conConductor: conductor != null)
           ? () => _safePush(ChatScreen(trip: _trip?.toJson() ?? {}))
           : null,
       onLlamar: () async {

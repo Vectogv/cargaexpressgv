@@ -3,11 +3,17 @@
 // `busqueda_timeout_service.ts` y `geo_service.obtenerViajesCercanos`.
 
 /// La solicitud admite ofertas sólo mientras el backend busca conductor
-/// (`buscando_conductor` o `pendiente` con ofertas sin aceptar).
+/// (`buscando_conductor` o `pendiente` con ofertas sin aceptar) o es una
+/// reserva (`reservado`) todavía sin conductor.
 bool solicitudSigueAbierta(dynamic estado) {
   final e = estado?.toString();
-  return e == null || e == 'buscando_conductor' || e == 'pendiente';
+  return e == null || e == 'buscando_conductor' || e == 'pendiente' || e == 'reservado';
 }
+
+/// Reserva programada: no corre el plazo de 15 min de búsqueda; se muestra
+/// la fecha de recogida en vez de la cuenta regresiva.
+bool esReservaProgramada(Map<String, dynamic> trip) =>
+    trip['tipoProgramacion'] == 'programada' || trip['estado'] == 'reservado';
 
 /// Minutos que el backend deja buscar conductor (BUSQUEDA_TIMEOUT_MIN,
 /// BusquedaTimeoutService): la solicitud sigue abierta a ofertas hasta

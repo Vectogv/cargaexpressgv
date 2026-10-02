@@ -21,12 +21,23 @@ class TripStatus {
 
   /// Estados en los que el backend permite el chat del viaje
   /// (`chat_controller.ts`; fuera de ellos responde 422).
-  static bool chatHabilitado(String? estado) =>
+  /// Una reserva (`reservado`) también chatea, pero solo cuando ya tiene
+  /// conductor asignado ([conConductor]).
+  static bool chatHabilitado(String? estado, {bool conConductor = false}) =>
       estado == aceptado ||
       estado == enCurso ||
       estado == enCamino ||
       estado == llegada ||
-      estado == sos;
+      estado == sos ||
+      (estado == reservado && conConductor);
+
+  /// [chatHabilitado] leyendo estado y conductor del JSON del viaje.
+  static bool chatHabilitadoEn(Map<String, dynamic>? trip) =>
+      chatHabilitado(trip?['estado']?.toString(), conConductor: trip?['conductor'] != null);
+
+  /// Reserva que ya tiene conductor asignado (sin estado nuevo en el backend).
+  static bool esReservaAsignada(Map<String, dynamic>? trip) =>
+      trip?['estado'] == reservado && trip?['conductor'] != null;
 
   /// Etiqueta legible en español para cualquier estado del backend
   /// (`app/services/trip_status_labels.ts`). Nunca devuelve el string crudo de

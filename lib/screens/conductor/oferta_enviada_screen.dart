@@ -7,6 +7,7 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../models/oferta_pendiente.dart' show formatoCuentaRegresiva;
 import '../../services/logger_service.dart';
 import '../../services/server_clock.dart';
+import 'mis_reservas_screen.dart';
 import 'oferta_aceptada_screen.dart';
 import 'offers_screen.dart';
 import '../../core/formato_dinero.dart';
@@ -164,10 +165,13 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
     final monto = tripData['monto'] is num ? formatearPesos(tripData['monto'] as num) : widget.montoOferta;
 
     if (!mounted) return;
+    // Reserva asignada: sigue `reservado` hasta 45 min antes; no hay llegada
+    // que confirmar ni GPS que compartir todavía.
+    final reservada = fullTrip['estado'] == TripStatus.reservado;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) => OfertaAceptadaScreen.desdeViaje(fullTrip, montoOferta: monto),
+        builder: (_) => reservada ? const MisReservasScreen() : OfertaAceptadaScreen.desdeViaje(fullTrip, montoOferta: monto),
       ),
       (route) => route.isFirst,
     );

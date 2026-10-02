@@ -73,8 +73,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
       } else {
         _activeTrip = await ApiClient.instance.getActiveTrip();
       }
-      final estado = _activeTrip?['estado'] as String?;
-      _canChat = TripStatus.chatHabilitado(estado);
+      _canChat = TripStatus.chatHabilitadoEn(_activeTrip);
       if (_canChat) {
         _setupSocket();
         final tripId = _tripId?.toString();
@@ -172,7 +171,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
       if (data['id']?.toString() == tripId && mounted) {
         final estado = data['estado'] as String?;
         if (estado != null) {
-          setState(() => _canChat = TripStatus.chatHabilitado(estado));
+          setState(() => _canChat = TripStatus.chatHabilitado(estado, conConductor: _activeTrip?['conductor'] != null));
         }
       }
     });
