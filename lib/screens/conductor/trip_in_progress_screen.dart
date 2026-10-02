@@ -2678,7 +2678,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
                 ),
                 const SizedBox(height: 12),
               ],
-              const CajaAviso(texto: 'Cancelar baja tu reputación en la plataforma. El cliente será notificado.'),
+              const CajaAviso(texto: 'Cancelar resta 0,5 a tu calificación. El cliente será notificado.'),
               const SizedBox(height: 12),
               BotonPrincipal(
                 texto: 'Sí, cancelar viaje',
