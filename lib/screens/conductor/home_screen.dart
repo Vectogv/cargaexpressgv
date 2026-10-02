@@ -311,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final trip = await ApiClient.instance.getActiveTrip();
       if (trip != null) {
         final estado = trip['estado'] as String?;
-        final activeStates = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion, TripStatus.pendienteConfirmacion];
+        final activeStates = [TripStatus.aceptado, TripStatus.enCamino, TripStatus.llegada, TripStatus.enCurso, TripStatus.entregado, TripStatus.esperaConfirmacion, TripStatus.pendienteConfirmacion, TripStatus.sos];
         if (activeStates.contains(estado)) {
           CacheService.instance.cacheActiveTrip(trip);
           if (mounted) setState(() => _activeTrip = trip);

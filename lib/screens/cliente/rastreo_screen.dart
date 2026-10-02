@@ -201,6 +201,17 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
           }
           SocketServiceClient.instance.joinTrip(_trip!.id);
         }
+        if (_trip == null) {
+          // 404 de /trips/active (caché vieja o push de un viaje ya cerrado):
+          // sin esto quedaba un "Buscando conductor" falso.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No tienes un viaje activo')),
+            );
+            _safePopUntilFirst();
+          }
+          return;
+        }
       }
 
       if (!_socketListenersSetUp) {
@@ -700,7 +711,12 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     if (tripId == null) return;
     try {
       final detalle = await TripService.getTripDetail(tripId);
-      if (!mounted || detalle['estado'] != TripStatus.cancelado) return;
+      if (!mounted) return;
+      if (detalle['estado'] == TripStatus.finalizado) {
+        _showViajeFinalizado();
+        return;
+      }
+      if (detalle['estado'] != TripStatus.cancelado || _status == TripStatus.cancelado) return;
       final motivo = detalle['motivoCancelacion'] as String?;
       if (esCanceladoPorSistema(motivo: motivo)) {
         _mostrarCanceladoPorSistema(const {});
@@ -749,6 +765,9 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
             });
             _alCambiarEstado(estado);
           }
+        } else if (trip == null && mounted && _trip != null) {
+          // Ya no está activo y se perdió el socket: cancelado o finalizado.
+          await _detectarCancelacionAlSondear();
         }
       } catch (_) {}
     });

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../contracts/trip_status.dart';
 import '../../services/socket_service_client.dart';
 import '../../services/api_client.dart';
+import '../../services/api/http_client.dart' show ApiException;
 import '../../models/oferta_pendiente.dart' show formatoCuentaRegresiva;
 import '../../services/logger_service.dart';
 import '../../services/server_clock.dart';
@@ -98,6 +99,9 @@ class _OfertaEnviadaScreenState extends State<OfertaEnviadaScreen> {
             const SnackBar(content: Text('El viaje ya no está disponible')),
           );
         }
+      } on ApiException catch (e) {
+        // 403: el cliente aceptó a otro conductor y el viaje ya no es visible.
+        if (e.statusCode == 403) _salir('Esta solicitud ya no está disponible');
       } catch (_) {}
     });
 

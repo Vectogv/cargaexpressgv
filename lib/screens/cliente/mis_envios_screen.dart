@@ -33,7 +33,8 @@ class _MisEnviosScreenState extends State<MisEnviosScreen> {
     if (!mounted) return;
     setState(() { _loading = true; _error = null; });
     try {
-      final data = await ApiClient.instance.getTripHistory();
+      // ponytail: tope de 100 del servidor; paginar si un cliente pasa de 100 envíos.
+      final data = await ApiClient.instance.getTripHistory(limit: 100);
       if (mounted) setState(() { _viajes = data; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = e.toString(); });

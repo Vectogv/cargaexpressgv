@@ -7,6 +7,8 @@ import '../../services/api/trip_service.dart';
 import '../../services/report_service.dart';
 import '../../widgets/error_carga.dart';
 import '../conductor/reportar_cliente_screen.dart';
+import '../shared/ui_compartida.dart' show BotonSecundario, ColoresApp;
+import 'cancel_trip_screen.dart';
 import '../../core/formato_dinero.dart';
 
 class ViajeDetalleScreen extends StatefulWidget {
@@ -80,6 +82,30 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       }
     } catch (e) {
       if (mounted) _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
+    }
+  }
+
+  bool _cancelando = false;
+
+  /// La reserva (`reservado`) no sale en /trips/active, así que el rastreo
+  /// no la abre: se cancela desde aquí (reservado -> cancelado está permitido).
+  Future<void> _cancelarReserva() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => const CancelTripScreen(enCurso: false)),
+    );
+    final motivo = motivoDesdeResultado(result);
+    if (motivo == null || !mounted) return;
+    setState(() => _cancelando = true);
+    try {
+      await TripService.cancelTrip(widget.tripId, motivo: motivo);
+      if (!mounted) return;
+      _snack('Reserva cancelada');
+      await _load();
+    } catch (e) {
+      if (mounted) _snack(mensajeDeError(e));
+    } finally {
+      if (mounted) setState(() => _cancelando = false);
     }
   }
 
@@ -188,6 +214,16 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
                       ] else if (_trip!['conductor'] != null) ...[
                         const SizedBox(height: 16),
                         _buildConductorSection(),
+                      ],
+                      if (!widget.comoConductor && _trip!['estado'] == TripStatus.reservado) ...[
+                        const SizedBox(height: 16),
+                        BotonSecundario(
+                          texto: 'Cancelar reserva',
+                          icono: Icons.event_busy_outlined,
+                          color: ColoresApp.rojo,
+                          cargando: _cancelando,
+                          onPressed: _cancelando ? null : _cancelarReserva,
+                        ),
                       ],
                       if (!widget.comoConductor && _trip!['estado'] == 'finalizado' && !_rated) ...[
                         const SizedBox(height: 16),

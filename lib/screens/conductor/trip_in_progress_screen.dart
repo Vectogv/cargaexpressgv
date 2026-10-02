@@ -73,6 +73,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
   final ValueNotifier<int> _elapsed = ValueNotifier<int>(0);
   /// Justificación de la hoja "¿Por qué cancelas?" (ver _cancelTrip).
   final _motivoCancelacion = TextEditingController();
+  final _motivoSolicitud = TextEditingController();
   int get _elapsedSeconds => _elapsed.value;
   set _elapsedSeconds(int v) => _elapsed.value = v;
   // Throttle de reconstrucciones por GPS (máx. 1 por segundo).
@@ -213,6 +214,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _cancelCountdown();
     _elapsed.dispose();
     _motivoCancelacion.dispose();
+    _motivoSolicitud.dispose();
     super.dispose();
   }
 
@@ -685,8 +687,14 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       return false;
     }
     try {
-      final key = _completeKey.keyFor('${t.id}|$montoFinal|$justificacion|$pin');
-      await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion, pin: pin, idempotencyKey: key));
+      // El reintento de conUbicacionFresca necesita clave nueva: el servidor
+      // cachea 60 s el 422 UBICACION_NO_RECIENTE bajo la primera.
+      var key = _completeKey.keyFor('${t.id}|$montoFinal|$justificacion|$pin');
+      await DriverLocationService.instance.conUbicacionFresca(() {
+        final k = key;
+        key = HttpClient.newIdempotencyKey();
+        return ApiClient.instance.completeTrip(t.id, montoFinal: montoFinal, justificacion: justificacion, pin: pin, idempotencyKey: k);
+      });
       _completeKey.settle();
       // El backend deja el viaje en 'pendiente_confirmacion' hasta que el
       // cliente confirme (no está finalizado todavía).
@@ -704,8 +712,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       } else if (e.code == 'PIN_REQUERIDO' || e.code == 'PIN_INCORRECTO') {
         // Cerca del destino el backend exige el PIN que ve el cliente: el
         // di\u00e1logo de arriba lo pide (o lo corrige si fue incorrecto).
-      } else if (e.code == 'FUERA_DE_RANGO_ORIGEN') {
-        if (mounted) _snack('Fuera de rango del origen. Distancia: ${e.message}');
       } else {
         if (mounted) _snack(e.message);
       }
@@ -1243,9 +1249,13 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
           return;
         }
         final monto = montoFinal;
-        final key = _finalizeKey.keyFor('${t.id}|$monto');
+        var key = _finalizeKey.keyFor('${t.id}|$monto');
         try {
-          await DriverLocationService.instance.conUbicacionFresca(() => ApiClient.instance.finalizeTrip(t.id, montoFinal: monto, idempotencyKey: key));
+          await DriverLocationService.instance.conUbicacionFresca(() {
+            final k = key;
+            key = HttpClient.newIdempotencyKey();
+            return ApiClient.instance.finalizeTrip(t.id, montoFinal: monto, idempotencyKey: k);
+          });
           _finalizeKey.settle();
         } catch (e) {
           _finalizeKey.settle(e);
@@ -2728,7 +2738,7 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     if (_isCancelling) return;
     _isCancelling = true;
 
-    final motivoCtrl = TextEditingController();
+    final motivoCtrl = _motivoSolicitud..clear();
     String? motivoSeleccionado;
 
     try {
@@ -2809,7 +2819,6 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     } catch (e) {
       _snack('Error: ${e.toString().replaceFirst("Exception: ", "")}');
     } finally {
-      motivoCtrl.dispose();
       _isCancelling = false;
     }
   }
