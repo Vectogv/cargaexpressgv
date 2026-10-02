@@ -457,7 +457,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
               child: TextField(
                 controller: _messageController,
                 decoration: InputDecoration(
-                  hintText: 'Escribe un mensaje...',
+                  hintText: 'Mensaje (sin teléfonos ni WhatsApp)',
                   hintStyle: TextStyle(color: _textGrey, fontSize: 14),
                   isDense: true,
                   border: InputBorder.none,

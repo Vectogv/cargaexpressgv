@@ -542,7 +542,7 @@ class _TripChatScreenState extends State<TripChatScreen> with WidgetsBindingObse
               child: TextField(
                 controller: _messageController,
                 decoration: InputDecoration(
-                  hintText: 'Escribe un mensaje...',
+                  hintText: 'Mensaje (sin teléfonos ni WhatsApp)',
                   hintStyle: TextStyle(color: ColoresApp.textoSecundario, fontSize: 13),
                   isDense: true,
                   border: InputBorder.none,
