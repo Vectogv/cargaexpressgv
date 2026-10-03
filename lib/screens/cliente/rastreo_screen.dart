@@ -1603,7 +1603,7 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
           ]),
           padding: EdgeInsets.fromLTRB(
             16,
-            media.padding.top + 72,
+            media.padding.top + 112, // el pin del destino no queda bajo la barra superior
             16,
             media.size.height * 0.6, // la hoja de búsqueda cubre ~60 % de la pantalla
           ),

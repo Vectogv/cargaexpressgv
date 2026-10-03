@@ -223,7 +223,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
-    await tester.tap(find.text('Calle 10, Medellín'));
+    await tester.tap(find.text('Calle 10'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
 
@@ -268,7 +268,7 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('Calle 10, Medellín'));
+      await tester.tap(find.text('Calle 10'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 

@@ -330,8 +330,8 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       if (o != null && d != null && _distanciaKm(o, d) > 0.05) {
         _mapCtrl.fitCamera(CameraFit.bounds(
           bounds: LatLngBounds.fromPoints([o, d]),
-          // Abajo deja libre el aviso "Toca el mapa para marcar un punto".
-          padding: const EdgeInsets.fromLTRB(40, 50, 60, 80),
+          // Arriba deja libre la tarjeta de distancia y tiempo.
+          padding: const EdgeInsets.fromLTRB(40, 76, 60, 30),
         ));
       } else {
         _mapCtrl.move(ultimo, 15);
@@ -562,53 +562,55 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
       if (!mounted) return;
 
-      final allResults = [...recent, ...data.cast<Map<String, dynamic>>()];
-      final recentCount = recent.length;
+      // Recientes solo si coinciden con lo buscado y no repiten un resultado.
+      final q = result.trim().toLowerCase();
+      final ids = data.map((m) => m['place_id']).toSet();
+      final recientes = recent
+          .where((m) => '${m['display_name']}'.toLowerCase().contains(q) && !ids.contains(m['place_id']))
+          .take(3)
+          .toList();
 
-      final selected = await showDialog<Map<String, dynamic>>(
+      final selected = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Selecciona una dirección'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
+        isScrollControlled: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+            child: ListView(
               shrinkWrap: true,
-              itemCount: allResults.length,
-              itemBuilder: (_, i) {
-                final isRecent = i < recentCount;
-                final item = allResults[i];
-                if (isRecent && i == 0 && recentCount > 0) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                        child: Text('RECIENTES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
-                      ),
-                      _addressTile(item, ctx),
-                    ],
-                  );
-                }
-                if (isRecent && i == recentCount - 1 && i + 1 < allResults.length) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _addressTile(item, ctx),
-                      const Divider(height: 1),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                        child: Text('RESULTADOS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
-                      ),
-                    ],
-                  );
-                }
-                return _addressTile(item, ctx);
-              },
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 2),
+                  child: Text(
+                    isOrigen ? '¿Dónde recogemos?' : '¿Dónde entregamos?',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text(
+                    'Resultados para "${result.trim()}", ordenados por cercanía',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                ),
+                if (recientes.isNotEmpty) ...[
+                  _seccionDirecciones('Recientes'),
+                  for (final m in recientes) _addressTile(m, ctx, reciente: true),
+                ],
+                _seccionDirecciones('Resultados'),
+                for (final m in data) _addressTile(m, ctx),
+              ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          ],
         ),
       );
 
@@ -651,11 +653,53 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     await prefs.setStringList(_recentKey, raw);
   }
 
-  Widget _addressTile(Map<String, dynamic> item, BuildContext ctx) {
-    return ListTile(
-      leading: const Icon(Icons.location_on, color: _kPrimary),
-      title: Text(item['display_name'] as String? ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
+  Widget _seccionDirecciones(String titulo) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+        child: Text(
+          titulo.toUpperCase(),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: Colors.grey.shade500),
+        ),
+      );
+
+  /// Nombre del lugar en negrita, el resto de la dirección en gris y la distancia a la derecha.
+  Widget _addressTile(Map<String, dynamic> item, BuildContext ctx, {bool reciente = false}) {
+    final partes = (item['display_name'] as String? ?? '').split(', ');
+    final lat = double.tryParse('${item['lat']}');
+    final lon = double.tryParse('${item['lon']}');
+    final ref = _origenLatLng ?? const LatLng(2.4448, -76.6147);
+    final km = lat == null || lon == null ? null : _distanciaKm(ref, LatLng(lat, lon));
+    return InkWell(
       onTap: () => Navigator.pop(ctx, item),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(12)),
+              child: Icon(reciente ? Icons.history : Icons.place_outlined, color: _kPrimary, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(partes.first, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  if (partes.length > 1)
+                    Text(partes.skip(1).take(3).join(', '), maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                ],
+              ),
+            ),
+            if (km != null) ...[
+              const SizedBox(width: 10),
+              Text(km > 99 ? '+99 km' : _formatKm(km),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[600])),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -1167,6 +1211,11 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       OutlinedButton.icon(
         key: const Key('btn_reintentar_ubicacion'),
         onPressed: () => _getCurrentLocation(isOrigen: isOrigen),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _kPrimary,
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: _kBorde),
+        ),
         icon: const Icon(Icons.my_location, size: 16),
         label: const Text('Reintentar'),
       ),
@@ -1510,15 +1559,60 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     return '${items.sublist(0, items.length - 1).join(', ')} y ${items.last}';
   }
 
+  /// Tarjeta sobre el mapa con lo que importa del envío: distancia y tiempo.
+  Widget _estadoRuta() {
+    final lista = _rutaKm != null;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 8, 14, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 10, offset: const Offset(0, 3))],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(color: _kPrimary, borderRadius: BorderRadius.circular(9)),
+              child: const Icon(Icons.local_shipping_outlined, color: Colors.white, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    lista
+                        ? '${_formatKm(_rutaKm!)} · $_rutaMin min'
+                        : '~${_formatKm(_distanciaKm(_origenLatLng!, _destinoLatLng!))}',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    lista ? 'Ruta por las calles' : 'Calculando la ruta…',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMapSection() {
     final o = _origenLatLng;
     final d = _destinoLatLng;
     return Container(
-      height: 200,
+      height: 220,
       decoration: BoxDecoration(
         color: const Color(0xFFF0F4F8),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorde),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -1530,20 +1624,24 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               _tileLayer,
               if (o != null && d != null && _ruta != null)
                 PolylineLayer(polylines: [
-                  Polyline(points: _ruta!, color: _kPrimary, strokeWidth: 4),
+                  Polyline(
+                    points: _ruta!,
+                    color: _kPrimary,
+                    strokeWidth: 5,
+                    borderColor: Colors.white,
+                    borderStrokeWidth: 2,
+                  ),
                 ]),
               MarkerLayer(markers: [
                 if (o != null)
-                  Marker(point: o, child: const Icon(Icons.trip_origin, color: _kOrigen, size: 28)),
+                  Marker(point: o, width: 30, height: 30, child: const _PuntoRuta(color: _kOrigen, letra: 'A')),
                 if (d != null)
-                  Marker(
-                    point: d,
-                    alignment: Alignment.topCenter,
-                    child: const Icon(Icons.location_on, color: _kDestino, size: 34),
-                  ),
+                  Marker(point: d, width: 30, height: 30, child: const _PuntoRuta(color: _kDestino, letra: 'B')),
               ]),
             ],
           ),
+          if (o != null && d != null)
+            Positioned(left: 10, top: 10, right: 64, child: _estadoRuta()),
           Positioned(
             right: 10,
             top: 10,
@@ -1553,7 +1651,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               onTap: () => _getCurrentLocation(isOrigen: true),
             ),
           ),
-          Positioned(
+          if (o == null || d == null) Positioned(
             left: 10,
             bottom: 10,
             right: 60,
@@ -1589,6 +1687,25 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Punto A/B del mapa: círculo de color con borde blanco y sombra.
+class _PuntoRuta extends StatelessWidget {
+  final Color color;
+  final String letra;
+  const _PuntoRuta({required this.color, required this.letra});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Text(letra, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+      );
+}
 
 /// Formatea dígitos con separador de miles colombiano: 150000 -> 150.000.
 String formatearMiles(String raw) {
