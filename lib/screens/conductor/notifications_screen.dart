@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/error_carga.dart';
 import '../shared/tickets/ticket_detalle_screen.dart';
 import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
 
+/// Bandeja de avisos (cliente y conductor): agrupada por día, con ícono y
+/// color por categoría, no leídas resaltadas y "Marcar todas como leídas".
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -10,12 +13,13 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
+enum _Categoria { viaje, pago, soporte, grupo, sistema }
+
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final NotificationService _service = NotificationService.instance;
   List<Map<String, dynamic>> _notifications = [];
   bool _loading = true;
   bool _error = false;
-
 
   @override
   void initState() {
@@ -51,65 +55,56 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
   }
 
-  IconData _iconForTipo(String? tipo) {
+  static _Categoria _categoria(String? tipo) {
+    switch (tipo) {
+      case 'nuevo_viaje':
+      case 'viaje_aceptado':
+      case 'viaje_completado':
+      case 'viaje_cancelado':
+      case 'viaje_estado':
+      case 'disputa_cierre':
+      case 'disputa_resuelta':
+      case 'busqueda_sin_conductor':
+        return _Categoria.viaje;
+      case 'pago_recibido':
+      case 'suspension_por_pago':
+        return _Categoria.pago;
+      case 'ticket_mensaje':
+      case 'ticket_estado':
+        return _Categoria.soporte;
+      case 'mensaje':
+      case 'conversacion_mensaje':
+        return _Categoria.grupo;
+      default:
+        return _Categoria.sistema;
+    }
+  }
+
+  static Color _color(_Categoria c) => switch (c) {
+        _Categoria.viaje => ColoresApp.azul,
+        _Categoria.pago => ColoresApp.verde,
+        _Categoria.soporte => ColoresApp.naranja,
+        _Categoria.grupo => const Color(0xFF00897B),
+        _Categoria.sistema => ColoresApp.textoSecundario,
+      };
+
+  static IconData _iconForTipo(String? tipo) {
     switch (tipo) {
       case 'nuevo_viaje': return Icons.local_shipping_outlined;
       case 'viaje_aceptado': return Icons.check_circle_outline;
       case 'viaje_completado': return Icons.done_all;
       case 'viaje_cancelado': return Icons.cancel_outlined;
       case 'pago_recibido': return Icons.payments_outlined;
-      case 'mensaje': return Icons.chat_bubble_outline;
+      case 'mensaje':
+      case 'conversacion_mensaje':
+        return Icons.chat_bubble_outline;
       case 'documentacion': return Icons.description_outlined;
-      // Tipo persistido que el backend envía al cliente
-      // (moderator_controller: cierre del viaje pasado a disputa).
       case 'disputa_cierre': return Icons.gavel_rounded;
-      // Deuda de comisión vencida (DriverDebtSuspensionService).
       case 'suspension_por_pago': return Icons.money_off_rounded;
-      // Búsqueda de conductor vencida sin ofertas aceptadas
-      // (BusquedaTimeoutService, BUSQUEDA_TIMEOUT_MIN): al cliente.
       case 'busqueda_sin_conductor': return Icons.search_off_rounded;
-      // Tickets de soporte: respuesta del staff o cambio de estado.
       case 'ticket_mensaje': return Icons.support_agent;
       case 'ticket_estado': return Icons.confirmation_number_outlined;
       default: return Icons.notifications_outlined;
-    }
-  }
-
-  Color _colorForTipo(String? tipo) {
-    switch (tipo) {
-      case 'nuevo_viaje': return ColoresApp.azul;
-      case 'viaje_aceptado': return ColoresApp.naranja;
-      case 'viaje_completado': return ColoresApp.verdeOscuro;
-      case 'viaje_cancelado': return Colors.red;
-      case 'pago_recibido': return const Color(0xFF6A1B9A);
-      case 'mensaje': return const Color(0xFF00897B);
-      case 'documentacion': return ColoresApp.naranja;
-      case 'disputa_cierre': return ColoresApp.naranja;
-      case 'suspension_por_pago': return ColoresApp.rojo;
-      case 'busqueda_sin_conductor': return ColoresApp.rojo;
-      case 'ticket_mensaje':
-      case 'ticket_estado':
-        return ColoresApp.azul;
-      default: return ColoresApp.grisClaro;
-    }
-  }
-
-  Color _bgForTipo(String? tipo) {
-    switch (tipo) {
-      case 'nuevo_viaje': return ColoresApp.azulTenue;
-      case 'viaje_aceptado': return ColoresApp.naranjaFondo;
-      case 'viaje_completado': return ColoresApp.verdeFondo;
-      case 'viaje_cancelado': return ColoresApp.rojoFondo;
-      case 'pago_recibido': return const Color(0xFFF3E5F5);
-      case 'mensaje': return const Color(0xFFE0F2F1);
-      case 'documentacion': return ColoresApp.rojoFondo;
-      case 'disputa_cierre': return ColoresApp.naranjaFondo;
-      case 'suspension_por_pago': return ColoresApp.rojoFondo;
-      case 'busqueda_sin_conductor': return ColoresApp.rojoFondo;
-      case 'ticket_mensaje':
-      case 'ticket_estado':
-        return ColoresApp.azulTenue;
-      default: return ColoresApp.fondo;
     }
   }
 
@@ -129,45 +124,58 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildList() {
     if (_notifications.isEmpty) {
       if (_loading) return const Center(child: CircularProgressIndicator());
+      if (_error) {
+        return ErrorCarga(titulo: 'No pudimos cargar tus notificaciones', onReintentar: _fetchNotifications);
+      }
       return RefreshIndicator(
         onRefresh: _fetchNotifications,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             const SizedBox(height: 120),
-            Icon(
-              _error ? Icons.cloud_off_outlined : Icons.notifications_none,
-              size: 64,
-              color: Colors.grey.shade300,
-            ),
+            Icon(Icons.notifications_none, size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 12),
-            Text(
-              _error ? 'No pudimos cargar tus notificaciones' : 'Sin notificaciones',
+            const Text(
+              'Sin notificaciones',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, color: Colors.black54),
+              style: TextStyle(fontSize: 16, color: ColoresApp.textoSecundario),
             ),
-            if (_error) ...[
-              const SizedBox(height: 12),
-              Center(
-                child: OutlinedButton.icon(
-                  onPressed: _fetchNotifications,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Reintentar'),
-                ),
-              ),
-            ],
           ],
         ),
       );
     }
+    // Encabezados de día (String) intercalados con los avisos (ya vienen
+    // ordenados del más reciente al más antiguo).
+    final items = <Object>[];
+    String? ultimo;
+    for (final n in _notifications) {
+      final dia = _etiquetaDia(n['createdAt'] as String?);
+      if (dia != ultimo) {
+        items.add(dia);
+        ultimo = dia;
+      }
+      items.add(n);
+    }
     return RefreshIndicator(
       onRefresh: _fetchNotifications,
-      child: ListView.separated(
+      child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        itemCount: _notifications.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (_, i) => _buildNotifCard(_notifications[i]),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        itemCount: items.length,
+        itemBuilder: (_, i) {
+          final it = items[i];
+          if (it is String) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
+              child: Text(it,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: ColoresApp.textoSecundario)),
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildNotifCard(it as Map<String, dynamic>),
+          );
+        },
       ),
     );
   }
@@ -191,12 +199,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               else
                 const SizedBox(width: 12),
               const Expanded(
-                child: Text('Notificaciones', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                child: Text('Notificaciones',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               ),
               if (hayNoLeidas)
-                TextButton(
-                  onPressed: () => _service.markAllRead(),
-                  child: const Text('Marcar todas leídas'),
+                Flexible(
+                  child: TextButton(
+                    onPressed: () => _service.markAllRead(),
+                    child: const Text('Marcar todas como leídas', textAlign: TextAlign.center),
+                  ),
                 ),
             ],
           ),
@@ -208,55 +221,84 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildNotifCard(Map<String, dynamic> notif) {
     final tipo = notif['tipo'] as String?;
     final leido = notif['leido'] == true;
-    return InkWell(
+    final color = _color(_categoria(tipo));
+    final tarjeta = InkWell(
       onTap: () => _onNotifTap(notif),
       borderRadius: BorderRadius.circular(14),
-      child: TarjetaBlanca(
-        radio: 14,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: _bgForTipo(tipo), borderRadius: BorderRadius.circular(12)),
-              child: Icon(_iconForTipo(tipo), color: _colorForTipo(tipo), size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    notif['titulo'] as String? ?? '',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: leido ? FontWeight.w500 : FontWeight.w700,
-                      color: ColoresApp.textoOscuro,
-                      height: 1.4,
-                    ),
-                  ),
-                  if (notif['mensaje'] != null) ...[
-                    const SizedBox(height: 2),
-                    Text(notif['mensaje'] as String, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(_formatDate(notif['createdAt'] as String?), style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
-                ],
-              ),
-            ),
-            if (!leido)
+      child: Opacity(
+        opacity: leido ? 0.6 : 1,
+        child: TarjetaBlanca(
+          radio: 14,
+          colorBorde: leido ? null : color.withValues(alpha: 0.35),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Container(
-                width: 9,
-                height: 9,
-                margin: const EdgeInsets.only(top: 4),
-                decoration: const BoxDecoration(color: ColoresApp.azul, shape: BoxShape.circle),
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                child: Icon(_iconForTipo(tipo), color: color, size: 22),
               ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notif['titulo'] as String? ?? '',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: leido ? FontWeight.w500 : FontWeight.w700,
+                        color: ColoresApp.textoOscuro,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (notif['mensaje'] != null) ...[
+                      const SizedBox(height: 2),
+                      Text(notif['mensaje'] as String,
+                          style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                    const SizedBox(height: 4),
+                    Text(_hora(notif['createdAt'] as String?),
+                        style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+                  ],
+                ),
+              ),
+              if (!leido)
+                Container(
+                  width: 9,
+                  height: 9,
+                  margin: const EdgeInsets.only(top: 4, left: 6),
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+            ],
+          ),
         ),
       ),
     );
+    if (leido) return tarjeta;
+    // Deslizar marca como leída; la tarjeta se queda (atenuada) en su lugar.
+    return Dismissible(
+      key: ValueKey('notif_${notif['id']}'),
+      direction: DismissDirection.horizontal,
+      background: _fondoDeslizar(Alignment.centerLeft),
+      secondaryBackground: _fondoDeslizar(Alignment.centerRight),
+      confirmDismiss: (_) async {
+        _service.markRead(notif);
+        return false;
+      },
+      child: tarjeta,
+    );
   }
+
+  Widget _fondoDeslizar(Alignment alineacion) => Container(
+        alignment: alineacion,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(color: ColoresApp.azulTenue, borderRadius: BorderRadius.circular(14)),
+        child: const Icon(Icons.done_all, color: ColoresApp.azul),
+      );
 
   void _onNotifTap(Map<String, dynamic> notif) {
     if (notif['leido'] != true) _service.markRead(notif);
@@ -266,22 +308,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       Navigator.push(context, MaterialPageRoute(builder: (_) => TicketDetalleScreen(ticketId: ticketId)));
       return;
     }
-    final texto = notif['mensaje'] as String? ?? notif['titulo'] as String? ?? '';
-    if (texto.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(texto), duration: const Duration(seconds: 2)),
-    );
+    // Aviso de un viaje: el mismo destino que al tocar el push (solo cliente).
+    final viajeId = notif['viajeId']?.toString();
+    if (viajeId != null && viajeId.isNotEmpty) _service.abrirViaje?.call(viajeId);
   }
 
-  String _formatDate(String? iso) {
-    if (iso == null) return '';
-    final dt = DateTime.tryParse(iso);
+  static DateTime? _local(String? iso) => iso == null ? null : DateTime.tryParse(iso)?.toLocal();
+
+  static String _etiquetaDia(String? iso) {
+    final dt = _local(iso);
+    if (dt == null) return 'Antes';
+    final hoy = DateTime.now();
+    final dias = DateTime(hoy.year, hoy.month, hoy.day).difference(DateTime(dt.year, dt.month, dt.day)).inDays;
+    if (dias <= 0) return 'Hoy';
+    if (dias == 1) return 'Ayer';
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
+
+  static String _hora(String? iso) {
+    final dt = _local(iso);
     if (dt == null) return '';
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'Ahora';
     if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-    if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
-    if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
-    return '${dt.day}/${dt.month}/${dt.year}';
+    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    return '$h:${dt.minute.toString().padLeft(2, '0')} ${dt.hour < 12 ? 'a. m.' : 'p. m.'}';
   }
 }

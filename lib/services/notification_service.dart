@@ -160,7 +160,27 @@ class NotificationService {
       'leido': raw['leido'] == true || raw['read'] == true,
       'createdAt': txt(raw['createdAt']) ?? DateTime.now().toIso8601String(),
       if (ticketId != null) 'ticketId': ticketId,
+      if (viajeIdDe(raw) != null) 'viajeId': viajeIdDe(raw),
     };
+  }
+
+  /// Id del viaje de un aviso: raíz (`data` del push) o dentro de `data`/`datos`.
+  static String? viajeIdDe(Map<String, dynamic> raw) {
+    String? txt(dynamic v) {
+      final s = v?.toString().trim();
+      return (s == null || s.isEmpty) ? null : s;
+    }
+
+    final directo = txt(raw['viajeId']) ?? txt(raw['tripId']);
+    if (directo != null) return directo;
+    for (final clave in const ['data', 'datos', 'metadata']) {
+      final anidado = raw[clave];
+      if (anidado is Map) {
+        final id = txt(anidado['viajeId']) ?? txt(anidado['tripId']);
+        if (id != null) return id;
+      }
+    }
+    return null;
   }
 
   /// Id del ticket de una notificación/push de soporte: en la raíz
@@ -209,6 +229,9 @@ class NotificationService {
       case 'notification:new':
         final n = normalizar(data);
         _remote.removeWhere((e) => e['id'] == n['id']);
+        // El push en primer plano ya había entrado como aviso local: el
+        // guardado en el servidor lo reemplaza para no verlo dos veces.
+        _local.removeWhere((e) => e['id'].toString().startsWith('local_fcm_') && _mismoTexto(e, n));
         _remote.add(n);
         break;
       case 'notification:read':
@@ -254,11 +277,16 @@ class NotificationService {
         if (data['__source'] != 'fcm') return;
         final n = normalizar(data);
         if (n['titulo'] == null && n['mensaje'] == null) return;
+        final limite = DateTime.now().subtract(const Duration(minutes: 2));
+        if ([..._remote, ..._local].any((e) => _mismoTexto(e, n) && _fecha(e).isAfter(limite))) return;
         n['id'] = 'local_fcm_${DateTime.now().microsecondsSinceEpoch}';
         _local.add(n);
     }
     _changed();
   }
+
+  static bool _mismoTexto(Map<String, dynamic> a, Map<String, dynamic> b) =>
+      a['titulo'] == b['titulo'] && a['mensaje'] == b['mensaje'];
 
   void _addLocal(String tipo, String titulo, String mensaje, String? tripId) {
     final ahora = DateTime.now();
@@ -270,6 +298,7 @@ class NotificationService {
       'leido': false,
       'createdAt': ahora.toIso8601String(),
       if (tripId != null) 'tripId': tripId,
+      if (tripId != null) 'viajeId': tripId,
     });
   }
 
@@ -520,12 +549,16 @@ class NotificationService {
     }
     _changed();
     if (!hasSession()) return;
-    for (final id in pendientes) {
-      try {
-        await markRemoteRead(id);
-      } catch (e) {
-        LoggerService.instance.warning('NotificationService.markAllRead error', e);
-      }
+    // ponytail: el servidor no tiene "marcar todas"; se marcan de a 5 en
+    // paralelo. Conviene PUT /api/notifications/read-all.
+    for (var i = 0; i < pendientes.length; i += 5) {
+      await Future.wait(pendientes.skip(i).take(5).map((id) async {
+        try {
+          await markRemoteRead(id);
+        } catch (e) {
+          LoggerService.instance.warning('NotificationService.markAllRead error', e);
+        }
+      }));
     }
   }
 

@@ -233,10 +233,69 @@ void main() {
     expect(find.text('El viaje fue cancelado por soporte'), findsOneWidget);
     expect(service.unreadCount, 2);
 
-    await tester.tap(find.text('Marcar todas leídas'));
+    await tester.tap(find.text('Marcar todas como leídas'));
     await tester.pumpAndSettle();
     expect(service.unreadCount, 0);
-    expect(find.text('Marcar todas leídas'), findsNothing);
+    expect(marcadas, ['1']); // la remota llamó al endpoint; la local no
+    expect(find.text('Marcar todas como leídas'), findsNothing);
+  });
+
+  testWidgets('agrupa por día: Hoy, Ayer y fecha', (tester) async {
+    final ahora = DateTime.now();
+    backend = [
+      remota('1', fecha: ahora.toIso8601String()),
+      remota('2', fecha: ahora.subtract(const Duration(days: 1)).toIso8601String()),
+      remota('3', fecha: ahora.subtract(const Duration(days: 5)).toIso8601String()),
+    ];
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+    await tester.pumpAndSettle();
+    final viejo = ahora.subtract(const Duration(days: 5));
+    expect(find.text('Hoy'), findsOneWidget);
+    expect(find.text('Ayer'), findsOneWidget);
+    expect(find.text('${viejo.day}/${viejo.month}/${viejo.year}'), findsOneWidget);
+  });
+
+  testWidgets('sin no leídas no hay botón; tocar una la marca leída y abre su viaje', (tester) async {
+    final abiertos = <String>[];
+    service.abrirViaje = abiertos.add;
+    addTearDown(() => service.abrirViaje = null);
+    backend = [
+      {...remota('1', fecha: DateTime.now().toIso8601String()), 'viajeId': '77'},
+      remota('2', leido: true, fecha: DateTime.now().toIso8601String()),
+    ];
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Marcar todas como leídas'), findsOneWidget);
+
+    await tester.tap(find.text('Aviso 1'));
+    await tester.pumpAndSettle();
+    expect(marcadas, ['1']);
+    expect(abiertos, ['77']);
+    expect(service.unreadCount, 0);
+    expect(find.text('Marcar todas como leídas'), findsNothing);
+  });
+
+  testWidgets('sin desbordes a 360 px con letra 1.3', (tester) async {
+    tester.view.physicalSize = const Size(360, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    backend = [remota('1', fecha: DateTime.now().toIso8601String())];
+    await tester.pumpWidget(MaterialApp(
+      builder: (c, w) => MediaQuery(data: MediaQuery.of(c).copyWith(textScaler: const TextScaler.linear(1.3)), child: w!),
+      home: const NotificationsScreen(),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  test('un push repetido no se duplica ni con su aviso guardado', () {
+    service.ingest({'__event': 'x', '__source': 'fcm', 'title': 'Hola', 'body': 'Mundo'});
+    service.ingest({'__event': 'x', '__source': 'fcm', 'title': 'Hola', 'body': 'Mundo'});
+    service.ingest({'__event': 'x', '__source': 'fcm', '__tap': true, 'title': 'Hola', 'body': 'Mundo'});
+    expect(service.notifications.length, 1);
+    service.ingest({'__event': 'notification:new', 'id': '9', 'titulo': 'Hola', 'mensaje': 'Mundo'});
+    expect(service.notifications.length, 1);
+    expect(service.notifications.first['id'], '9');
   });
 
   testWidgets('la notificación disputa_cierre (moderator_controller) tiene icono de disputa', (tester) async {
