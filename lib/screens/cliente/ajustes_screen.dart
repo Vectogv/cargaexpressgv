@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../shared/accesos_perfil.dart';
 import '../shared/cambiar_password.dart';
+import '../shared/eliminar_cuenta.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
 import 'soporte_screen.dart';
 
@@ -49,6 +50,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
           const SizedBox(height: 16),
           _buildSection('Cuenta', [
             _buildLinkItem(Icons.lock_outline, 'Cambiar contrase\u00f1a', () => mostrarDialogoCambiarPassword(context)),
+            _buildLinkItem(Icons.delete_forever_outlined, 'Eliminar mi cuenta', () => mostrarDialogoEliminarCuenta(context)),
           ]),
           const SizedBox(height: 16),
           _buildSection('Soporte', [

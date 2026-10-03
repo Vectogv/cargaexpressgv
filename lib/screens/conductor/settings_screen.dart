@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../shared/cambiar_password.dart';
+import '../shared/eliminar_cuenta.dart';
 import '../shared/ui_compartida.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -84,6 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           _buildSection('Cuenta', [
             _buildLinkItem(Icons.lock_outline, 'Cambiar contraseña', () => mostrarDialogoCambiarPassword(context)),
+            _buildLinkItem(Icons.delete_forever_outlined, 'Eliminar mi cuenta', () => mostrarDialogoEliminarCuenta(context)),
           ]),
           const SizedBox(height: 12),
           _buildSection('General', [

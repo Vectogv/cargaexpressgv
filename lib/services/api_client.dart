@@ -271,6 +271,13 @@ class ApiClient {
 
   Future<void> changePassword(String actual, String nueva) => ProfileService.changePassword(actual, nueva);
 
+  /// Borra la cuenta en el servidor y cierra la sesión local.
+  Future<void> eliminarCuenta() async {
+    await ProfileService.eliminarCuenta();
+    await clearTokens();
+    unawaited(cerrarSesionGoogle());
+  }
+
   // --- Documents ---
 
   Future<String> uploadDocumentCedula(Uint8List bytes, String filename) => DriverService.uploadDocumentCedula(bytes, filename);
