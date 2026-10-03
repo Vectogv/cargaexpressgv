@@ -1,11 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/contracts/validacion_usuario.dart';
 import 'package:cargaexpress/screens/user/login_screen.dart';
-import 'package:cargaexpress/screens/user/register_screen.dart';
+import 'package:cargaexpress/screens/user/registro/registro_cliente.dart';
 
 import '../helpers/fake_api.dart';
+
+/// Abre el asistente del cliente en el primer paso con correo.
+Future<void> _registroConCorreo(WidgetTester tester) async {
+  pantallaAlta(tester);
+  await tester.pumpWidget(const MaterialApp(home: RegistroClienteScreen()));
+  await avanzar(tester, 0.5);
+  await tester.tap(find.byKey(const Key('btn_registro_correo')));
+  await avanzar(tester, 0.5);
+}
+
+Future<void> _escribir(WidgetTester tester, String paso, String texto) async {
+  await tester.enterText(find.byKey(Key('campo_$paso')), texto);
+  await tester.tap(find.byKey(const Key('btn_continuar')));
+  await avanzar(tester, 0.5);
+}
 
 void main() {
   group('reglas de app/validators/auth.ts y profile.ts', () {
@@ -71,40 +87,39 @@ void main() {
     expect(log, isEmpty);
   });
 
-  testWidgets('registro: contraseña corta y edad fuera de rango se avisan sin llamar al backend',
-      (tester) async {
-    pantallaAlta(tester);
-    final log = <Object>[];
+  testWidgets('registro: contraseña corta se avisa sin llamar al backend', (tester) async {
+    final log = <http.Request>[];
     await conApiFalsa((_) => jsonResp({}), () async {
-      await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
-      final campos = find.byType(TextField);
-      await tester.enterText(campos.at(0), 'Ana');
-      await tester.enterText(campos.at(1), 'Pérez');
-      await tester.enterText(campos.at(2), 'ana@test.com');
-      await tester.enterText(campos.at(3), '123');
-      final edad = find.byWidgetPredicate((w) => w is TextField && w.keyboardType == TextInputType.number);
-      await tester.enterText(edad.first, '30');
-      await tester.ensureVisible(find.text('Crear cuenta'));
-      await tester.tap(find.text('Crear cuenta'));
-      await avanzar(tester);
+      await _registroConCorreo(tester);
+      await _escribir(tester, 'nombre', 'Ana');
+      await _escribir(tester, 'apellido', 'Pérez');
+      await _escribir(tester, 'telefono', '3001234567');
+      await _escribir(tester, 'email', 'ana@test.com');
+      await _escribir(tester, 'password', '123');
       expect(find.text('La contraseña debe tener entre 6 y 32 caracteres'), findsOneWidget);
-      tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger)).clearSnackBars();
-      await avanzar(tester);
-
-      await tester.enterText(campos.at(3), 'secreta123');
-      await tester.enterText(edad.first, '130');
-      await tester.tap(find.text('Crear cuenta'));
-      await avanzar(tester);
-      expect(find.text('Ingresa una edad válida (18 a 120 años)'), findsOneWidget);
-    }, log: log.cast());
+      expect(find.byKey(const Key('campo_password')), findsOneWidget);
+    }, log: log);
     expect(log, isEmpty);
   });
 
+  testWidgets('registro: edad fuera de rango se avisa sin guardar el perfil', (tester) async {
+    final log = <http.Request>[];
+    await conApiFalsa((_) => jsonResp({'telefono': '3001234567', 'edad': null, 'registroCompleto': false}), () async {
+      pantallaAlta(tester);
+      await tester.pumpWidget(const MaterialApp(home: RegistroClienteScreen.completar()));
+      await avanzar(tester, 0.5);
+      await _escribir(tester, 'edad', '130');
+      expect(find.text('Ingresa una edad válida (18 a 120 años)'), findsOneWidget);
+    }, log: log);
+    expect(log.where((r) => r.method != 'GET'), isEmpty);
+  });
+
   testWidgets('registro: los campos respetan la longitud máxima del backend', (tester) async {
-    pantallaAlta(tester);
-    await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
-    final nombre = find.byType(TextField).at(0);
-    await tester.enterText(nombre, 'x' * 150);
-    expect(tester.widget<TextField>(nombre).controller!.text.length, 100);
+    await conApiFalsa((_) => jsonResp({}), () async {
+      await _registroConCorreo(tester);
+      final nombre = find.byKey(const Key('campo_nombre'));
+      await tester.enterText(nombre, 'x' * 150);
+      expect(tester.widget<TextField>(nombre).controller!.text.length, 100);
+    });
   });
 }

@@ -23,7 +23,7 @@ import 'services/driver_location_service.dart';
 import 'core/navegador_global.dart';
 import 'screens/user/auth_screen.dart';
 import 'screens/user/intro_screen.dart';
-import 'screens/user/google_login.dart' show CompletarPerfilScreen;
+import 'screens/user/google_login.dart' show pantallaCompletarPerfil;
 import 'screens/shared/cuenta_no_activa_dialog.dart' show mostrarCuentaSuspendidaDialog;
 import 'screens/shared/tickets/tickets_navegacion.dart' show abrirTicketSoporteGlobal;
 import 'screens/home_by_role.dart';
@@ -50,9 +50,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// misma pantalla que iniciar sesión.
 Widget _homeScreenByRole() {
   final destino = homeDestinoForSession();
-  // Entró con Google y cerró la app antes de dar teléfono y edad.
+  // Cerró la app antes de terminar el registro (o de dar teléfono y edad).
   if (!ApiClient.instance.perfilCompleto && errorDeDestino(destino) == null) {
-    return CompletarPerfilScreen(destino: destino, nombre: ApiClient.instance.nombre);
+    return pantallaCompletarPerfil(destino, ApiClient.instance.nombre);
   }
   return homeScreenFor(destino);
 }

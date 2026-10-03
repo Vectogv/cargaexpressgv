@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cargaexpress/screens/cliente/home_screen.dart';
 import 'package:cargaexpress/screens/user/auth_screen.dart';
 import 'package:cargaexpress/screens/user/google_login.dart';
-import 'package:cargaexpress/screens/user/register_screen.dart';
+import 'package:cargaexpress/screens/user/registro/registro_cliente.dart';
 import 'package:cargaexpress/services/api_client.dart';
 import 'package:cargaexpress/services/session_monitor_service.dart';
 import 'package:cargaexpress/services/socket_service_client.dart';
@@ -26,8 +26,22 @@ Future<void> _limpiar(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 30));
 }
 
+Future<void> _escribir(WidgetTester tester, String paso, String texto) async {
+  await tester.enterText(find.byKey(Key('campo_$paso')), texto);
+  await _siguiente(tester);
+}
+
+Future<void> _siguiente(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('btn_continuar')));
+  await avanzar(tester, 0.5);
+}
+
 void main() {
   final idToken = 'x' * 40;
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    return ApiClient.instance.clearTokens();
+  });
 
   testWidgets('cancelar el selector de Google no llama al servidor', (tester) async {
     final log = <http.Request>[];
@@ -49,7 +63,7 @@ void main() {
     });
   });
 
-  testWidgets('cuenta nueva pide teléfono y edad y luego abre el inicio', (tester) async {
+  testWidgets('cliente con perfil incompleto: el asistente pide lo que falta y luego abre el inicio', (tester) async {
     pantallaAlta(tester);
     final log = <http.Request>[];
     await conApiFalsa((req) {
@@ -64,37 +78,47 @@ void main() {
           'perfilCompleto': false,
         });
       }
+      if (req.url.path == '/api/users/profile') {
+        return jsonResp({'nombre': 'Ana', 'telefono': null, 'edad': null, 'cedula': null, 'registroCompleto': false});
+      }
       if (req.url.path == '/api/trips/active') return errorResp(404, 'Sin viaje');
       return jsonResp({'data': []});
     }, () async {
       await tester.pumpWidget(_boton(() async => idToken));
       await tester.tap(find.byKey(const Key('btn_google')));
       await avanzar(tester);
-      expect(find.byType(CompletarPerfilScreen), findsOneWidget);
+      expect(find.byType(RegistroClienteScreen), findsOneWidget);
       final google = log.firstWhere((r) => r.url.path == '/api/auth/google');
       expect(jsonDecode(google.body), {'idToken': idToken});
       // Si cierra la app aquí, al volver a abrirla se le piden otra vez.
       await ApiClient.instance.init();
       expect(ApiClient.instance.perfilCompleto, isFalse);
 
+      expect(find.byKey(const Key('campo_telefono')), findsOneWidget);
+      expect(find.byKey(const Key('btn_atras')), findsNothing);
+      await _escribir(tester, 'telefono', '3001234567');
       // Menor de edad: no se envía nada.
-      await tester.enterText(find.byKey(const Key('campo_telefono_google')), '3001234567');
-      await tester.enterText(find.byKey(const Key('campo_edad_google')), '16');
-      await tester.tap(find.byKey(const Key('btn_completar_perfil')));
-      await avanzar(tester);
+      await _escribir(tester, 'edad', '16');
       expect(log.where((r) => r.method == 'PUT'), isEmpty);
-
-      await tester.enterText(find.byKey(const Key('campo_edad_google')), '30');
-      await tester.tap(find.byKey(const Key('btn_completar_perfil')));
-      await avanzar(tester);
-      final put = log.firstWhere((r) => r.method == 'PUT');
-      expect(jsonDecode(put.body), {'telefono': '3001234567', 'edad': 30});
-      expect(find.byType(ClienteHomeScreen), findsOneWidget);
+      await _escribir(tester, 'edad', '30');
+      await _siguiente(tester); // cédula vacía (opcional)
+      expect(find.text('Antes de empezar'), findsOneWidget);
+      await _siguiente(tester);
+      expect(find.text('Registro completado'), findsOneWidget);
       expect(ApiClient.instance.perfilCompleto, isTrue);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('auth_perfil_completo'), isNull);
+
+      await tester.tap(find.byKey(const Key('btn_ir_panel')));
+      await avanzar(tester);
+      expect(find.byType(ClienteHomeScreen), findsOneWidget);
       await _limpiar(tester);
     }, log: log);
+    final puts = log.where((r) => r.method == 'PUT').map((r) => jsonDecode(r.body)).toList();
+    expect(puts, [
+      {'telefono': '3001234567', 'edad': 30},
+      {'aceptaTerminos': true},
+    ]);
   });
 
   testWidgets('correo sin cuenta (404 CUENTA_NO_EXISTE): "No tienes cuenta, regístrate" y abre el registro prellenado', (tester) async {
@@ -114,12 +138,12 @@ void main() {
       await tester.tap(find.byKey(const Key('btn_google')));
       await avanzar(tester);
       expect(find.text('No tienes cuenta, regístrate'), findsOneWidget);
-      // Sin flavor: registro del cliente, prellenado y sin contraseña.
-      expect(find.byType(RegisterScreen), findsOneWidget);
-      expect(find.text('Te registras con tu cuenta de Google. Solo faltan unos datos.'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'Contraseña'), findsNothing);
-      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Correo electrónico')).enabled, isFalse);
-      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Nombre')).controller?.text, 'Ana');
+      // Sin flavor: asistente del cliente, prellenado y sin contraseña.
+      expect(find.byType(RegistroClienteScreen), findsOneWidget);
+      expect(find.text('Confirma tus datos'), findsOneWidget);
+      expect(find.byKey(const Key('campo_password')), findsNothing);
+      expect(tester.widget<TextField>(find.byKey(const Key('campo_email'))).enabled, isFalse);
+      expect(tester.widget<TextField>(find.byKey(const Key('campo_nombre'))).controller?.text, 'Ana');
       expect(ApiClient.instance.token, isNull);
       expect(log.where((r) => r.url.path == '/api/auth/register'), isEmpty);
     }, log: log);

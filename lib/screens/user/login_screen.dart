@@ -73,6 +73,14 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _error = error);
         return;
       }
+      if (!auth.perfilCompleto) {
+        // Dejó el registro a medias: termina el asistente antes del inicio.
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => pantallaCompletarPerfil(destino, auth.nombre)),
+          (_) => false,
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bienvenido ${auth.nombre}')));
       abrirInicioComoRaiz(context, homeScreenFor(destino));
     } catch (e) {

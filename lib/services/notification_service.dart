@@ -34,6 +34,8 @@ class NotificationService {
   @visibleForTesting
   Future<void> Function(String id) markRemoteRead = ProfileService.markNotificationRead;
   @visibleForTesting
+  Future<void> Function() markAllRemoteRead = ProfileService.markAllNotificationsRead;
+  @visibleForTesting
   bool Function() hasSession = () => ApiClient.instance.token != null;
   @visibleForTesting
   String? Function() currentUser = () => ApiClient.instance.userId;
@@ -540,25 +542,16 @@ class NotificationService {
   void clearDuplicateTracking() => _processedTripIds.clear();
 
   Future<void> markAllRead() async {
-    final pendientes = _remote
-        .where((n) => n['leido'] != true)
-        .map((n) => n['id'] as String)
-        .toList();
+    final habiaPendientes = _remote.any((n) => n['leido'] != true);
     for (final n in [..._remote, ..._local]) {
       n['leido'] = true;
     }
     _changed();
-    if (!hasSession()) return;
-    // ponytail: el servidor no tiene "marcar todas"; se marcan de a 5 en
-    // paralelo. Conviene PUT /api/notifications/read-all.
-    for (var i = 0; i < pendientes.length; i += 5) {
-      await Future.wait(pendientes.skip(i).take(5).map((id) async {
-        try {
-          await markRemoteRead(id);
-        } catch (e) {
-          LoggerService.instance.warning('NotificationService.markAllRead error', e);
-        }
-      }));
+    if (!hasSession() || !habiaPendientes) return;
+    try {
+      await markAllRemoteRead();
+    } catch (e) {
+      LoggerService.instance.warning('NotificationService.markAllRead error', e);
     }
   }
 

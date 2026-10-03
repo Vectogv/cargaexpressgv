@@ -32,6 +32,7 @@ void main() {
       return backend;
     };
     service.markRemoteRead = (id) async => marcadas.add(id);
+    service.markAllRemoteRead = () async => marcadas.add('todas');
     service.resetForTest();
   });
 
@@ -128,7 +129,8 @@ void main() {
 
     await service.markAllRead();
     expect(service.unreadCount, 0);
-    expect(marcadas, unorderedEquals(['1', '2']));
+    // Una sola llamada a PUT /api/notifications/read-all, no una por aviso.
+    expect(marcadas, ['todas']);
   });
 
   test('"Conductor asignado" sale de offer:accepted (flujo real) sin duplicar con trip:accepted', () {
@@ -236,7 +238,7 @@ void main() {
     await tester.tap(find.text('Marcar todas como leídas'));
     await tester.pumpAndSettle();
     expect(service.unreadCount, 0);
-    expect(marcadas, ['1']); // la remota llamó al endpoint; la local no
+    expect(marcadas, ['todas']); // una sola llamada a read-all
     expect(find.text('Marcar todas como leídas'), findsNothing);
   });
 
@@ -298,9 +300,9 @@ void main() {
     expect(service.notifications.first['id'], '9');
   });
 
-  testWidgets('la notificación disputa_cierre (moderator_controller) tiene icono de disputa', (tester) async {
+  testWidgets('la notificación disputa_resuelta tiene icono de disputa (disputa_cierre ya no existe: llega como viaje_estado)', (tester) async {
     backend = [
-      {...remota('d1', fecha: DateTime.now().toIso8601String()), 'tipo': 'disputa_cierre'},
+      {...remota('d1', fecha: DateTime.now().toIso8601String()), 'tipo': 'disputa_resuelta', 'viajeId': '5'},
     ];
     await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
     await tester.pumpAndSettle();

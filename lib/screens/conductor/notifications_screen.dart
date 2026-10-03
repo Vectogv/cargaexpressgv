@@ -62,7 +62,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'viaje_completado':
       case 'viaje_cancelado':
       case 'viaje_estado':
-      case 'disputa_cierre':
       case 'disputa_resuelta':
       case 'busqueda_sin_conductor':
         return _Categoria.viaje;
@@ -99,7 +98,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'conversacion_mensaje':
         return Icons.chat_bubble_outline;
       case 'documentacion': return Icons.description_outlined;
-      case 'disputa_cierre': return Icons.gavel_rounded;
+      case 'disputa_resuelta': return Icons.gavel_rounded;
       case 'suspension_por_pago': return Icons.money_off_rounded;
       case 'busqueda_sin_conductor': return Icons.search_off_rounded;
       case 'ticket_mensaje': return Icons.support_agent;

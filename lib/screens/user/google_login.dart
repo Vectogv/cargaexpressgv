@@ -8,15 +8,21 @@ import '../../services/google_auth.dart';
 import '../home_by_role.dart';
 import 'auth_estilos.dart';
 import 'auth_screen.dart';
-import 'register_screen.dart';
+import 'registro/registro_cliente.dart';
 import 'registro_conductor/registro_conductor_screen.dart';
 
 /// Pantalla de "Crear cuenta" según la app: el asistente del conductor o el
-/// formulario del cliente. Con [google] e [idToken] llega prellenada desde el
-/// login (404 CUENTA_NO_EXISTE).
+/// del cliente. Con [google] e [idToken] llega prellenada desde el login
+/// (404 CUENTA_NO_EXISTE).
 Widget pantallaDeRegistro({Map<String, dynamic>? google, String? idToken}) => esAppConductor
     ? RegistroConductorScreen(google: google, idToken: idToken)
-    : RegisterScreen(google: google, idToken: idToken);
+    : RegistroClienteScreen(google: google, idToken: idToken);
+
+/// Sesión con `perfilCompleto: false`: el cliente termina su asistente de
+/// registro (pide solo lo que falta); el conductor da teléfono y edad.
+Widget pantallaCompletarPerfil(HomeDestino destino, String? nombre) => destino == HomeDestino.cliente
+    ? const RegistroClienteScreen.completar()
+    : CompletarPerfilScreen(destino: destino, nombre: nombre);
 
 /// Botón "Continuar con Google" del login y del registro. Google ya no crea
 /// cuentas: si el correo no existe, el servidor responde 404 CUENTA_NO_EXISTE
@@ -73,7 +79,7 @@ class _BotonGoogleAuthState extends State<BotonGoogleAuth> {
         abrirInicioComoRaiz(context, homeScreenFor(destino));
       } else {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => CompletarPerfilScreen(destino: destino, nombre: auth.nombre)),
+          MaterialPageRoute(builder: (_) => pantallaCompletarPerfil(destino, auth.nombre)),
           (_) => false,
         );
       }

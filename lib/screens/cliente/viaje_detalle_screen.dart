@@ -136,6 +136,13 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   Future<void> _revisarPlazo() async {
     final plazo = _trip?['plazo'];
     if (!_esReserva || plazo is! Map || plazo['estado'] != 'pendiente' || _dialogoPlazoAbierto) return;
+    // `expiraEn` (ISO): pasado ese momento el servidor ya lo da por expirado
+    // (409 SIN_PLAZO_PENDIENTE), así que no vale la pena preguntar.
+    final expira = DateTime.tryParse(plazo['expiraEn']?.toString() ?? '')?.toLocal();
+    if (expira != null && expira.isBefore(DateTime.now())) return;
+    final antesDe = expira == null
+        ? ''
+        : ' Responde antes de las ${expira.hour.toString().padLeft(2, '0')}:${expira.minute.toString().padLeft(2, '0')}.';
     _dialogoPlazoAbierto = true;
     final aceptar = await showDialog<bool>(
       context: context,
@@ -143,7 +150,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       builder: (ctx) => DialogoApp(
         icono: Icons.schedule_rounded,
         titulo: 'El conductor pide ${plazo['minutos']} min más',
-        cuerpo: 'No podrá llegar a la hora programada. ¿Le das más tiempo? Si rechazas, tu reserva vuelve a recibir ofertas.',
+        cuerpo: 'No podrá llegar a la hora programada. ¿Le das más tiempo? Si rechazas, tu reserva vuelve a recibir ofertas.$antesDe',
         textoPrincipal: 'Aceptar',
         onPrincipal: () => Navigator.pop(ctx, true),
         textoSecundario: 'Rechazar',

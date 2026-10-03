@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cargaexpress/screens/cliente/home_screen.dart';
 import 'package:cargaexpress/screens/user/auth_screen.dart';
 import 'package:cargaexpress/screens/user/login_screen.dart';
-import 'package:cargaexpress/screens/user/register_screen.dart';
-import 'package:cargaexpress/screens/user/registro_conductor/registro_conductor_screen.dart';
+import 'package:cargaexpress/screens/user/registro/registro_cliente.dart';
 import 'package:cargaexpress/services/api_client.dart';
 import 'package:cargaexpress/services/session_monitor_service.dart';
 import 'package:cargaexpress/services/socket_service_client.dart';
@@ -38,6 +38,8 @@ Future<void> _pantallaPequena(WidgetTester tester, Widget screen, {double escala
 }
 
 void main() {
+  // El asistente de registro lee su borrador de SharedPreferences.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => SessionMonitorService.instance.stop());
 
   group('bienvenida', () {
@@ -52,7 +54,7 @@ void main() {
       await avanzar(tester);
       await tester.tap(find.byKey(const Key('btn_ir_registro')));
       await avanzar(tester);
-      expect(find.byType(RegisterScreen), findsOneWidget);
+      expect(find.byType(RegistroClienteScreen), findsOneWidget);
     });
 
     testWidgets('muestra la marca y la propuesta, sin restos de wireframe ni botón de Google', (tester) async {
@@ -143,7 +145,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
       await tester.tap(find.byKey(const Key('link_registro')));
       await avanzar(tester);
-      expect(find.byType(RegisterScreen), findsOneWidget);
+      expect(find.byType(RegistroClienteScreen), findsOneWidget);
     });
 
     testWidgets('login correcto de cliente abre su inicio', (tester) async {
@@ -178,83 +180,22 @@ void main() {
   });
 
   group('registro', () {
-    Future<void> llenarDatosPersonales(WidgetTester tester) async {
-      final campos = find.byType(TextField);
-      await tester.enterText(campos.at(0), 'Ana');
-      await tester.enterText(campos.at(1), 'Pérez');
-      await tester.enterText(campos.at(2), 'ana@test.com');
-      await tester.enterText(campos.at(3), 'secreta123');
-      // Edad: el primer campo con teclado numérico.
-      final edad = find.byWidgetPredicate((w) => w is TextField && w.keyboardType == TextInputType.number);
-      await tester.enterText(edad.first, '30');
-    }
-
-    testWidgets('correo ya usado (409): se muestra el motivo', (tester) async {
-      pantallaAlta(tester);
-      await conApiFalsa((_) => errorResp(409, 'El correo ya está registrado'), () async {
-        await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
-        await llenarDatosPersonales(tester);
-        await tester.ensureVisible(find.text('Crear cuenta'));
-        await tester.tap(find.text('Crear cuenta'));
-        await avanzar(tester);
-        expect(find.text('El correo ya está registrado'), findsOneWidget);
-        expect(find.byType(CircularProgressIndicator), findsNothing);
-      });
-    });
-
-    testWidgets('vacío: campos obligatorios marcados y aviso junto al botón', (tester) async {
+    // El flujo completo del asistente está en registro_cliente_test.dart.
+    testWidgets('vacío: el primer paso no avanza ni llama al backend', (tester) async {
       pantallaAlta(tester);
       final log = <http.Request>[];
       await conApiFalsa((_) => jsonResp({}), () async {
-        await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
-        await tester.ensureVisible(find.text('Crear cuenta'));
-        await tester.tap(find.text('Crear cuenta'));
-        await avanzar(tester);
-        expect(find.text('Este campo es obligatorio'), findsNWidgets(2));
-        expect(find.text('Ingresa tu correo electrónico'), findsOneWidget);
-        expect(find.text('La edad es obligatoria'), findsOneWidget);
-        expect(find.text('Revisa los campos marcados en rojo.'), findsOneWidget);
+        await tester.pumpWidget(const MaterialApp(home: RegistroClienteScreen()));
+        await avanzar(tester, 0.5);
+        expect(find.text('Bienvenido a Carga Express'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('btn_registro_correo')));
+        await avanzar(tester, 0.5);
+        await tester.tap(find.byKey(const Key('btn_continuar')));
+        await avanzar(tester, 0.5);
+        expect(find.text('Este campo es obligatorio'), findsOneWidget);
+        expect(find.byKey(const Key('campo_nombre')), findsOneWidget);
       }, log: log);
       expect(log, isEmpty);
-    });
-
-    testWidgets('menor de edad: se avisa sin llamar al backend', (tester) async {
-      pantallaAlta(tester);
-      final log = <http.Request>[];
-      await conApiFalsa((_) => jsonResp({}), () async {
-        await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
-        await llenarDatosPersonales(tester);
-        final edad = find.byWidgetPredicate((w) => w is TextField && w.keyboardType == TextInputType.number);
-        await tester.enterText(edad.first, '16');
-        await tester.ensureVisible(find.text('Crear cuenta'));
-        await tester.tap(find.text('Crear cuenta'));
-        await avanzar(tester);
-        expect(find.text('Debes ser mayor de 18 años para registrarte'), findsOneWidget);
-      }, log: log);
-      expect(log, isEmpty);
-    });
-
-    testWidgets('conductor: la tarjeta de rol abre el asistente de registro del conductor', (tester) async {
-      pantallaAlta(tester);
-      final log = <http.Request>[];
-      await conApiFalsa((_) => jsonResp({}), () async {
-        await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
-        expect(find.text('Conductor y vehículo'), findsNothing);
-        await tester.tap(find.byKey(const Key('rol_conductor')));
-        await avanzar(tester);
-        expect(find.byType(RegistroConductorScreen), findsOneWidget);
-        expect(find.text('Bienvenido, conductor'), findsOneWidget);
-      }, log: log);
-      expect(log, isEmpty);
-    });
-
-    testWidgets('"Inicia sesión" abre el login', (tester) async {
-      pantallaAlta(tester);
-      await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
-      await tester.ensureVisible(find.byKey(const Key('link_login')));
-      await tester.tap(find.byKey(const Key('link_login')));
-      await avanzar(tester);
-      expect(find.byType(LoginScreen), findsOneWidget);
     });
   });
 
@@ -277,10 +218,13 @@ void main() {
       });
 
       testWidgets('registro del cliente con errores, texto x$escala', (tester) async {
-        await _pantallaPequena(tester, const RegisterScreen(), escala: escala);
-        await tester.ensureVisible(find.text('Crear cuenta'));
-        await tester.tap(find.text('Crear cuenta'));
-        await avanzar(tester);
+        await _pantallaPequena(tester, const RegistroClienteScreen(), escala: escala);
+        await avanzar(tester, 0.5);
+        await tester.tap(find.byKey(const Key('btn_registro_correo')));
+        await avanzar(tester, 0.5);
+        await tester.tap(find.byKey(const Key('btn_continuar')));
+        await avanzar(tester, 0.5);
+        expect(find.text('Este campo es obligatorio'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }

@@ -35,6 +35,11 @@ class ProfileService {
     await HttpClient.put('/api/notifications/$id/read', auth: true);
   }
 
+  /// Marca todas las del usuario en una sola llamada (responde `{actualizadas: N}`).
+  static Future<void> markAllNotificationsRead() async {
+    await HttpClient.put('/api/notifications/read-all', auth: true);
+  }
+
   static Future<Map<String, dynamic>> getSettings() async {
     return HttpClient.get('/api/settings', auth: true);
   }

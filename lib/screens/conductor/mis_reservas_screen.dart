@@ -246,6 +246,9 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
         ] else if (plazo['estado'] == 'pendiente') ...[
           const Align(alignment: Alignment.centerLeft, child: ChipEstado.naranja('Esperando respuesta del cliente')),
           const SizedBox(height: 8),
+        ] else if (plazo['estado'] == 'expirado') ...[
+          const Align(alignment: Alignment.centerLeft, child: ChipEstado.rojo('El cliente no respondió a tiempo')),
+          const SizedBox(height: 8),
         ],
         Row(children: [
           Expanded(
