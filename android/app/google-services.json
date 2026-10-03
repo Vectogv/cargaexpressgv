@@ -59,6 +59,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "848686850284-jdnlrmbtoppv76g3tj39e95ni0fha00o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "co.cargaexpress.conductor",
+            "certificate_hash": "c07bbcedb6fa4a82e27bd8edb4dca347e9c53321"
+          }
+        },
+        {
+          "client_id": "848686850284-m037qou8gqnbngve01783kof23fe66s3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "co.cargaexpress.conductor",
+            "certificate_hash": "10c912b3a244409c1fbffbb43a03afa3fbd79b04"
+          }
+        },
+        {
           "client_id": "848686850284-bi6477mo5t1ok3tgrha0vvnfmqcdcfma.apps.googleusercontent.com",
           "client_type": 3
         }
