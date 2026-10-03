@@ -69,7 +69,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
   LatLng? _origenLatLng;
   LatLng? _destinoLatLng;
-  LatLng _center = const LatLng(6.2476, -75.5658);
+  LatLng _center = const LatLng(2.4448, -76.6147); // Popayán
   bool _mapaListo = false;
   bool _loading = false;
   Timer? _draftTimer;
@@ -114,7 +114,12 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     initialCenter: _center,
     initialZoom: 13,
     onTap: _onMapTapped,
-    onMapReady: () => _mapaListo = true,
+    onMapReady: () {
+      _mapaListo = true;
+      // El borrador pudo cargarse antes de que el mapa estuviera listo.
+      final p = _destinoLatLng ?? _origenLatLng;
+      if (p != null) _encuadrar(p);
+    },
   );
   late final TileLayer _tileLayer = TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: 'com.cargaexpress.app');
 
@@ -181,6 +186,8 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
         _descripcionCtrl.text = prefs.getString(_prefDescripcion) ?? '';
         _precioCtrl.text = formatearMiles(prefs.getString(_prefPrecio) ?? '');
       });
+      final p = _destinoLatLng ?? _origenLatLng;
+      if (p != null) _encuadrar(p);
       _actualizarRuta();
     } catch (e) {
       LoggerService.instance.warning('nuevo_envio._loadDraft error', e);
