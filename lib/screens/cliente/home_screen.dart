@@ -148,6 +148,8 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
         if (mounted) setState(() { _activeTrip = trip; _loading = false; _errorActivo = false; });
       } else {
         CacheService.instance.clearActiveTrip();
+        // El viaje acaba de cerrarse (sin socket): que "Último envío" lo muestre.
+        if (_activeTrip != null) _loadRecientes();
         if (mounted) setState(() { _activeTrip = null; _loading = false; _errorActivo = false; });
       }
     } catch (_) {

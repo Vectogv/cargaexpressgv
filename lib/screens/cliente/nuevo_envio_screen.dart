@@ -181,6 +181,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
         _descripcionCtrl.text = prefs.getString(_prefDescripcion) ?? '';
         _precioCtrl.text = formatearMiles(prefs.getString(_prefPrecio) ?? '');
       });
+      _actualizarRuta();
     } catch (e) {
       LoggerService.instance.warning('nuevo_envio._loadDraft error', e);
     }
@@ -258,7 +259,47 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       }
     });
     if (mover) _encuadrar(p);
+    _actualizarRuta();
     return isOrigen ? _versionOrigen : _versionDestino;
+  }
+
+  // Ruta por las calles (Mapbox Directions). Sin ruta no se dibuja ninguna línea.
+  List<LatLng>? _ruta;
+  double? _rutaKm;
+  int? _rutaMin;
+  String? _rutaClave;
+
+  Future<void> _actualizarRuta() async {
+    final o = _origenLatLng;
+    final d = _destinoLatLng;
+    final clave = o == null || d == null ? null : '${_coords(o)};${_coords(d)}';
+    if (clave == _rutaClave) return;
+    _rutaClave = clave;
+    if (_ruta != null) setState(() { _ruta = null; _rutaKm = null; _rutaMin = null; });
+    if (clave == null || _distanciaKm(o!, d!) < 0.05) return;
+    await MapConfig.ensureLoaded();
+    final token = MapConfig.mapboxAccessToken;
+    if (token.isEmpty || clave != _rutaClave) return;
+    try {
+      final uri = Uri.parse('https://api.mapbox.com/directions/v5/mapbox/driving/'
+          '${o.longitude},${o.latitude};${d.longitude},${d.latitude}'
+          '?geometries=geojson&overview=full&access_token=$token');
+      final res = await _geoClient.get(uri).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return;
+      final r = (jsonDecode(res.body)['routes'] as List).first as Map<String, dynamic>;
+      final puntos = [
+        for (final c in r['geometry']['coordinates'] as List)
+          LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
+      ];
+      if (!mounted || clave != _rutaClave || puntos.length < 2) return;
+      setState(() {
+        _ruta = puntos;
+        _rutaKm = (r['distance'] as num).toDouble() / 1000;
+        _rutaMin = ((r['duration'] as num) / 60).ceil();
+      });
+    } catch (e) {
+      LoggerService.instance.warning('nuevo_envio._actualizarRuta error', e);
+    }
   }
 
   void _encuadrar(LatLng ultimo) {
@@ -1073,7 +1114,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Distancia aprox.: ${_formatKm(_distanciaKm(o, d))} en línea recta',
+                      _rutaKm != null
+                          ? 'Por las calles: ${_formatKm(_rutaKm!)} · unos $_rutaMin min'
+                          : 'Distancia aprox.: ${_formatKm(_distanciaKm(o, d))} en línea recta',
                       style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                     ),
                   ),
@@ -1441,9 +1484,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
             options: _mapOptions,
             children: [
               _tileLayer,
-              if (o != null && d != null)
+              if (o != null && d != null && _ruta != null)
                 PolylineLayer(polylines: [
-                  Polyline(points: [o, d], color: _kPrimary.withValues(alpha: 0.6), strokeWidth: 3),
+                  Polyline(points: _ruta!, color: _kPrimary, strokeWidth: 4),
                 ]),
               MarkerLayer(markers: [
                 if (o != null)
