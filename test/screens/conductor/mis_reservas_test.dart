@@ -97,7 +97,7 @@ void main() {
     final log = <http.Request>[];
     await conApiFalsa((req) {
       if (req.method == 'POST' && req.url.path.endsWith('/plazo')) {
-        return jsonResp({'plazoSolicitud': {'minutos': 30, 'estado': 'pendiente'}});
+        return jsonResp({'plazo': {'minutos': 30, 'estado': 'pendiente'}});
       }
       return jsonResp({'data': [_reserva]});
     }, () async {
@@ -126,7 +126,7 @@ void main() {
 
   testWidgets('ya pedido el plazo muestra el chip y no el botón', (tester) async {
     pantallaAlta(tester);
-    final reservaConPlazo = {..._reserva, 'plazoSolicitud': {'minutos': 15, 'estado': 'pendiente'}};
+    final reservaConPlazo = {..._reserva, 'plazo': {'minutos': 15, 'estado': 'pendiente'}};
     await conApiFalsa((_) => jsonResp({'data': [reservaConPlazo]}), () async {
       await tester.pumpWidget(const MaterialApp(home: MisReservasScreen()));
       await avanzar(tester);

@@ -12,7 +12,6 @@ import '../../services/cache_service.dart';
 import '../../services/config_cliente_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/socket_service_client.dart';
-import '../../services/api/trip_service.dart';
 import '../shared/action_key.dart';
 import '../shared/ui_compartida.dart';
 import '../conductor/notifications_screen.dart';
@@ -140,14 +139,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
       final trip = await ApiClient.instance.getActiveTrip();
       if (trip != null) {
         CacheService.instance.cacheActiveTrip(trip);
-        final plazoPrevio = _activeTrip?['plazoSolicitud'] as Map<String, dynamic>?;
-        final plazoNuevo = trip['plazoSolicitud'] as Map<String, dynamic>?;
         // El inicio muestra el viaje activo en su tarjeta (estado, progreso,
         // PIN y confirmación de entrega): ya no se salta solo al rastreo.
         if (mounted) setState(() { _activeTrip = trip; _loading = false; _errorActivo = false; });
-        if (plazoNuevo?['estado'] == 'pendiente' && plazoPrevio?['estado'] != 'pendiente') {
-          _responderPlazo(trip, plazoNuevo!);
-        }
       } else {
         CacheService.instance.clearActiveTrip();
         if (mounted) setState(() { _activeTrip = null; _loading = false; _errorActivo = false; });
@@ -155,32 +149,6 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     } catch (_) {
       if (mounted) setState(() { _loading = false; _errorActivo = true; });
     }
-  }
-
-  /// El conductor pidió más tiempo en la reserva: el cliente acepta (se corre
-  /// la hora) o rechaza (se libera y se busca otro conductor).
-  Future<void> _responderPlazo(Map<String, dynamic> trip, Map<String, dynamic> plazo) async {
-    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
-    final id = (trip['_id'] ?? trip['id'])?.toString();
-    if (id == null) return;
-    final aceptar = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => DialogoApp(
-        icono: Icons.schedule_rounded,
-        titulo: 'El conductor pide ${plazo['minutos']} min más',
-        cuerpo: 'No podrá llegar a la hora programada. ¿Le das más tiempo?',
-        textoPrincipal: 'Aceptar',
-        onPrincipal: () => Navigator.pop(ctx, true),
-        textoSecundario: 'Rechazar',
-        onSecundario: () => Navigator.pop(ctx, false),
-      ),
-    );
-    if (aceptar == null || !mounted) return;
-    try {
-      await TripService.responderPlazo(id, aceptar: aceptar);
-    } catch (_) {}
-    _loadActiveTrip();
   }
 
   /// Últimos envíos para el inicio (el viaje activo ya tiene su tarjeta).

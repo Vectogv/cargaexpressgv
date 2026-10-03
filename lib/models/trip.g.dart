@@ -38,7 +38,6 @@ Trip _$TripFromJson(Map<String, dynamic> json) => Trip(
   receptorNombre: json['receptorNombre'] as String?,
   receptorTelefono: json['receptorTelefono'] as String?,
   tipoVehiculoRequerido: json['tipoVehiculoRequerido'] as String?,
-  plazoSolicitud: json['plazoSolicitud'] as Map<String, dynamic>?,
 );
 
 Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
@@ -65,5 +64,4 @@ Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
   'receptorNombre': instance.receptorNombre,
   'receptorTelefono': instance.receptorTelefono,
   'tipoVehiculoRequerido': instance.tipoVehiculoRequerido,
-  'plazoSolicitud': instance.plazoSolicitud,
 };

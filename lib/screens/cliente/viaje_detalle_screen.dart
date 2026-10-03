@@ -12,7 +12,7 @@ import '../../services/report_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../widgets/error_carga.dart';
 import '../conductor/reportar_cliente_screen.dart';
-import '../shared/ui_compartida.dart' show BotonPrincipal, BotonSecundario, ColoresApp, cifrasTabulares;
+import '../shared/ui_compartida.dart' show BotonPrincipal, BotonSecundario, ColoresApp, DialogoApp, cifrasTabulares;
 import 'cancel_trip_screen.dart';
 import 'chat_screen.dart';
 import 'ofertas_recibidas_screen.dart' show intervaloSondeoOfertas;
@@ -119,8 +119,49 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
       if (!mounted) return;
       setState(() => _trip = data);
       _ajustarSondeo();
-      if (_estaActivo(data['estado']?.toString())) _abrirRastreo();
+      if (_estaActivo(data['estado']?.toString())) {
+        _abrirRastreo();
+      } else {
+        _revisarPlazo();
+      }
     } catch (_) {}
+  }
+
+  /// El conductor asignado pidió más tiempo (`plazo.estado == 'pendiente'`):
+  /// el cliente acepta (se corre la hora) o rechaza (la reserva se libera y
+  /// vuelve a recibir ofertas). La reserva no sale en /trips/active, así que
+  /// el aviso vive aquí; el push `reserva_plazo` abre esta pantalla.
+  bool _dialogoPlazoAbierto = false;
+
+  Future<void> _revisarPlazo() async {
+    final plazo = _trip?['plazo'];
+    if (!_esReserva || plazo is! Map || plazo['estado'] != 'pendiente' || _dialogoPlazoAbierto) return;
+    _dialogoPlazoAbierto = true;
+    final aceptar = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => DialogoApp(
+        icono: Icons.schedule_rounded,
+        titulo: 'El conductor pide ${plazo['minutos']} min más',
+        cuerpo: 'No podrá llegar a la hora programada. ¿Le das más tiempo? Si rechazas, tu reserva vuelve a recibir ofertas.',
+        textoPrincipal: 'Aceptar',
+        onPrincipal: () => Navigator.pop(ctx, true),
+        textoSecundario: 'Rechazar',
+        onSecundario: () => Navigator.pop(ctx, false),
+      ),
+    );
+    if (aceptar != null && mounted) {
+      try {
+        await TripService.responderPlazo(widget.tripId, aceptar: aceptar);
+        if (mounted) _snack(aceptar ? 'Nuevo horario aceptado' : 'Tu reserva vuelve a recibir ofertas');
+      } on ApiException catch (e) {
+        if (mounted) _snack(e.message);
+      } catch (e) {
+        if (mounted) _snack(mensajeDeError(e));
+      }
+    }
+    _dialogoPlazoAbierto = false;
+    if (mounted) await _load();
   }
 
   static bool _estaActivo(String? estado) =>
@@ -174,6 +215,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
           _error = null;
         });
         _ajustarSondeo();
+        _revisarPlazo();
       }
     } on ApiException catch (e) {
       if (!mounted) return;

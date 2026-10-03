@@ -40,10 +40,6 @@ class Trip {
   /// Vehículo que el cliente pidió para este envío (informativo: no oculta
   /// el viaje a conductores con otro vehículo). null si no especificó.
   final String? tipoVehiculoRequerido;
-  /// Pedido del conductor de más tiempo en una reserva (una sola vez):
-  /// {minutos, estado:'pendiente'|'aceptado'|'rechazado'|'expirado',
-  /// solicitadoAt, expiraEn}. null si nunca se pidió.
-  final Map<String, dynamic>? plazoSolicitud;
 
   Trip({
     required this.id,
@@ -69,7 +65,6 @@ class Trip {
     this.receptorNombre,
     this.receptorTelefono,
     this.tipoVehiculoRequerido,
-    this.plazoSolicitud,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {

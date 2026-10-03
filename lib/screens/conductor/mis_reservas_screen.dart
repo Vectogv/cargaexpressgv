@@ -155,7 +155,7 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
       setState(() {
         _reservas = _reservas.map((x) => idDeViaje(x) != id
             ? x
-            : {...x, 'plazoSolicitud': resp['plazoSolicitud'] ?? {'minutos': minutos, 'estado': 'pendiente'}}).toList();
+            : {...x, 'plazo': resp['plazo'] ?? {'minutos': minutos, 'estado': 'pendiente'}}).toList();
       });
     } on ApiException catch (e) {
       if (mounted) _snack(e.message);
@@ -207,7 +207,7 @@ class _MisReservasScreenState extends State<MisReservasScreen> {
     final nombre = [cliente?['nombre'], cliente?['apellido']].whereType<String>().join(' ').trim();
     final precio = (r['precioFinal'] ?? r['precioEstimado']) as num?;
     final fecha = formatoFechaHoraReserva(r['fechaProgramada']?.toString(), r['horaProgramada']?.toString());
-    final plazo = r['plazoSolicitud'] as Map<String, dynamic>?;
+    final plazo = r['plazo'] as Map<String, dynamic>?;
     return TarjetaBlanca(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [

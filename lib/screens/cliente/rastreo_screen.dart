@@ -26,7 +26,6 @@ import '../../widgets/capa_vehiculos.dart';
 import '../../widgets/mapa_viaje.dart';
 import '../../widgets/vehiculo_mapa.dart';
 import '../shared/action_key.dart';
-import '../shared/ui_compartida.dart' show DialogoApp;
 import 'busqueda_conductor_view.dart';
 import 'cancel_trip_screen.dart';
 import 'nuevo_envio_screen.dart';
@@ -82,9 +81,6 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   // ofertas aceptadas (BusquedaTimeoutService): la vista de cierre debe
   // decirlo, no mostrar el aviso genérico de "viaje cancelado".
   bool _canceladoPorSistema = false;
-  // El conductor pidió más tiempo en la reserva: el diálogo se muestra una
-  // sola vez por solicitud.
-  bool _plazoDialogoMostrado = false;
   int _minutosBusqueda = busquedaTimeoutMinPorDefecto;
   // Una clave de idempotencia por acción del usuario (se reutiliza si reintenta).
   final ActionKey _confirmCloseKey = ActionKey();
@@ -204,7 +200,6 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
             setState(() => _status = estado);
           }
           SocketServiceClient.instance.joinTrip(_trip!.id);
-          _revisarPlazoSolicitud(_trip!.plazoSolicitud);
         }
         if (_trip == null) {
           // 404 de /trips/active (caché vieja o push de un viaje ya cerrado):
@@ -392,42 +387,9 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
         }
       });
       if (_status != anterior) _alCambiarEstado(_status);
-      _revisarPlazoSolicitud(parsed.plazoSolicitud);
     } catch (e) {
       debugPrint('Rastreo: no se pudo refrescar el viaje: $e');
     }
-  }
-
-  /// El conductor pidió más tiempo en la reserva: el cliente acepta (se corre
-  /// la hora) o rechaza (se libera y se busca otro conductor). El viaje se
-  /// queda en estado 'reservado', así que esto no puede depender de un
-  /// cambio de `estado` para dispararse.
-  void _revisarPlazoSolicitud(Map<String, dynamic>? plazo) {
-    if (plazo == null || plazo['estado'] != 'pendiente' || _plazoDialogoMostrado) return;
-    _plazoDialogoMostrado = true;
-    _mostrarDialogoPlazo(plazo);
-  }
-
-  Future<void> _mostrarDialogoPlazo(Map<String, dynamic> plazo) async {
-    if (!mounted) return;
-    final aceptar = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => DialogoApp(
-        icono: Icons.schedule_rounded,
-        titulo: 'El conductor pide ${plazo['minutos']} min más',
-        cuerpo: 'No podrá llegar a la hora programada. ¿Le das más tiempo?',
-        textoPrincipal: 'Aceptar',
-        onPrincipal: () => Navigator.pop(ctx, true),
-        textoSecundario: 'Rechazar',
-        onSecundario: () => Navigator.pop(ctx, false),
-      ),
-    );
-    if (aceptar == null || _trip == null || !mounted) return;
-    try {
-      await TripService.responderPlazo(_trip!.id, aceptar: aceptar);
-    } catch (_) {}
-    _refrescarViaje();
   }
 
   /// Reacción de la pantalla a un nuevo estado del viaje, venga del socket o
@@ -499,10 +461,6 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   void _setupSocketListeners() {
     _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
       final newStatus = (data['estado'] ?? data['status']) as String?;
-      // El viaje se queda en 'reservado' mientras se pide el plazo: este
-      // aviso no puede esperar a un cambio de estado para dispararse.
-      final plazoRaw = data['plazoSolicitud'];
-      if (plazoRaw is Map) _revisarPlazoSolicitud(Map<String, dynamic>.from(plazoRaw));
       if (newStatus != null && newStatus != _status && mounted) {
         _trasFrame(() {
           if (!mounted) return;
@@ -807,7 +765,6 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
             });
             _alCambiarEstado(estado);
           }
-          _revisarPlazoSolicitud(parsed.plazoSolicitud);
         } else if (trip == null && mounted && _trip != null) {
           // Ya no está activo y se perdió el socket: cancelado o finalizado.
           await _detectarCancelacionAlSondear();
