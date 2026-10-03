@@ -8,6 +8,10 @@ import '../../widgets/error_carga.dart';
 import '../../services/socket_service_client.dart';
 import '../shared/ui_compartida.dart' show BotonPrincipal, CajaAviso, CajaIcono, ChipEstado, ColoresApp, TarjetaBlanca;
 
+/// SOAT apagado por decisión de gerencia (2026-10-03): no se pide ni se muestra.
+/// Para volver a pedirlo, ponerlo en true (el servidor también debe exigirlo).
+const bool soatActivo = false;
+
 /// Foto guardada de un documento del conductor (clave de `conductor` del perfil).
 String? fotoDocumento(Map<String, dynamic>? conductor, String tipo) {
   const campos = {
@@ -70,7 +74,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     _DocItem('foto_vehiculo', 'Foto del vehículo', Icons.directions_car_outlined),
     _DocItem('tarjeta_propiedad', 'Tarjeta de propiedad', Icons.description_outlined),
     _DocItem('tecnomecanica', 'Revisión técnico-mecánica', Icons.build_outlined, conVencimiento: true),
-    _DocItem('soat', 'SOAT', Icons.health_and_safety_outlined, conVencimiento: true),
+    if (soatActivo) _DocItem('soat', 'SOAT', Icons.health_and_safety_outlined, conVencimiento: true),
     _DocItem('foto_conductor', 'Foto del conductor', Icons.person_outline),
   ];
 

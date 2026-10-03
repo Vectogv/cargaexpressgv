@@ -1103,7 +1103,7 @@ class _PanelVerificacion extends StatelessWidget {
   const _PanelVerificacion({super.key, required this.conductor, required this.onTap});
 
   static const _documentos = [
-    ('SOAT', 'soat'),
+    if (soatActivo) ('SOAT', 'soat'),
     ('Tecnomecánica', 'tecnomecanica'),
     ('Licencia de conducción', 'licencia'),
     ('Validación del vehículo', 'tarjeta_propiedad'),

@@ -141,10 +141,10 @@ void main() {
       // (el encabezado ya muestra el mismo texto como estado de conexión)
       expect(find.descendant(of: panel, matching: find.text('Pendiente de verificación')), findsOneWidget);
       expect(find.text('Completa tu verificación'), findsOneWidget);
-      for (final doc in ['SOAT', 'Tecnomecánica', 'Licencia de conducción', 'Validación del vehículo']) {
+      for (final doc in [if (soatActivo) 'SOAT', 'Tecnomecánica', 'Licencia de conducción', 'Validación del vehículo']) {
         expect(find.text(doc), findsOneWidget, reason: doc);
       }
-      expect(find.text('En validación'), findsOneWidget); // SOAT con foto
+      if (soatActivo) expect(find.text('En validación'), findsOneWidget); // SOAT con foto
       expect(find.text('Pendiente'), findsNWidgets(3)); // los otros 3 sin foto
 
       await tester.tap(find.byKey(const Key('panel_verificacion')));

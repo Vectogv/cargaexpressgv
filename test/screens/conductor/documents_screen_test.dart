@@ -26,7 +26,7 @@ void main() {
   const enlace = '¿No tienes SOAT?';
   const revisando = 'El equipo de Carga Express está revisando tu solicitud.';
 
-  testWidgets('muestra las tarjetas nuevas y la solicitud de validación del SOAT la deja en validación', (tester) async {
+  testWidgets('muestra las tarjetas nuevas y la solicitud de validación del SOAT la deja en validación', skip: !soatActivo, (tester) async {
     pantallaAlta(tester);
     conductor = {'estadoVerificacion': 'pendiente', 'fotoSoat': null, 'fotoLicencia': '/storage/lic.png', 'excepcionSoatEstado': null};
     final log = <http.Request>[];
@@ -78,7 +78,7 @@ void main() {
     expect(estadoDocumento({'estadoVerificacion': 'pendiente', 'excepcionSoatEstado': 'rechazada'}, 'soat'), 'pendiente');
   });
 
-  testWidgets('SOAT vencido se marca en rojo y sin enlace de excepción', (tester) async {
+  testWidgets('SOAT vencido se marca en rojo y sin enlace de excepción', skip: !soatActivo, (tester) async {
     pantallaAlta(tester);
     conductor = {
       'estadoVerificacion': 'pendiente',
@@ -101,7 +101,7 @@ void main() {
     });
   });
 
-  testWidgets('excepción del SOAT aprobada se muestra sin enlace', (tester) async {
+  testWidgets('excepción del SOAT aprobada se muestra sin enlace', skip: !soatActivo, (tester) async {
     pantallaAlta(tester);
     conductor = {'estadoVerificacion': 'pendiente', 'fotoSoat': null, 'excepcionSoatEstado': 'aprobada'};
     await conApiFalsa(backend, () async {
