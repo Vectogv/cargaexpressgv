@@ -195,16 +195,16 @@ class _TransicionAlDiaState extends State<TransicionAlDia> with SingleTickerProv
   static const _salida = 700, _entrada = 450;
   static const _corte = _salida / (_salida + _entrada);
 
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: _salida + _entrada),
-  );
+  // En initState y no `late` perezoso: si se creara por primera vez en
+  // dispose(), el vsync consultaría un context ya desactivado.
+  late final AnimationController _c;
   Widget? _anterior;
   bool _transicion = false;
 
   @override
   void initState() {
     super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: _salida + _entrada));
     if (!widget.alDia) _anterior = widget.child;
   }
 
