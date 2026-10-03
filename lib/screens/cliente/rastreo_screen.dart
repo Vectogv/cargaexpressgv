@@ -251,10 +251,15 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   }
 
   void _reemplazarOfertas(List<Map<String, dynamic>> ofertas) {
+    // El backend sigue devolviendo las vencidas (~30 s): no se cuentan.
+    final ahora = ServerClock.ahora();
     setState(() {
       _ofertas
         ..clear()
-        ..addAll(ofertas);
+        ..addAll(ofertas.where((o) {
+          final vence = o['expiresAt'] is String ? DateTime.tryParse(o['expiresAt'] as String) : null;
+          return vence == null || vence.isAfter(ahora);
+        }));
       _hasOffers = _ofertas.isNotEmpty;
     });
   }
@@ -1579,6 +1584,8 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       );
     }
     final centro = LatLng(origen.lat, origen.lng);
+    final d = _trip?.destino;
+    final destino = d == null ? null : LatLng(d.lat, d.lng);
     if (_nearbyMapCenter != centro) {
       _nearbyMapCenter = centro;
       final media = MediaQuery.of(context);
@@ -1588,10 +1595,12 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       final dLng = radioKm / (111.320 * cos(_toRad(origen.lat)).abs().clamp(0.01, 1.0));
       _nearbyMapOptions = MapOptions(
         initialCameraFit: CameraFit.bounds(
-          bounds: LatLngBounds(
+          // El radio de búsqueda y también el destino.
+          bounds: LatLngBounds.fromPoints([
             LatLng(origen.lat - dLat, origen.lng - dLng),
             LatLng(origen.lat + dLat, origen.lng + dLng),
-          ),
+            if (destino != null) destino,
+          ]),
           padding: EdgeInsets.fromLTRB(
             16,
             media.padding.top + 72,
@@ -1634,8 +1643,16 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
             width: 40,
             height: 40,
             alignment: Alignment.topCenter,
-            child: const Icon(Icons.location_on, color: RastreoColores.rojo, size: 40),
+            child: const Icon(Icons.location_on, color: RastreoColores.verde, size: 40),
           ),
+          if (destino != null)
+            Marker(
+              point: destino,
+              width: 40,
+              height: 40,
+              alignment: Alignment.topCenter,
+              child: const Icon(Icons.location_on, color: RastreoColores.rojo, size: 40),
+            ),
         ]),
       ],
     );

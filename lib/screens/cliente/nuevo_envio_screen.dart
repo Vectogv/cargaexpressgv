@@ -105,6 +105,18 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   };
   // Sesgo (no restricción) hacia Popayán: sin bounded=1 sigue hallando otras ciudades.
   static const String _sesgoPopayan = '&countrycodes=co&viewbox=-77.1,2.95,-76.1,1.95';
+
+  /// Nominatim no ordena por cercanía aunque tenga el viewbox: primero lo más
+  /// cerca de Popayán (o del origen ya elegido).
+  List<Map<String, dynamic>> _porCercania(List<dynamic> data) {
+    final ref = _origenLatLng ?? const LatLng(2.4448, -76.6147);
+    double d(Map<String, dynamic> m) {
+      final lat = double.tryParse('${m['lat']}') ?? 0;
+      final lon = double.tryParse('${m['lon']}') ?? 0;
+      return (lat - ref.latitude) * (lat - ref.latitude) + (lon - ref.longitude) * (lon - ref.longitude);
+    }
+    return data.cast<Map<String, dynamic>>().toList()..sort((a, b) => d(a).compareTo(d(b)));
+  }
   static const Duration _nominatimGap = Duration(milliseconds: 1000);
   late final http.Client _geoClient = widget.geoClient ?? http.Client();
   DateTime _lastGeoRequest = DateTime.fromMillisecondsSinceEpoch(0);
@@ -363,6 +375,14 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       // El usuario eligió el punto a mano mientras esperaba: no sobrescribir.
       if (version != (isOrigen ? _versionOrigen : _versionDestino)) return;
       final latLng = LatLng(pos.latitude, pos.longitude);
+      // GPS viejo o simulado (p. ej. un emulador en California): no lo usamos.
+      if (latLng.latitude < -4.3 || latLng.latitude > 13.5 || latLng.longitude < -79.1 || latLng.longitude > -66.8) {
+        setState(() {
+          _locIssue = LocationIssue.unavailable;
+          _locError = 'Tu ubicación parece estar fuera de Colombia.';
+        });
+        return;
+      }
       final v = _setPunto(isOrigen, latLng, 'Mi ubicación actual (${_coords(latLng)})');
       unawaited(_resolverDireccion(isOrigen, latLng, v));
     } on LocationException catch (e) {
@@ -500,7 +520,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
             autofocus: true,
             textInputAction: TextInputAction.search,
             decoration: const InputDecoration(
-              hintText: 'Ej: Calle 10 # 43-20, Medellín',
+              hintText: 'Ej: Calle 5 # 10-20, Popayán',
               prefixIcon: Icon(Icons.search),
             ),
             onSubmitted: (v) => Navigator.pop(ctx, v),
@@ -530,7 +550,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
           if (mounted) _snack('No se pudo buscar la dirección (${res.statusCode}). Intenta de nuevo.');
           return;
         }
-        data = jsonDecode(res.body) as List<dynamic>;
+        data = _porCercania(jsonDecode(res.body) as List<dynamic>);
       } finally {
         if (mounted) setState(() => isOrigen ? _resolviendoOrigen = false : _resolviendoDestino = false);
       }
@@ -645,7 +665,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     );
     final res = await _nominatimGet(uri);
     if (res.statusCode != 200) return const [];
-    return (jsonDecode(res.body) as List<dynamic>).cast<Map<String, dynamic>>();
+    return _porCercania(jsonDecode(res.body) as List<dynamic>);
   }
 
   Future<void> _showMapPicker({bool isOrigen = true}) async {
@@ -1207,7 +1227,10 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       children: [
         OutlinedButton.icon(
           key: const Key('btn_mis_rutas'),
-          style: OutlinedButton.styleFrom(foregroundColor: ColoresApp.azul),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: ColoresApp.azul,
+            side: const BorderSide(color: _kBorde),
+          ),
           onPressed: _mostrarFavoritos,
           icon: const Icon(Icons.star_border, size: 18),
           label: const Text('Mis rutas'),
@@ -1241,6 +1264,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
           style: SegmentedButton.styleFrom(
             selectedBackgroundColor: ColoresApp.azul.withValues(alpha: 0.12),
             selectedForegroundColor: ColoresApp.azul,
+            side: const BorderSide(color: _kBorde),
           ),
           selected: {programada != null},
           onSelectionChanged: (s) {
@@ -1284,6 +1308,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
           isDense: true,
           contentPadding: EdgeInsets.zero,
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          filled: false,
           counterText: '',
           hintText: 'Ej: 3 cajas medianas, una nevera, 200 kg aprox.',
         ),
@@ -1306,6 +1333,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               decoration: const InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 hintText: 'Nombre de quien recibe',
               ),
             ),
@@ -1321,6 +1351,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               decoration: const InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 hintText: 'Teléfono de quien recibe',
               ),
             ),
@@ -1406,6 +1439,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
                     hintText: '0',
                   ),
                   inputFormatters: [MilesInputFormatter()],
@@ -1669,7 +1705,7 @@ class _PuntoRow extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.8)),
+                          const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.8, color: ColoresApp.azul)),
                           const SizedBox(width: 8),
                           Flexible(child: Text(estado!, style: TextStyle(fontSize: 12, color: Colors.grey[600]))),
                         ],
@@ -1710,7 +1746,7 @@ class _MapButton extends StatelessWidget {
             height: 40,
             child: Center(
               child: loading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.azul))
                   : const Icon(Icons.my_location, size: 20, color: _kPrimary),
             ),
           ),
