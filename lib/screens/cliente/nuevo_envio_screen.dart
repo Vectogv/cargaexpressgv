@@ -18,6 +18,7 @@ import '../../services/logger_service.dart';
 import '../shared/action_key.dart';
 import '../shared/cuenta_no_activa_dialog.dart';
 import '../../widgets/vehiculo_mapa.dart';
+import 'elegir_punto_mapa_screen.dart';
 import 'rastreo_screen.dart';
 import 'viaje_detalle_screen.dart';
 
@@ -412,7 +413,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               ListTile(
                 leading: const Icon(Icons.map_outlined, color: _kPrimary),
                 title: const Text('Elegir en el mapa'),
-                subtitle: const Text('Toca el punto exacto'),
+                subtitle: const Text('Mueve el mapa hasta el punto exacto'),
                 onTap: () => Navigator.pop(ctx, 'map'),
               ),
               ListTile(
@@ -586,35 +587,29 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     );
   }
 
-  void _showMapPicker({bool isOrigen = true}) {
-    final inicial = (isOrigen ? _origenLatLng : _destinoLatLng) ?? _center;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Toca el mapa para marcar el ${isOrigen ? "origen" : "destino"}'),
-        // Ancho explícito: AlertDialog mide el ancho intrínseco del contenido y FlutterMap no lo soporta.
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 300,
-          child: FlutterMap(
-            options: MapOptions(
-              initialCenter: inicial,
-              initialZoom: 14,
-              onTap: (tap, latLng) {
-                Navigator.pop(ctx);
-                if (mounted) _elegirEnMapa(latLng, isOrigen: isOrigen);
-              },
-            ),
-            children: [
-              _tileLayer,
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-        ],
-      ),
+  Future<List<Map<String, dynamic>>> _buscarLugares(String q) async {
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(q)}&format=json&limit=5&accept-language=es',
     );
+    final res = await _nominatimGet(uri);
+    if (res.statusCode != 200) return const [];
+    return (jsonDecode(res.body) as List<dynamic>).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> _showMapPicker({bool isOrigen = true}) async {
+    final inicial = (isOrigen ? _origenLatLng : _destinoLatLng) ?? _center;
+    final elegido = await Navigator.of(context).push<PuntoElegido>(MaterialPageRoute(
+      builder: (_) => ElegirPuntoMapaScreen(
+        esOrigen: isOrigen,
+        inicial: inicial,
+        origen: isOrigen ? null : _origenLatLng,
+        direccionDe: _reverseGeocode,
+        buscar: _buscarLugares,
+        capaMosaicos: widget.mostrarMapa ? _tileLayer : null,
+      ),
+    ));
+    if (elegido == null || !mounted) return;
+    _setPunto(isOrigen, elegido.punto, elegido.direccion);
   }
 
   // ── Validación y envío ────────────────────────────────────────────────────
