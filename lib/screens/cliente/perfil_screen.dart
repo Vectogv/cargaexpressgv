@@ -167,7 +167,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // Íconos claros solo cuando se ve la portada oscura (no en carga/error).
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _loading || _error != null ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
+      child: Scaffold(
       backgroundColor: ColoresApp.fondo,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -207,6 +210,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     ],
                   ),
                 ),
+      ),
     );
   }
 

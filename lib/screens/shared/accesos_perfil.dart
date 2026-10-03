@@ -3,7 +3,7 @@ import '../../contracts/validacion_usuario.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../user/auth_estilos.dart';
-import 'ui_compartida.dart' show DialogoApp;
+import 'ui_compartida.dart' show ColoresApp, DialogoApp;
 
 /// "Acerca de nosotros", compartido por Ajustes del cliente y los dos perfiles.
 void mostrarAcercaDe(BuildContext context) {
@@ -11,6 +11,12 @@ void mostrarAcercaDe(BuildContext context) {
     context: context,
     applicationName: 'CargaExpress',
     applicationVersion: '1.0.0',
+    applicationIcon: Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(12)),
+      child: const Icon(Icons.local_shipping_rounded, color: Colors.white),
+    ),
     children: const [Text('Envíos de carga con conductores verificados.')],
   );
 }

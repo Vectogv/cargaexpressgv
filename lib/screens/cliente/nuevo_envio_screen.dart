@@ -17,6 +17,7 @@ import '../../services/location_permission.dart';
 import '../../services/logger_service.dart';
 import '../shared/action_key.dart';
 import '../shared/cuenta_no_activa_dialog.dart';
+import '../shared/ui_compartida.dart' show ColoresApp;
 import '../../widgets/vehiculo_mapa.dart';
 import 'elegir_punto_mapa_screen.dart';
 import 'rastreo_screen.dart';
@@ -102,6 +103,8 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     'User-Agent': 'CargaExpress/1.0 (com.cargaexpress.app)',
     'Accept-Language': 'es',
   };
+  // Sesgo (no restricción) hacia Popayán: sin bounded=1 sigue hallando otras ciudades.
+  static const String _sesgoPopayan = '&countrycodes=co&viewbox=-77.1,2.95,-76.1,1.95';
   static const Duration _nominatimGap = Duration(milliseconds: 1000);
   late final http.Client _geoClient = widget.geoClient ?? http.Client();
   DateTime _lastGeoRequest = DateTime.fromMillisecondsSinceEpoch(0);
@@ -471,7 +474,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       final List<dynamic> data;
       try {
         final uri = Uri.parse(
-          'https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(result)}&format=json&limit=5&accept-language=es',
+          'https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(result)}&format=json&limit=5&accept-language=es$_sesgoPopayan',
         );
         final res = await _nominatimGet(uri);
         if (res.statusCode != 200) {
@@ -589,7 +592,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
   Future<List<Map<String, dynamic>>> _buscarLugares(String q) async {
     final uri = Uri.parse(
-      'https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(q)}&format=json&limit=5&accept-language=es',
+      'https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(q)}&format=json&limit=5&accept-language=es$_sesgoPopayan',
     );
     final res = await _nominatimGet(uri);
     if (res.statusCode != 200) return const [];
@@ -1153,6 +1156,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       children: [
         OutlinedButton.icon(
           key: const Key('btn_mis_rutas'),
+          style: OutlinedButton.styleFrom(foregroundColor: ColoresApp.azul),
           onPressed: _mostrarFavoritos,
           icon: const Icon(Icons.star_border, size: 18),
           label: const Text('Mis rutas'),
@@ -1183,6 +1187,10 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
             ButtonSegment(value: false, label: Text('Ahora')),
             ButtonSegment(value: true, label: Text('Programar')),
           ],
+          style: SegmentedButton.styleFrom(
+            selectedBackgroundColor: ColoresApp.azul.withValues(alpha: 0.12),
+            selectedForegroundColor: ColoresApp.azul,
+          ),
           selected: {programada != null},
           onSelectionChanged: (s) {
             if (s.first) {
