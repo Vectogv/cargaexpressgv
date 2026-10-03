@@ -27,7 +27,7 @@ import 'solicitudes_disponibles_screen.dart';
 import 'solicitudes_disponibles_section.dart';
 import 'aviso_cuenta_pago.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
-import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp, cifrasTabulares;
+import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp, ChipEstado, cifrasTabulares;
 import '../shared/cuenta_no_activa_dialog.dart' show CuentaNoActivaDialog;
 import '../../core/formato_dinero.dart';
 
@@ -866,6 +866,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return _buildActiveTripCard();
     }
     final aviso = _avisoPrincipal();
+    final conductor = _profile?['conductor'] as Map<String, dynamic>?;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -880,6 +881,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: _buildActiveTripCard(margen: EdgeInsets.zero),
             ),
           if (aviso != null) aviso,
+          if (conductor != null && _verificacionEstado != 'aprobado')
+            _PanelVerificacion(key: const Key('panel_verificacion'), conductor: conductor, onTap: () => _navigate(10)),
           SolicitudesDisponiblesSection(
             online: _online,
             cargandoConexion: _statusLoading,
@@ -934,6 +937,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final estado = _verificacionEstado;
     if (estado == 'rechazado' || estado == 'pendiente') {
+      // Registro a medias (foto del conductor o del vehículo sin subir):
+      // se le pide retomarlo antes que esperar la verificación.
+      final conductor = _profile!['conductor'] as Map<String, dynamic>?;
+      final faltaFoto = fotoDocumento(conductor, 'foto_conductor') == null
+          ? 'del conductor'
+          : fotoDocumento(conductor, 'foto_vehiculo') == null
+              ? 'del vehículo'
+              : null;
+      if (estado == 'pendiente' && faltaFoto != null) {
+        return _AvisoRegistro(
+          key: const Key('aviso_verificacion'),
+          icono: Icons.person_add_alt_1,
+          color: ColoresApp.azul,
+          titulo: 'Continúa tu registro',
+          detalle: 'Te falta la foto $faltaFoto. Súbela en Documentación.',
+          onTap: () => _navigate(10),
+        );
+      }
       return _AvisoRegistro(
         key: const Key('aviso_verificacion'),
         icono: Icons.verified_outlined,
@@ -1061,6 +1082,69 @@ class _AvisoRegistro extends StatelessWidget {
                   ),
                 ),
                 Icon(Icons.chevron_right_rounded, color: color),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Estado de cuenta" + "Completa tu verificación": los 4 documentos que
+/// revisa la empresa, cada uno con su estado derivado ([estadoDocumento]).
+class _PanelVerificacion extends StatelessWidget {
+  final Map<String, dynamic> conductor;
+  final VoidCallback onTap;
+  const _PanelVerificacion({super.key, required this.conductor, required this.onTap});
+
+  static const _documentos = [
+    ('SOAT', 'soat'),
+    ('Tecnomecánica', 'tecnomecanica'),
+    ('Licencia de conducción', 'licencia'),
+    ('Validación del vehículo', 'tarjeta_propiedad'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final rechazado = conductor['estadoVerificacion'] == 'rechazado';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TarjetaBlanca(
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Estado de cuenta', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.textoSecundario)),
+                    ),
+                    rechazado
+                        ? const ChipEstado.rojo('Verificación rechazada', icono: Icons.cancel)
+                        : const ChipEstado.naranja('Pendiente de verificación', icono: Icons.schedule),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text('Completa tu verificación', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro)),
+                const SizedBox(height: 8),
+                for (final (titulo, tipo) in _documentos)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(titulo, style: const TextStyle(fontSize: 14, color: ColoresApp.textoOscuro))),
+                        chipDocumento(estadoDocumento(conductor, tipo)),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                const Text('Toca para subir tus documentos', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ColoresApp.azul)),
               ],
             ),
           ),

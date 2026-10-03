@@ -6,7 +6,48 @@ import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
 import '../../widgets/error_carga.dart';
 import '../../services/socket_service_client.dart';
-import '../shared/ui_compartida.dart' show ChipEstado, ColoresApp, DialogoApp, TarjetaBlanca;
+import '../shared/ui_compartida.dart' show BotonPrincipal, CajaAviso, CajaIcono, ChipEstado, ColoresApp, TarjetaBlanca;
+
+/// Foto guardada de un documento del conductor (clave de `conductor` del perfil).
+String? fotoDocumento(Map<String, dynamic>? conductor, String tipo) {
+  const campos = {
+    'cedula': 'fotoCedula',
+    'cedula_reverso': 'fotoCedulaReverso',
+    'licencia': 'fotoLicencia',
+    'foto_vehiculo': 'fotoVehiculo',
+    'foto_conductor': 'fotoConductor',
+    'tarjeta_propiedad': 'fotoTarjetaPropiedad',
+    'tecnomecanica': 'fotoTecnomecanica',
+    'soat': 'fotoSoat',
+  };
+  final v = conductor?[campos[tipo]];
+  return v == null || v.toString().isEmpty ? null : v.toString();
+}
+
+/// Estado de un documento, derivado del perfil (el servidor solo guarda un
+/// `estadoVerificacion` global): sin foto → `pendiente`; con foto → `aprobado`
+/// / `rechazado` según el global, si no `en_validacion`. El SOAT con
+/// excepción pedida cuenta como en validación (aprobada → aprobado).
+String estadoDocumento(Map<String, dynamic>? conductor, String tipo) {
+  if (fotoDocumento(conductor, tipo) == null) {
+    if (tipo == 'soat') {
+      final exc = conductor?['excepcionSoatEstado'];
+      if (exc == 'aprobada') return 'aprobado';
+      if (exc == 'pendiente') return 'en_validacion';
+    }
+    return 'pendiente';
+  }
+  final global = conductor?['estadoVerificacion'];
+  return global == 'aprobado' || global == 'rechazado' ? global as String : 'en_validacion';
+}
+
+/// Chip del estado que devuelve [estadoDocumento].
+Widget chipDocumento(String estado) => switch (estado) {
+      'aprobado' => const ChipEstado.verde('Aprobado', icono: Icons.check_circle),
+      'rechazado' => const ChipEstado.rojo('Rechazado', icono: Icons.cancel),
+      'en_validacion' => const ChipEstado.naranja('En validación', icono: Icons.schedule),
+      _ => const ChipEstado(texto: 'Pendiente', color: ColoresApp.textoSecundario, fondo: ColoresApp.fondoItem, icono: Icons.upload_outlined),
+    };
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -21,9 +62,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   bool _error = false;
   String? _uploadingDoc;
   StreamSubscription<Map<String, dynamic>>? _verificationSub;
-  /// Comentario del diálogo "Valoración del vehículo" (ver _solicitarExcepcionSoat).
-  final _comentarioSoat = TextEditingController();
-
 
   final List<_DocItem> _docs = [
     _DocItem('cedula', 'Cédula (frente)', Icons.badge_outlined),
@@ -66,7 +104,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   @override
   void dispose() {
     _verificationSub?.cancel();
-    _comentarioSoat.dispose();
     super.dispose();
   }
 
@@ -85,28 +122,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     }
   }
 
-  String? _fotoUrl(String docType) {
-    if (_conductor == null) return null;
-    switch (docType) {
-      case 'cedula':
-        return _conductor!['fotoCedula'] as String?;
-      case 'licencia':
-        return _conductor!['fotoLicencia'] as String?;
-      case 'foto_vehiculo':
-        return _conductor!['fotoVehiculo'] as String?;
-      case 'foto_conductor':
-        return _conductor!['fotoConductor'] as String?;
-      case 'cedula_reverso':
-        return _conductor!['fotoCedulaReverso'] as String?;
-      case 'tarjeta_propiedad':
-        return _conductor!['fotoTarjetaPropiedad'] as String?;
-      case 'tecnomecanica':
-        return _conductor!['fotoTecnomecanica'] as String?;
-      case 'soat':
-        return _conductor!['fotoSoat'] as String?;
-    }
-    return null;
-  }
+  String? _fotoUrl(String docType) => fotoDocumento(_conductor, docType);
 
   /// Fecha de vencimiento (YYYY-MM-DD) de la tecnomecánica o el SOAT.
   String? _vence(String docType) {
@@ -120,12 +136,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
   String? get _excepcionSoat => _conductor?['excepcionSoatEstado'] as String?;
 
-  String _estado(String docType) {
-    final global = _conductor?['estadoVerificacion'] as String? ?? 'pendiente';
-    final foto = _fotoUrl(docType);
-    if (foto == null || foto.isEmpty) return 'no_subido';
-    return global;
-  }
+  String _estado(String docType) => estadoDocumento(_conductor, docType);
 
   Future<void> _confirmAndUpload(String docType) async {
     final picker = ImagePicker();
@@ -277,46 +288,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Future<void> _solicitarExcepcionSoat() async {
-    // Vive en el State (se libera en dispose): el diálogo sigue animándose al
-    // cerrar y un dispose inmediato rompía su TextField.
-    final ctrl = _comentarioSoat..clear();
-    final enviar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => DialogoApp(
-        desplazable: true,
-        icono: Icons.fact_check_outlined,
-        titulo: 'Valoración del vehículo',
-        cuerpo: 'El equipo CargaExpress revisará tu caso y valorará el vehículo. Puedes dejar un comentario.',
-        contenido: TextField(
-          controller: ctrl,
-          maxLines: 3,
-          maxLength: 500,
-          decoration: const InputDecoration(hintText: 'Comentario (opcional)', counterText: ''),
-        ),
-        textoPrincipal: 'Enviar solicitud',
-        onPrincipal: () => Navigator.pop(ctx, true),
-        textoSecundario: 'Cancelar',
-        onSecundario: () => Navigator.pop(ctx, false),
-      ),
-    );
-    if (enviar != true || !mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ApiClient.instance.solicitarExcepcionSoat(ctrl.text.trim());
-      await _loadStatus();
-      messenger.showSnackBar(const SnackBar(content: Text('Solicitud enviada. Te avisaremos cuando la revisen.')));
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}')));
-    }
+    final enviada = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const _SolicitudSoatScreen()));
+    if (enviada == true && mounted) _loadStatus();
   }
 
   /// Debajo de la tarjeta del SOAT: estado de la excepción o el enlace para pedirla.
   Widget _buildExcepcionSoat() {
     final estado = _excepcionSoat;
     final nota = _conductor?['excepcionSoatNota'] as String?;
-    final foto = _fotoUrl('soat');
     if (estado == 'pendiente' || estado == 'aprobada') {
       final ok = estado == 'aprobada';
       final color = ok ? ColoresApp.verde : ColoresApp.naranja;
@@ -328,7 +307,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                ok ? 'Excepción del SOAT aprobada' : 'Excepción del SOAT en revisión',
+                ok ? 'Excepción del SOAT aprobada' : 'El equipo de Carga Express está revisando tu solicitud.',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
               ),
             ),
@@ -336,7 +315,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         ),
       );
     }
-    if (foto != null && foto.isNotEmpty) return const SizedBox.shrink();
+    if (_fotoUrl('soat') != null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -350,14 +329,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 style: TextStyle(fontSize: 12, color: ColoresApp.rojo),
               ),
             ),
-          TextButton(
-            key: const Key('soat_excepcion'),
-            onPressed: _solicitarExcepcionSoat,
-            style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft, foregroundColor: ColoresApp.azul),
-            child: const Text(
-              '¿No tienes SOAT? Contacta al equipo CargaExpress para valorar el vehículo',
-              style: TextStyle(fontSize: 12, decoration: TextDecoration.underline),
-            ),
+          Row(
+            children: [
+              const Text('¿No tienes SOAT?', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
+              TextButton(
+                key: const Key('soat_excepcion'),
+                onPressed: _solicitarExcepcionSoat,
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), foregroundColor: ColoresApp.azul),
+                child: const Text('Enviar solicitud', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, decoration: TextDecoration.underline)),
+              ),
+            ],
           ),
         ],
       ),
@@ -467,7 +448,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final estado = _estado(doc.type);
     final subiendo = _uploadingDoc == doc.type;
     final nota = _conductor?['notaRechazo'] as String?;
-    final vence = doc.conVencimiento && estado != 'no_subido' ? _vence(doc.type) : null;
+    final foto = _fotoUrl(doc.type);
+    final vence = doc.conVencimiento && foto != null ? _vence(doc.type) : null;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -508,14 +490,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(nota, style: TextStyle(fontSize: 12, color: ColoresApp.rojo.withValues(alpha: 0.7)), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ),
-                  if (estado != 'no_subido') ...[
+                  if (foto != null) ...[
                     const SizedBox(height: 6),
                     GestureDetector(
                       onTap: () => _showDocumentPreview(doc.type),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: MediaImage(
-                          path: _fotoUrl(doc.type),
+                          path: foto,
                           height: 56,
                           width: 80,
                           placeholder: Container(
@@ -558,23 +540,142 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             child: Text(texto),
           ),
         );
-    switch (estado) {
-      case 'aprobado':
-        return const ChipEstado.verde('Aprobado', icono: Icons.check_circle);
-      case 'rechazado':
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ChipEstado.rojo('Rechazado', icono: Icons.cancel),
-            const SizedBox(height: 6),
-            subir('Re-subir', ColoresApp.rojo),
-          ],
-        );
-      case 'pendiente':
-        return const ChipEstado.naranja('En revisión', icono: Icons.schedule);
-      default:
-        return subir('Subir', ColoresApp.azul);
+    final chip = chipDocumento(estado);
+    final sinFoto = _fotoUrl(docType) == null;
+    final Widget? boton = switch (estado) {
+      'rechazado' => subir('Re-subir', ColoresApp.rojo),
+      // Aprobado sin foto = excepción del SOAT aprobada: no hay nada que subir.
+      'aprobado' => null,
+      _ => sinFoto ? subir('Subir', ColoresApp.azul) : null,
+    };
+    if (boton == null) return chip;
+    return Column(mainAxisSize: MainAxisSize.min, children: [chip, const SizedBox(height: 6), boton]);
+  }
+}
+
+/// "Solicitud de validación" del SOAT: asunto y tipo fijos, información
+/// adicional opcional. Usa el mismo endpoint de la excepción del SOAT.
+class _SolicitudSoatScreen extends StatefulWidget {
+  const _SolicitudSoatScreen();
+
+  @override
+  State<_SolicitudSoatScreen> createState() => _SolicitudSoatScreenState();
+}
+
+class _SolicitudSoatScreenState extends State<_SolicitudSoatScreen> {
+  final _info = TextEditingController();
+  bool _enviando = false;
+  bool _enviada = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _info.dispose();
+    super.dispose();
+  }
+
+  Future<void> _enviar() async {
+    setState(() {
+      _enviando = true;
+      _error = null;
+    });
+    try {
+      await ApiClient.instance.solicitarExcepcionSoat(_info.text.trim());
+      if (mounted) setState(() => _enviada = true);
+    } catch (e) {
+      if (mounted) setState(() => _error = mensajeDeError(e));
+    } finally {
+      if (mounted) setState(() => _enviando = false);
     }
+  }
+
+  Widget _fijo(String label, String valor, IconData icono) => TextFormField(
+        initialValue: valor,
+        enabled: false,
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icono, size: 20)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_enviada,
+      onPopInvokedWithResult: (hecho, _) {
+        if (!hecho) Navigator.pop(context, true);
+      },
+      child: Scaffold(
+        backgroundColor: ColoresApp.fondo,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: _enviada
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: ColoresApp.textoOscuro),
+                  onPressed: () => Navigator.pop(context),
+                ),
+          automaticallyImplyLeading: false,
+          title: Text(
+            _enviada ? 'Solicitud enviada' : 'Solicitud de validación',
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro),
+          ),
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _enviada
+              ? TarjetaBlanca(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Center(child: CajaIcono(icono: Icons.check_circle_rounded, color: ColoresApp.verde, tamano: 64)),
+                      const SizedBox(height: 16),
+                      const Text('Solicitud enviada', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ColoresApp.textoOscuro)),
+                      const SizedBox(height: 6),
+                      const Text('Tu solicitud fue recibida correctamente.', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: ColoresApp.textoSecundario)),
+                      const SizedBox(height: 16),
+                      const Center(child: ChipEstado.naranja('En validación', icono: Icons.schedule)),
+                      const SizedBox(height: 8),
+                      const Text('El equipo de Carga Express está revisando tu solicitud.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: ColoresApp.textoSecundario)),
+                      const SizedBox(height: 20),
+                      BotonPrincipal(key: const Key('btn_volver_documentos'), texto: 'Volver a documentos', onPressed: () => Navigator.pop(context, true)),
+                    ],
+                  ),
+                )
+              : TarjetaBlanca(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _fijo('Asunto', 'SOAT', Icons.health_and_safety_outlined),
+                      const SizedBox(height: 12),
+                      _fijo('Tipo', 'Validación de vehículo', Icons.fact_check_outlined),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: const Key('campo_info_soat'),
+                        controller: _info,
+                        enabled: !_enviando,
+                        maxLines: 4,
+                        maxLength: 500,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          labelText: 'Información adicional (opcional)',
+                          alignLabelWithHint: true,
+                          hintText: 'Cuéntanos por qué tu vehículo no tiene SOAT',
+                          counterText: '',
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        CajaAviso(texto: _error!, icono: Icons.error_outline, color: ColoresApp.rojo, fondo: ColoresApp.rojoFondo),
+                      ],
+                      const SizedBox(height: 16),
+                      BotonPrincipal(key: const Key('btn_enviar_soat'), texto: 'Enviar solicitud', cargando: _enviando, onPressed: _enviando ? null : _enviar),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
   }
 }
 

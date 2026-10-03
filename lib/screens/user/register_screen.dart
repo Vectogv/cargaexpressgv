@@ -7,9 +7,16 @@ import '../home_by_role.dart';
 import 'auth_estilos.dart';
 import 'google_login.dart';
 import 'login_screen.dart';
+import 'registro_conductor/registro_conductor_screen.dart';
 
+/// Registro del cliente. El conductor se registra con el asistente
+/// [RegistroConductorScreen]; sin flavor (pruebas) la tarjeta "Conductor" lo abre.
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  /// Datos de Google (404 CUENTA_NO_EXISTE) y su idToken: el formulario llega
+  /// prellenado y se registra con `idToken` en vez de contraseña.
+  final Map<String, dynamic>? google;
+  final String? idToken;
+  const RegisterScreen({super.key, this.google, this.idToken});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -18,15 +25,16 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   // Cada app registra un solo rol; sin flavor (pruebas) se elige con las tarjetas.
-  String _rol = esAppConductor ? 'conductor' : 'cliente';
   static final bool _elegirRol = !esAppCliente && !esAppConductor;
   int get _sinPaso => _elegirRol ? 0 : 1;
-  int get _totalPasos => (_esConductor ? 3 : 2) - _sinPaso;
+  int get _totalPasos => 2 - _sinPaso;
   bool _loading = false;
   bool _obscure = true;
   bool _intentado = false;
   bool _formInvalido = false;
   String? _error;
+  Map<String, dynamic>? _google;
+  String? _idToken;
 
   final _nombreCtrl = TextEditingController();
   final _apellidoCtrl = TextEditingController();
@@ -35,28 +43,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _telefonoCtrl = TextEditingController();
   final _edadCtrl = TextEditingController();
 
-  final _cedulaCtrl = TextEditingController();
-  final _placaCtrl = TextEditingController();
-  final _capacidadCtrl = TextEditingController();
-  final _ciudadCtrl = TextEditingController();
-  String _tipoVehiculo = 'Motocicleta';
+  @override
+  void initState() {
+    super.initState();
+    if (widget.google != null) _usarGoogle(widget.google!, widget.idToken);
+  }
 
-  static const List<String> _tiposVehiculo = [
-    'Motocicleta',
-    'Sedan',
-    'Camioneta',
-    'Camion',
-    'Furgon',
-  ];
-
-  bool get _esConductor => _rol == 'conductor';
+  void _usarGoogle(Map<String, dynamic> google, String? idToken) {
+    setState(() {
+      _google = google;
+      _idToken = idToken;
+      _nombreCtrl.text = (google['nombre'] ?? '').toString();
+      _apellidoCtrl.text = (google['apellido'] ?? '').toString();
+      _emailCtrl.text = (google['email'] ?? '').toString();
+    });
+  }
 
   @override
   void dispose() {
-    for (final c in [
-      _nombreCtrl, _apellidoCtrl, _emailCtrl, _passCtrl, _telefonoCtrl,
-      _edadCtrl, _cedulaCtrl, _placaCtrl, _capacidadCtrl, _ciudadCtrl,
-    ]) {
+    for (final c in [_nombreCtrl, _apellidoCtrl, _emailCtrl, _passCtrl, _telefonoCtrl, _edadCtrl]) {
       c.dispose();
     }
     super.dispose();
@@ -97,23 +102,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'nombre': _nombreCtrl.text.trim(),
       'apellido': _apellidoCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
-      'password': _passCtrl.text,
-      'rol': _rol,
+      if (_google == null) 'password': _passCtrl.text else 'idToken': _idToken,
+      'rol': 'cliente',
     };
     if (_telefonoCtrl.text.trim().isNotEmpty) {
       body['telefono'] = _telefonoCtrl.text.trim();
     }
     body['edad'] = int.parse(_edadCtrl.text.trim());
-    if (_esConductor && _ciudadCtrl.text.trim().isNotEmpty) {
-      body['ciudad'] = _ciudadCtrl.text.trim();
-    }
-
-    if (_esConductor) {
-      body['cedula'] = _cedulaCtrl.text.trim();
-      body['placa'] = _placaCtrl.text.trim().toUpperCase();
-      body['tipoVehiculo'] = _tipoVehiculo;
-      body['capacidad'] = _capacidadCtrl.text.trim();
-    }
 
     try {
       final auth = await ApiClient.instance.register(body);
@@ -194,8 +189,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               icono: Icons.inventory_2_outlined,
                               titulo: 'Cliente',
                               descripcion: 'Quiero enviar carga',
-                              seleccionado: _rol == 'cliente',
-                              onTap: () => setState(() => _rol = 'cliente'),
+                              seleccionado: true,
+                              onTap: () {},
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -205,24 +200,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               icono: Icons.local_shipping_outlined,
                               titulo: 'Conductor',
                               descripcion: 'Quiero transportar carga',
-                              seleccionado: _esConductor,
-                              onTap: () => setState(() => _rol = 'conductor'),
+                              seleccionado: false,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const RegistroConductorScreen()),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
                     ],
-                    // Google solo crea cuentas de cliente: el conductor necesita
-                    // cédula, placa y documentos del formulario.
-                    if (!_esConductor) ...[
+                    if (_google == null) ...[
                       const SizedBox(height: 16),
-                      BotonGoogleAuth(deshabilitado: _loading),
+                      BotonGoogleAuth(deshabilitado: _loading, onSinCuenta: _usarGoogle),
                       const SeparadorAuth(texto: 'o con tu correo'),
                     ] else
-                      const SizedBox(height: 26),
+                      const SizedBox(height: 22),
                     _TituloSeccion(paso: 2 - _sinPaso, titulo: 'Datos personales', total: _totalPasos),
                     const SizedBox(height: 12),
+                    if (_google != null) ...[
+                      const Text(
+                        'Te registras con tu cuenta de Google. Solo faltan unos datos.',
+                        style: TextStyle(fontSize: 13.5, color: AuthColores.gris, height: 1.35),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TarjetaAuth(
                       child: AutofillGroup(
                         child: Column(
@@ -254,22 +257,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               maxLength: LimitesUsuario.email,
                               validator: _validarEmail,
                               autofill: AutofillHints.email,
+                              habilitado: _google == null,
+                              ayuda: _google == null ? null : 'Es el de tu cuenta de Google',
                             ),
-                            _campo(
-                              controller: _passCtrl,
-                              label: 'Contraseña',
-                              icono: Icons.lock_outline_rounded,
-                              ayuda: 'Entre ${LimitesUsuario.passwordMin} y ${LimitesUsuario.passwordMax} caracteres',
-                              obscure: _obscure,
-                              maxLength: LimitesUsuario.passwordMax,
-                              validator: _validarPassword,
-                              autofill: AutofillHints.newPassword,
-                              sufijo: IconButton(
-                                tooltip: _obscure ? 'Mostrar contraseña' : 'Ocultar contraseña',
-                                icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
-                                onPressed: () => setState(() => _obscure = !_obscure),
+                            if (_google == null)
+                              _campo(
+                                controller: _passCtrl,
+                                label: 'Contraseña',
+                                icono: Icons.lock_outline_rounded,
+                                ayuda: 'Entre ${LimitesUsuario.passwordMin} y ${LimitesUsuario.passwordMax} caracteres',
+                                obscure: _obscure,
+                                maxLength: LimitesUsuario.passwordMax,
+                                validator: _validarPassword,
+                                autofill: AutofillHints.newPassword,
+                                sufijo: IconButton(
+                                  tooltip: _obscure ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
+                                  onPressed: () => setState(() => _obscure = !_obscure),
+                                ),
                               ),
-                            ),
                             _campo(
                               controller: _telefonoCtrl,
                               label: 'Teléfono (opcional)',
@@ -288,72 +294,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               maxLength: 3,
                               soloDigitos: true,
                               validator: _validarEdad,
-                              ultimo: !_esConductor,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (_esConductor) ...[
-                      const SizedBox(height: 26),
-                      _TituloSeccion(paso: 3 - _sinPaso, titulo: 'Conductor y vehículo', total: _totalPasos),
-                      const SizedBox(height: 12),
-                      TarjetaAuth(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _campo(
-                              controller: _cedulaCtrl,
-                              label: 'Cédula',
-                              icono: Icons.credit_card_outlined,
-                              teclado: TextInputType.number,
-                              maxLength: LimitesUsuario.cedula,
-                              validator: _obligatorio,
-                            ),
-                            _campo(
-                              controller: _placaCtrl,
-                              label: 'Placa',
-                              icono: Icons.pin_outlined,
-                              capitalizacion: TextCapitalization.characters,
-                              maxLength: LimitesUsuario.placa,
-                              validator: _obligatorio,
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
-                              child: DropdownButtonFormField<String>(
-                                key: const Key('campo_tipo_vehiculo'),
-                                initialValue: _tipoVehiculo,
-                                isExpanded: true,
-                                decoration: decoracionCampoAuth(
-                                  label: 'Tipo de vehículo',
-                                  icono: Icons.directions_car_outlined,
-                                ),
-                                items: _tiposVehiculo
-                                    .map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis)))
-                                    .toList(),
-                                onChanged: (v) => setState(() => _tipoVehiculo = v ?? 'Motocicleta'),
-                              ),
-                            ),
-                            _campo(
-                              controller: _capacidadCtrl,
-                              label: 'Capacidad',
-                              icono: Icons.scale_outlined,
-                              ayuda: 'Ejemplo: 500 kg',
-                              maxLength: LimitesUsuario.capacidad,
-                              validator: _obligatorio,
-                            ),
-                            _campo(
-                              controller: _ciudadCtrl,
-                              label: 'Ciudad (zona de cobertura)',
-                              icono: Icons.location_city_outlined,
-                              maxLength: LimitesUsuario.ciudad,
-                              capitalizacion: TextCapitalization.words,
                               ultimo: true,
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                     const SizedBox(height: 22),
                     if (_error != null) ...[
                       AvisoErrorAuth(mensaje: _error!),
@@ -403,11 +349,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     String? Function(String?)? validator,
     String? autofill,
     bool ultimo = false,
+    bool habilitado = true,
   }) {
     return Padding(
       padding: EdgeInsets.only(bottom: ultimo ? 0 : 14),
       child: TextFormField(
         controller: controller,
+        enabled: habilitado,
         // Límite del backend (app/validators/auth.ts), sin contador visible.
         inputFormatters: [
           if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),

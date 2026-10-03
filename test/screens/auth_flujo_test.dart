@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +8,7 @@ import 'package:cargaexpress/screens/cliente/home_screen.dart';
 import 'package:cargaexpress/screens/user/auth_screen.dart';
 import 'package:cargaexpress/screens/user/login_screen.dart';
 import 'package:cargaexpress/screens/user/register_screen.dart';
+import 'package:cargaexpress/screens/user/registro_conductor/registro_conductor_screen.dart';
 import 'package:cargaexpress/services/api_client.dart';
 import 'package:cargaexpress/services/session_monitor_service.dart';
 import 'package:cargaexpress/services/socket_service_client.dart';
@@ -234,40 +234,18 @@ void main() {
       expect(log, isEmpty);
     });
 
-    testWidgets('conductor: tarjeta de rol, sección de vehículo y datos enviados al backend', (tester) async {
+    testWidgets('conductor: la tarjeta de rol abre el asistente de registro del conductor', (tester) async {
       pantallaAlta(tester);
       final log = <http.Request>[];
-      await conApiFalsa((_) => errorResp(409, 'La placa ya está registrada'), () async {
+      await conApiFalsa((_) => jsonResp({}), () async {
         await tester.pumpWidget(const MaterialApp(home: RegisterScreen()));
         expect(find.text('Conductor y vehículo'), findsNothing);
         await tester.tap(find.byKey(const Key('rol_conductor')));
-        await tester.pump();
-        expect(find.text('Conductor y vehículo'), findsOneWidget);
-
-        await llenarDatosPersonales(tester);
-        await tester.ensureVisible(find.text('Crear cuenta'));
-        await tester.tap(find.text('Crear cuenta'));
         await avanzar(tester);
-        // Faltan cédula, placa y capacidad.
-        expect(find.text('Este campo es obligatorio'), findsNWidgets(3));
-
-        await tester.enterText(find.widgetWithText(TextField, 'Cédula'), '123456');
-        await tester.enterText(find.widgetWithText(TextField, 'Placa'), 'abc123');
-        await tester.enterText(find.widgetWithText(TextField, 'Capacidad'), '500 kg');
-        await tester.enterText(find.widgetWithText(TextField, 'Ciudad (zona de cobertura)'), 'Cali');
-        await tester.tap(find.text('Crear cuenta'));
-        await avanzar(tester);
-        expect(find.text('La placa ya está registrada'), findsOneWidget);
+        expect(find.byType(RegistroConductorScreen), findsOneWidget);
+        expect(find.text('Bienvenido, conductor'), findsOneWidget);
       }, log: log);
-      final body = jsonDecode(log.single.body) as Map<String, dynamic>;
-      expect(log.single.url.path, '/api/auth/register');
-      expect(body['rol'], 'conductor');
-      expect(body['placa'], 'ABC123');
-      expect(body['cedula'], '123456');
-      expect(body['tipoVehiculo'], 'Motocicleta');
-      expect(body['capacidad'], '500 kg');
-      expect(body['ciudad'], 'Cali');
-      expect(body['edad'], 30);
+      expect(log, isEmpty);
     });
 
     testWidgets('"Inicia sesión" abre el login', (tester) async {
@@ -298,10 +276,8 @@ void main() {
         });
       });
 
-      testWidgets('registro de conductor con errores, texto x$escala', (tester) async {
+      testWidgets('registro del cliente con errores, texto x$escala', (tester) async {
         await _pantallaPequena(tester, const RegisterScreen(), escala: escala);
-        await tester.tap(find.byKey(const Key('rol_conductor')));
-        await tester.pump();
         await tester.ensureVisible(find.text('Crear cuenta'));
         await tester.tap(find.text('Crear cuenta'));
         await avanzar(tester);

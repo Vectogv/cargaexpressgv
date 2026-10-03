@@ -8,9 +8,19 @@ import '../../services/google_auth.dart';
 import '../home_by_role.dart';
 import 'auth_estilos.dart';
 import 'auth_screen.dart';
+import 'register_screen.dart';
+import 'registro_conductor/registro_conductor_screen.dart';
 
-/// Botón "Continuar con Google" del login y del registro. Una cuenta nueva
-/// queda como cliente; si faltan teléfono o edad se piden antes del inicio.
+/// Pantalla de "Crear cuenta" según la app: el asistente del conductor o el
+/// formulario del cliente. Con [google] e [idToken] llega prellenada desde el
+/// login (404 CUENTA_NO_EXISTE).
+Widget pantallaDeRegistro({Map<String, dynamic>? google, String? idToken}) => esAppConductor
+    ? RegistroConductorScreen(google: google, idToken: idToken)
+    : RegisterScreen(google: google, idToken: idToken);
+
+/// Botón "Continuar con Google" del login y del registro. Google ya no crea
+/// cuentas: si el correo no existe, el servidor responde 404 CUENTA_NO_EXISTE
+/// con los datos de Google y se lleva al registro prellenado.
 class BotonGoogleAuth extends StatefulWidget {
   /// Para pruebas: reemplaza el selector de cuentas de Google.
   final Future<String?> Function()? obtenerIdToken;
@@ -20,7 +30,11 @@ class BotonGoogleAuth extends StatefulWidget {
 
   /// Avisa al formulario para que no entre al mismo tiempo.
   final ValueChanged<bool>? onCargando;
-  const BotonGoogleAuth({super.key, this.obtenerIdToken, this.deshabilitado = false, this.onCargando});
+
+  /// Si el correo no tiene cuenta, recibe los datos de Google y el idToken en
+  /// vez de abrir el registro (el registro mismo lo usa para prellenarse).
+  final void Function(Map<String, dynamic> google, String idToken)? onSinCuenta;
+  const BotonGoogleAuth({super.key, this.obtenerIdToken, this.deshabilitado = false, this.onCargando, this.onSinCuenta});
 
   @override
   State<BotonGoogleAuth> createState() => _BotonGoogleAuthState();
@@ -38,8 +52,9 @@ class _BotonGoogleAuthState extends State<BotonGoogleAuth> {
   Future<void> _entrar() async {
     _setCargando(true);
     setState(() => _error = null);
+    String? idToken;
     try {
-      final idToken = await (widget.obtenerIdToken ?? idTokenDeGoogle)();
+      idToken = await (widget.obtenerIdToken ?? idTokenDeGoogle)();
       if (idToken == null) return; // Canceló el selector.
       final auth = await ApiClient.instance.loginGoogle(idToken);
       if (!mounted) {
@@ -63,6 +78,17 @@ class _BotonGoogleAuthState extends State<BotonGoogleAuth> {
         );
       }
     } on ApiException catch (e) {
+      if (e.statusCode == 404 && e.code == 'CUENTA_NO_EXISTE' && idToken != null) {
+        final google = (e.data?['google'] as Map?)?.cast<String, dynamic>() ?? {};
+        if (widget.onSinCuenta != null) {
+          widget.onSinCuenta!(google, idToken);
+          return;
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No tienes cuenta, regístrate')));
+        Navigator.push(context, MaterialPageRoute(builder: (_) => pantallaDeRegistro(google: google, idToken: idToken)));
+        return;
+      }
       if (mounted) setState(() => _error = e.message);
     } on GoogleSignInException catch (e) {
       debugPrint('Google: ${e.code} ${e.description}');

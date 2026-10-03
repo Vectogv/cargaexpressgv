@@ -6,7 +6,6 @@ import '../home_by_role.dart';
 import 'auth_estilos.dart';
 import 'google_login.dart';
 import 'recuperar_password_screen.dart';
-import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -212,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     accion: 'Regístrate',
                     onTap: () => Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      MaterialPageRoute(builder: (_) => pantallaDeRegistro()),
                     ),
                   ),
                 ],

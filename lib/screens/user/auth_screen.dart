@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../shared/ui_compartida.dart' show FondoDegradado;
 import 'auth_estilos.dart';
+import 'google_login.dart' show pantallaDeRegistro;
 import 'login_screen.dart';
-import 'register_screen.dart';
 
 /// Bienvenida: marca, propuesta de valor y acceso a login / registro.
 class AuthScreen extends StatelessWidget {
@@ -68,7 +68,7 @@ class AuthScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                           OutlinedButton(
                             key: const Key('btn_ir_registro'),
-                            onPressed: () => _abrir(context, const RegisterScreen()),
+                            onPressed: () => _abrir(context, pantallaDeRegistro()),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AuthColores.primario,
                               minimumSize: const Size.fromHeight(52),

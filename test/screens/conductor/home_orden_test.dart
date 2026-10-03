@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:cargaexpress/contracts/socket_events.dart';
 import 'package:cargaexpress/contracts/solicitud.dart';
+import 'package:cargaexpress/screens/conductor/documents_screen.dart';
 import 'package:cargaexpress/screens/conductor/earnings_screen.dart';
 import 'package:cargaexpress/screens/conductor/home_screen.dart';
 import 'package:cargaexpress/screens/shared/cuenta_no_activa_dialog.dart';
@@ -111,7 +112,7 @@ void main() {
   });
 
   testWidgets('con varios motivos sólo sale el aviso más importante (bloqueo por pago antes que verificación)', (tester) async {
-    perfil = {'id': 1, 'nombre': 'Luis', 'conductor': {'estadoVerificacion': 'pendiente'}};
+    perfil = {'id': 1, 'nombre': 'Luis', 'conductor': {'estadoVerificacion': 'pendiente', 'fotoConductor': '/f.png', 'fotoVehiculo': '/v.png'}};
     deuda = {'estadoCuenta': 'suspension_por_pago', 'montoDeuda': 15000};
     await conApiFalsa(backend, () async {
       await abrir(tester);
@@ -122,13 +123,53 @@ void main() {
   });
 
   testWidgets('verificación pendiente sin deuda: un solo aviso que lleva a Documentación', (tester) async {
-    perfil = {'id': 1, 'nombre': 'Luis', 'conductor': {'estadoVerificacion': 'pendiente'}};
+    perfil = {
+      'id': 1,
+      'nombre': 'Luis',
+      'conductor': {'estadoVerificacion': 'pendiente', 'fotoConductor': '/f.png', 'fotoVehiculo': '/v.png', 'fotoSoat': '/s.png'},
+    };
     await conApiFalsa(backend, () async {
       await abrir(tester);
       expect(find.byKey(const Key('aviso_verificacion')), findsOneWidget);
       expect(find.text('Verificación pendiente'), findsOneWidget);
       expect(find.byKey(const Key('aviso_cuenta_pago')), findsNothing);
       expect(find.byKey(const Key('aviso_registro_incompleto')), findsNothing);
+
+      // Panel de verificación: estado de cuenta y los 4 documentos con su estado.
+      final panel = find.byKey(const Key('panel_verificacion'));
+      expect(panel, findsOneWidget);
+      // (el encabezado ya muestra el mismo texto como estado de conexión)
+      expect(find.descendant(of: panel, matching: find.text('Pendiente de verificación')), findsOneWidget);
+      expect(find.text('Completa tu verificación'), findsOneWidget);
+      for (final doc in ['SOAT', 'Tecnomecánica', 'Licencia de conducción', 'Validación del vehículo']) {
+        expect(find.text(doc), findsOneWidget, reason: doc);
+      }
+      expect(find.text('En validación'), findsOneWidget); // SOAT con foto
+      expect(find.text('Pendiente'), findsNWidgets(3)); // los otros 3 sin foto
+
+      await tester.tap(find.byKey(const Key('panel_verificacion')));
+      await avanzar(tester, 1);
+      expect(find.byType(DocumentsScreen), findsOneWidget);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('registro a medias (sin foto del conductor): "Continúa tu registro" en vez de "Verificación pendiente"', (tester) async {
+    perfil = {'id': 1, 'nombre': 'Luis', 'conductor': {'estadoVerificacion': 'pendiente', 'fotoVehiculo': '/v.png'}};
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      expect(find.byKey(const Key('aviso_verificacion')), findsOneWidget);
+      expect(find.text('Continúa tu registro'), findsOneWidget);
+      expect(find.text('Te falta la foto del conductor. Súbela en Documentación.'), findsOneWidget);
+      expect(find.text('Verificación pendiente'), findsNothing);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('cuenta aprobada: sin panel de verificación', (tester) async {
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      expect(find.byKey(const Key('panel_verificacion')), findsNothing);
       await cerrar(tester);
     });
   });

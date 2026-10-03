@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cargaexpress/screens/cliente/home_screen.dart';
 import 'package:cargaexpress/screens/user/auth_screen.dart';
 import 'package:cargaexpress/screens/user/google_login.dart';
+import 'package:cargaexpress/screens/user/register_screen.dart';
 import 'package:cargaexpress/services/api_client.dart';
 import 'package:cargaexpress/services/session_monitor_service.dart';
 import 'package:cargaexpress/services/socket_service_client.dart';
@@ -93,6 +94,34 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('auth_perfil_completo'), isNull);
       await _limpiar(tester);
+    }, log: log);
+  });
+
+  testWidgets('correo sin cuenta (404 CUENTA_NO_EXISTE): "No tienes cuenta, regístrate" y abre el registro prellenado', (tester) async {
+    pantallaAlta(tester);
+    final log = <http.Request>[];
+    await conApiFalsa((req) {
+      if (req.url.path == '/api/auth/google') {
+        return jsonResp({
+          'message': 'No tienes cuenta',
+          'code': 'CUENTA_NO_EXISTE',
+          'google': {'nombre': 'Ana', 'apellido': 'Pérez', 'email': 'ana@gmail.com', 'foto': null},
+        }, 404);
+      }
+      return jsonResp({});
+    }, () async {
+      await tester.pumpWidget(_boton(() async => idToken));
+      await tester.tap(find.byKey(const Key('btn_google')));
+      await avanzar(tester);
+      expect(find.text('No tienes cuenta, regístrate'), findsOneWidget);
+      // Sin flavor: registro del cliente, prellenado y sin contraseña.
+      expect(find.byType(RegisterScreen), findsOneWidget);
+      expect(find.text('Te registras con tu cuenta de Google. Solo faltan unos datos.'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Contraseña'), findsNothing);
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Correo electrónico')).enabled, isFalse);
+      expect(tester.widget<TextField>(find.widgetWithText(TextField, 'Nombre')).controller?.text, 'Ana');
+      expect(ApiClient.instance.token, isNull);
+      expect(log.where((r) => r.url.path == '/api/auth/register'), isEmpty);
     }, log: log);
   });
 
