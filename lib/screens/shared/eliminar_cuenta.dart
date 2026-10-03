@@ -7,8 +7,9 @@ import '../user/auth_screen.dart';
 import 'ui_compartida.dart' show ColoresApp, DialogoApp;
 
 /// "Eliminar mi cuenta" (Ajustes del cliente y del conductor): Play exige que
-/// el usuario pueda borrar su cuenta desde la app. Pide escribir ELIMINAR para
-/// no borrarla por un toque accidental; al terminar vuelve al login.
+/// el usuario pueda pedirlo desde la app. El usuario ve "eliminar", pero el
+/// servidor archiva la cuenta. Pide escribir ELIMINAR para evitar un toque
+/// accidental; al terminar vuelve al login.
 Future<void> mostrarDialogoEliminarCuenta(BuildContext context) async {
   final ok = await showDialog<bool>(
     context: context,
@@ -57,7 +58,7 @@ class _DialogoEliminarCuentaState extends State<_DialogoEliminarCuenta> {
       DriverLocationService.instance.stop();
       if (mounted) Navigator.pop(context, true);
     } on ApiException catch (e) {
-      // 409: viaje activo o deuda pendiente; el servidor explica cuál.
+      // 409: viaje activo o dinero pendiente; el servidor explica cuál.
       setState(() {
         _borrando = false;
         _error = e.message;
@@ -84,9 +85,8 @@ class _DialogoEliminarCuentaState extends State<_DialogoEliminarCuenta> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Se borran tu perfil, tus fotos, tus documentos y tus datos de contacto. '
-              'Esto no se puede deshacer. Los registros de viajes y pagos se guardan '
-              'sin tu nombre, como lo exige la ley.',
+              'Se cierra tu sesión y ya no podrás entrar con esta cuenta. '
+              'Solo se puede si no tienes viajes activos ni dinero pendiente.',
               style: TextStyle(fontSize: 14, height: 1.4),
             ),
             const SizedBox(height: 14),

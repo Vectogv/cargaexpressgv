@@ -23,8 +23,9 @@ class ProfileService {
     await HttpClient.put('/api/users/password', body: {'actual': actual, 'nueva': nueva}, auth: true);
   }
 
-  /// Borrado de la cuenta propia (lo exige Play). El servidor anonimiza los
-  /// datos y responde 409 con `message` si hay un viaje activo o deuda.
+  /// "Eliminar mi cuenta" (lo exige Play). El servidor archiva la cuenta, sin
+  /// borrar datos, y responde 409 con `message` si hay un viaje activo, deuda
+  /// o disputa (eso lo revisa soporte).
   static Future<void> eliminarCuenta() async {
     await HttpClient.delete('/api/users/me', auth: true);
   }

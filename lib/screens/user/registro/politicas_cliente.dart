@@ -21,5 +21,9 @@ Al crear tu cuenta en Carga Express aceptas estas condiciones:
 
 9. SOS. El botón SOS avisa al equipo de Carga Express y a los moderadores de tu zona en caso de emergencia.
 
-10. Datos. Tus datos se usan solo para operar la plataforma y contactarte por tus envíos.
+10. Responsabilidad por la carga. Carga Express responde por tu carga en caso de fallas, daños, robo o pérdida, siempre que lo reportes dentro de las 24 horas siguientes. Para eso tenemos los datos del remitente (el cliente) y de quien la transporta (el conductor).
+
+11. Datos. Solo pedimos los datos mínimos para tus envíos y no recolectamos datos sensibles fuera de ellos. Tus datos se usan solo para operar la plataforma y contactarte por tus envíos.
+
+12. Eliminar tu cuenta. Cuando eliminas tu cuenta, se archiva: tu información queda guardada y no se usa para ningún fin. Solo se puede si no tienes viajes activos ni dinero pendiente; si tienes algo pendiente, soporte revisa tu caso. Una cuenta sin uso durante 6 meses también se archiva, con las mismas condiciones.
 ''';
