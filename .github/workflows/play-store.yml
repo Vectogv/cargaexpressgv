@@ -24,6 +24,8 @@ jobs:
   publicar:
     runs-on: ubuntu-latest
     strategy:
+      # Si una app falla (p. ej. la del conductor sin crear en Play), la otra sigue.
+      fail-fast: false
       matrix:
         flavor: ${{ fromJSON(inputs.app == 'ambas' && '["cliente","conductor"]' || format('["{0}"]', inputs.app)) }}
 
@@ -64,6 +66,12 @@ jobs:
       # versionCode = 100 + número de corrida: siempre sube y nunca choca con los subidos a mano.
       - name: Compilar AAB
         run: flutter build appbundle --release --flavor ${{ matrix.flavor }} --build-number=$((100 + ${{ github.run_number }}))
+
+      # Play exige subir a mano el primer AAB de cada app: queda descargable en la corrida.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aab-${{ matrix.flavor }}
+          path: build/app/outputs/bundle/${{ matrix.flavor }}Release/app-${{ matrix.flavor }}-release.aab
 
       - name: Subir a Play
         uses: r0adkll/upload-google-play@v1
