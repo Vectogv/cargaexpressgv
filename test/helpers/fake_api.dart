@@ -28,7 +28,8 @@ Future<void> conApiFalsa(
   Future<void> Function() body, {
   List<http.Request>? log,
 }) {
-  SharedPreferences.setMockInitialValues({});
+  // Tutorial de bienvenida ya visto: no tapa el inicio en las pruebas.
+  SharedPreferences.setMockInitialValues({'tutorial_cliente_visto': true, 'tutorial_conductor_visto': true});
   return http.runWithClient(body, () => MockClient((req) async {
         log?.add(req);
         return handler(req);

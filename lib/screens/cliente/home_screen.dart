@@ -22,6 +22,7 @@ import 'mis_envios_screen.dart';
 import 'rastreo_screen.dart';
 import 'perfil_screen.dart';
 import 'pagos_screen.dart';
+import '../shared/tutorial_inicio.dart';
 import 'soporte_screen.dart';
 import 'viaje_detalle_screen.dart';
 import 'viaje_finalizado.dart';
@@ -68,6 +69,9 @@ class _ClienteHomeScreenState extends State<ClienteHomeScreen> with WidgetsBindi
     ConfigClienteService.instance.cargar();
     // Anuncio de la gerencia (Configuración → Banner en el panel): ventana, una vez al día.
     _mostrarAnuncio();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) mostrarTutorialSiToca(context, claveTutorialCliente, pasosTutorialCliente);
+    });
     _sondeo = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted && _activeTrip != null && ModalRoute.of(context)?.isCurrent == true) _loadActiveTrip();
     });

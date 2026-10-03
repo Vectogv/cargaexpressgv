@@ -29,6 +29,7 @@ import 'aviso_cuenta_pago.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
 import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp, ChipEstado, cifrasTabulares;
 import '../shared/cuenta_no_activa_dialog.dart' show CuentaNoActivaDialog;
+import '../shared/tutorial_inicio.dart';
 import '../../core/formato_dinero.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -89,6 +90,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) mostrarTutorialSiToca(context, claveTutorialConductor, pasosTutorialConductor);
+    });
 
     // Respaldo sin socket: si el cliente aceptó la oferta y el evento no
     // llegó (socket caído), esto detecta el viaje aceptado igual. Sigue
