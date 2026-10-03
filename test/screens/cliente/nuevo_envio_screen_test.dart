@@ -389,6 +389,33 @@ void main() {
     });
   });
 
+  group('ubicación fuera de Colombia', () {
+    testWidgets('una última posición vieja se reemplaza por una lectura nueva', (tester) async {
+      var llamadas = 0;
+      LocationPermissionHelper.source = _FakeSource(
+        // 1.ª lectura sin señal: cae a la última conocida (California).
+        onCurrent: () async {
+          if (llamadas++ == 0) throw TimeoutException('sin señal');
+          return _pos(2.4419, -76.6063);
+        },
+        last: _pos(37.42, -122.08),
+      );
+      await _pumpScreen(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('fuera de Colombia'), findsNothing);
+      expect(find.textContaining('Mi ubicación actual'), findsOneWidget);
+      await _dispose(tester);
+    });
+
+    testWidgets('si de verdad está fuera, avisa', (tester) async {
+      LocationPermissionHelper.source = _FakeSource(onCurrent: () async => _pos(37.42, -122.08));
+      await _pumpScreen(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('fuera de Colombia'), findsOneWidget);
+      await _dispose(tester);
+    });
+  });
+
   test('formatearMiles usa separador de miles', () {
     expect(formatearMiles('150000'), '150.000');
     expect(formatearMiles('1.234.567'), '1.234.567');

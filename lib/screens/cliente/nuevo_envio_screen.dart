@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -255,6 +256,9 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   static String _coords(LatLng p) =>
       '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}';
 
+  static bool _fueraDeColombia(Position p) =>
+      p.latitude < -4.3 || p.latitude > 13.5 || p.longitude < -79.1 || p.longitude > -66.8;
+
   /// Fija un punto de inmediato (con [texto] provisional) y devuelve su versión.
   int _setPunto(bool isOrigen, LatLng p, String texto, {bool mover = true}) {
     setState(() {
@@ -370,13 +374,21 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
     });
     try {
       await LocationPermissionHelper.ensure(openSettings: false);
-      final pos = await LocationPermissionHelper.currentPosition();
+      var pos = await LocationPermissionHelper.currentPosition();
+      // La última posición conocida puede ser vieja (otra ciudad, un emulador
+      // en California): se pide una lectura nueva antes de descartarla.
+      if (_fueraDeColombia(pos)) {
+        try {
+          pos = await LocationPermissionHelper.currentPosition(allowLastKnown: false);
+        } on LocationException catch (_) {}
+      }
       if (!mounted) return;
       // El usuario eligió el punto a mano mientras esperaba: no sobrescribir.
       if (version != (isOrigen ? _versionOrigen : _versionDestino)) return;
       final latLng = LatLng(pos.latitude, pos.longitude);
-      // GPS viejo o simulado (p. ej. un emulador en California): no lo usamos.
-      if (latLng.latitude < -4.3 || latLng.latitude > 13.5 || latLng.longitude < -79.1 || latLng.longitude > -66.8) {
+      if (_fueraDeColombia(pos)) {
+        // Si el punto ya está puesto (borrador o elegido a mano), se conserva sin avisar.
+        if ((isOrigen ? _origenLatLng : _destinoLatLng) != null) return;
         setState(() {
           _locIssue = LocationIssue.unavailable;
           _locError = 'Tu ubicación parece estar fuera de Colombia.';
