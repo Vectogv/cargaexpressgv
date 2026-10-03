@@ -71,6 +71,13 @@ class RutaViaje {
     );
   }
 
+  /// Ruta dibujable: por calles de verdad. Una `aproximada` o con solo los
+  /// extremos (línea recta de respaldo del servidor) cuenta como sin ruta.
+  List<LatLng>? get coordsReales {
+    final c = coords;
+    return (!aproximada && c != null && c.length > 2) ? c : null;
+  }
+
   /// "8 min", "1 h 5 min" o null sin dato.
   String? get minutosTexto {
     final m = minutos;

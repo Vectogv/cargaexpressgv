@@ -37,7 +37,6 @@ class ViajeAceptadoScreen extends StatelessWidget {
 
   /// Ruta conductor → recogida (GET /trips/:id/route, fase 'recogida').
   final List<LatLng>? ruta;
-  final bool rutaAproximada;
 
   /// Texto del botón principal.
   final String textoAccion;
@@ -61,7 +60,6 @@ class ViajeAceptadoScreen extends StatelessWidget {
     this.vehiculoPos,
     this.tipoVehiculo,
     this.ruta,
-    this.rutaAproximada = false,
     this.textoAccion = 'Voy en camino a recoger',
   });
 
@@ -137,7 +135,6 @@ class ViajeAceptadoScreen extends StatelessWidget {
           tipoVehiculo: tipoVehiculo,
           etiquetaVehiculo: 'Tú',
           ruta: ruta,
-          rutaAproximada: rutaAproximada,
         ),
       ),
     );

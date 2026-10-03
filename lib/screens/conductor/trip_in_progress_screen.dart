@@ -1488,10 +1488,10 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
       final id = data['tripId']?.toString();
       if (r == null || !mounted || (id != null && id != _trip?.id.toString())) return;
       if (r.fase != _faseActual) return;
-      final points = r.coords;
+      final points = r.coordsReales;
       setState(() {
         _aplicarEtaServidor(r);
-        if (points != null && points.length >= 2) {
+        if (points != null) {
           _routePoints = points;
           _routePolylines = [
             Polyline(points: points, color: Colors.black.withValues(alpha: 0.2), strokeWidth: 8),
@@ -1539,12 +1539,16 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     final pos = (_currentLat != null && _currentLng != null) ? LatLng(_currentLat!, _currentLng!) : null;
     // Sin GPS todavía se dibuja el recorrido origen -> destino.
     final desde = pos ?? LatLng(origen.lat, origen.lng);
-    final objetivo = (antes && pos != null) ? LatLng(origen.lat, origen.lng) : LatLng(destino.lat, destino.lng);
     final clave = '${antes ? 'origen' : 'destino'}|${pos != null}';
     final anterior = _rutaDesde;
     if (!forzar && clave == _rutaClave && anterior != null) {
-      final movido = _haversine(desde.latitude, desde.longitude, anterior.latitude, anterior.longitude);
-      if (movido < 0.25 || DateTime.now().difference(_ultimaRuta) < const Duration(seconds: 45)) return;
+      if (_routePoints.isEmpty) {
+        // Viaje en ruta = ruta obligatoria: sin ruta real se reintenta cada 8 s.
+        if (DateTime.now().difference(_ultimaRuta) < const Duration(seconds: 8)) return;
+      } else {
+        final movido = _haversine(desde.latitude, desde.longitude, anterior.latitude, anterior.longitude);
+        if (movido < 0.25 || DateTime.now().difference(_ultimaRuta) < const Duration(seconds: 45)) return;
+      }
     }
     if (_cargandoRuta) {
       // Se repite al terminar la petición en curso (p. ej. llegó el GPS).
@@ -1557,11 +1561,9 @@ class _TripInProgressScreenState extends State<TripInProgressScreen> with Widget
     _ultimaRuta = DateTime.now();
     try {
       // Ruta del backend (la misma del cliente, cacheada allá: no cuesta una
-      // llamada a Mapbox por pantalla). Sin ella, recta hasta el objetivo.
+      // llamada a Mapbox por pantalla). Sin ruta real, solo los puntos.
       final r = await RutaViaje.obtener(t.id);
-      final points = (r != null && r.fase == _faseActual && r.coords != null && r.coords!.length >= 2)
-          ? r.coords!
-          : <LatLng>[desde, objetivo];
+      final points = (r != null && r.fase == _faseActual) ? (r.coordsReales ?? <LatLng>[]) : <LatLng>[];
       if (r != null) _aplicarEtaServidor(r);
       if (!mounted) return;
       setState(() {

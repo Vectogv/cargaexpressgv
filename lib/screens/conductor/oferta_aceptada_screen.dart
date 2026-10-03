@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../shared/ui_compartida.dart';
 import 'package:latlong2/latlong.dart';
@@ -75,7 +77,7 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
 
   /// Ruta conductor → recogida calculada por el backend (si ya existe).
   List<LatLng>? _ruta;
-  bool _rutaAproximada = false;
+  Timer? _rutaTimer;
 
   /// Id del viaje en cualquiera de los formatos del backend (`_id`/`id` del
   /// detalle, `viajeId`/`tripId` de los sockets).
@@ -89,19 +91,24 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
   void initState() {
     super.initState();
     _cargarRuta();
+    // Yendo a recoger la ruta es obligatoria: se reintenta cada 8 s hasta tenerla.
+    _rutaTimer = Timer.periodic(const Duration(seconds: 8), (_) => _cargarRuta());
+  }
+
+  @override
+  void dispose() {
+    _rutaTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _cargarRuta() async {
     final id = _tripId;
-    if (id == null) return;
+    if (id == null || _ruta != null) return;
     final ruta = await RutaViaje.obtener(id);
-    if (!mounted || ruta == null || ruta.fase != 'recogida') return;
-    final coords = ruta.coords;
-    if (coords == null || coords.length < 2) return;
-    setState(() {
-      _ruta = coords;
-      _rutaAproximada = ruta.aproximada;
-    });
+    final coords = ruta?.coordsReales;
+    if (!mounted || ruta == null || ruta.fase != 'recogida' || coords == null) return;
+    _rutaTimer?.cancel();
+    setState(() => _ruta = coords);
   }
 
   /// "Voy en camino a recoger": POST /confirm-arrival (aceptado →
@@ -217,7 +224,6 @@ class _OfertaAceptadaScreenState extends State<OfertaAceptadaScreen> {
       vehiculoPos: MapaViaje.punto(DriverLocationService.instance.lastLat, DriverLocationService.instance.lastLng),
       tipoVehiculo: (widget.trip['conductor'] as Map?)?['tipoVehiculo'] as String?,
       ruta: _ruta,
-      rutaAproximada: _rutaAproximada,
     );
   }
 }

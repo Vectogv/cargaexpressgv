@@ -12,8 +12,8 @@ import 'vehiculo_mapa.dart';
 /// que se vean todos. Sin ningún punto muestra un fondo neutro en lugar de un
 /// mapa inventado.
 ///
-/// Opcionalmente dibuja la [ruta] (continua si viene del servicio de rutas,
-/// punteada si es [rutaAproximada], p. ej. una línea recta de respaldo) y,
+/// Opcionalmente dibuja la [ruta] real del servicio de rutas (sin ella, solo
+/// los puntos: nunca una línea recta de respaldo) y,
 /// con [seguir], vuelve a encuadrar [encuadre] cada vez que cambia (el
 /// vehículo en vivo). Un gesto del usuario se avisa con [onGestoUsuario] para
 /// que la pantalla deje de seguir y ofrezca "Recentrar".
@@ -29,7 +29,6 @@ class MapaViaje extends StatefulWidget {
   final LatLng? destino;
   final LatLng? vehiculo;
   final List<LatLng>? ruta;
-  final bool rutaAproximada;
   final List<LatLng>? encuadre;
   final bool seguir;
   final EdgeInsets padding;
@@ -45,7 +44,6 @@ class MapaViaje extends StatefulWidget {
     this.destino,
     this.vehiculo,
     this.ruta,
-    this.rutaAproximada = false,
     this.encuadre,
     this.seguir = false,
     this.padding = const EdgeInsets.all(48),
@@ -84,7 +82,6 @@ class MapaViaje extends StatefulWidget {
 }
 
 class _MapaViajeState extends State<MapaViaje> {
-  static final _punteada = StrokePattern.dashed(segments: const [12, 10]);
   static const _interaction = InteractionOptions(flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag);
 
   final MapController _controller = MapController();
@@ -191,11 +188,8 @@ class _MapaViajeState extends State<MapaViaje> {
               points: ruta,
               strokeWidth: 5,
               color: const Color(0xFF2563EB),
-              borderStrokeWidth: widget.rutaAproximada ? 0 : 2,
+              borderStrokeWidth: 2,
               borderColor: const Color(0xFF1E3A8A),
-              pattern: widget.rutaAproximada
-                  ? _punteada
-                  : const StrokePattern.solid(),
             ),
           ]),
         MarkerLayer(markers: [

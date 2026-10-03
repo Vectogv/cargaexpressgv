@@ -1725,8 +1725,8 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
     final fase = _faseRecogida ? 'recogida' : 'destino';
     if (r.fase != fase) return; // llegó tarde, de la fase anterior
     setState(() {
-      final coords = r.coords;
-      if (coords != null && coords.length >= 2) {
+      final coords = r.coordsReales;
+      if (coords != null) {
         _ruta = coords;
         _rutaDeClave = fase;
         _rutaClave = fase;
@@ -1803,14 +1803,12 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
 
     _asegurarRuta(conductor: vehiculo, origen: origen, destino: destino);
 
-    // Ruta real si ya llegó la de esta fase; si no (o si el servicio de rutas
-    // falló y devolvió los extremos), línea recta punteada.
+    // Solo la ruta real de esta fase; sin ella, solo los puntos (el sondeo de
+    // 8 s sigue pidiéndola hasta que llegue).
     final desde = _faseRecogida ? vehiculo : origen;
     final hasta = _faseRecogida ? origen : destino;
     final rutaReal = _ruta != null && _ruta!.length > 2 && _rutaDeClave == _rutaClave;
-    final List<LatLng>? ruta = rutaReal
-        ? _ruta
-        : (desde != null && hasta != null ? [desde, hasta] : null);
+    final List<LatLng>? ruta = rutaReal ? _ruta : null;
 
     final encuadre = <LatLng>[
       if (vehiculo != null) vehiculo else if (desde != null) desde,
@@ -1856,7 +1854,6 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
         rumboVehiculo: _driverRumbo,
         etiquetaVehiculo: etiquetaVehiculoAsignado(_status),
         ruta: ruta,
-        rutaAproximada: !rutaReal,
         encuadre: encuadre,
         seguir: _seguirCamara,
         padding: EdgeInsets.fromLTRB(

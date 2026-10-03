@@ -51,25 +51,16 @@ void main() {
       expect(find.byType(PolylineLayer), findsNothing);
     });
 
-    testWidgets('ruta aproximada (línea recta de respaldo) se dibuja punteada y sin borde', (tester) async {
+    testWidgets('sin ruta real solo se ven los marcadores, sin Polyline', (tester) async {
       await tester.pumpWidget(const MaterialApp(
         home: SizedBox(
           height: 220,
-          child: MapaViaje(
-            origen: LatLng(2.44, -76.6),
-            destino: LatLng(2.46, -76.58),
-            ruta: [LatLng(2.44, -76.6), LatLng(2.46, -76.58)],
-            rutaAproximada: true,
-          ),
+          child: MapaViaje(origen: LatLng(2.44, -76.6), destino: LatLng(2.46, -76.58), ruta: null),
         ),
       ));
       await tester.pump();
-
-      final layer = tester.widget<PolylineLayer>(find.byType(PolylineLayer));
-      final poly = layer.polylines.single;
-      expect(poly.borderStrokeWidth, 0);
-      expect(poly.pattern, StrokePattern.dashed(segments: const [12, 10]));
-      expect(poly.pattern, isNot(const StrokePattern.solid()));
+      expect(find.byType(PolylineLayer), findsNothing);
+      expect(find.byIcon(Icons.location_on), findsOneWidget);
     });
 
     testWidgets('ruta real (del servicio de rutas) se dibuja sólida y con borde', (tester) async {

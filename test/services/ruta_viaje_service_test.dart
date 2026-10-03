@@ -56,6 +56,14 @@ void main() {
     expect(vacia.ubicacionActualizadaEn, isNull);
   });
 
+  test('coordsReales: aproximada o solo los extremos cuenta como sin ruta', () {
+    final tres = [[2.47, -76.57], [2.48, -76.58], [2.49, -76.59]];
+    expect(RutaViaje.fromJson({'fase': 'destino', 'coords': tres})!.coordsReales, hasLength(3));
+    expect(RutaViaje.fromJson({'fase': 'destino', 'aproximada': true, 'coords': tres})!.coordsReales, isNull);
+    expect(RutaViaje.fromJson({'fase': 'destino', 'coords': tres.take(2).toList()})!.coordsReales, isNull);
+    expect(RutaViaje.fromJson({'fase': 'destino'})!.coordsReales, isNull);
+  });
+
   test('horas en el texto del ETA', () {
     expect(const RutaViaje(fase: 'destino', minutos: 75).minutosTexto, '1 h 15 min');
     expect(const RutaViaje(fase: 'destino').minutosTexto, isNull);

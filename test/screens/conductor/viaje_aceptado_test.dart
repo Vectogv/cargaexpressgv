@@ -80,7 +80,6 @@ void main() {
       expect(mapa.destino, isNull);
       expect(mapa.ruta, isNotNull);
       expect(mapa.ruta!.length, 3);
-      expect(mapa.rutaAproximada, isFalse);
 
       // La etiqueta describe la acción real de esta fase.
       expect(find.text('Voy en camino a recoger'), findsOneWidget);
@@ -99,6 +98,23 @@ void main() {
       expect(mapa.ruta, isNull);
       await cerrar(tester);
     });
+  });
+
+  testWidgets('sin ruta se vuelve a pedir /route cada 8 s hasta tenerla', (tester) async {
+    rutaDisponible = false;
+    final log = <http.Request>[];
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      MapaViaje mapa() => tester.widget<MapaViaje>(find.byKey(const Key('mapa_recogida')));
+      expect(mapa().ruta, isNull);
+
+      rutaDisponible = true;
+      await tester.pump(const Duration(seconds: 9));
+      await avanzar(tester, 1);
+      expect(log.where((r) => r.url.path == '/api/trips/9/route').length, greaterThanOrEqualTo(2));
+      expect(mapa().ruta, hasLength(3));
+      await cerrar(tester);
+    }, log: log);
   });
 
   testWidgets('"Voy en camino a recoger" llama a confirm-arrival y abre el viaje ya en camino', (tester) async {
