@@ -17,7 +17,11 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  String _rol = 'cliente';
+  // Cada app registra un solo rol; sin flavor (pruebas) se elige con las tarjetas.
+  String _rol = esAppConductor ? 'conductor' : 'cliente';
+  static final bool _elegirRol = !esAppCliente && !esAppConductor;
+  int get _sinPaso => _elegirRol ? 0 : 1;
+  int get _totalPasos => (_esConductor ? 3 : 2) - _sinPaso;
   bool _loading = false;
   bool _obscure = true;
   bool _intentado = false;
@@ -119,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
       final home = homeDestinoFor(rol: auth.rol, esModerador: auth.esModerador);
-      if (home == HomeDestino.ninguno) {
+      if (errorDeDestino(home) != null) {
         // Rol sin pantalla en la app: cerrar la sesión que dejó el registro.
         await ApiClient.instance.logout();
         if (!mounted) return;
@@ -172,12 +176,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AuthColores.texto, letterSpacing: -0.5),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Solo te toma un minuto. Elige cómo usarás CargaExpress.',
-                      style: TextStyle(fontSize: 15, color: AuthColores.gris, height: 1.35),
+                    Text(
+                      _elegirRol ? 'Solo te toma un minuto. Elige cómo usarás CargaExpress.' : 'Solo te toma un minuto.',
+                      style: const TextStyle(fontSize: 15, color: AuthColores.gris, height: 1.35),
                     ),
                     const SizedBox(height: 22),
-                    _TituloSeccion(paso: 1, titulo: 'Tipo de cuenta', total: _esConductor ? 3 : 2),
+                    if (_elegirRol) ...[
+                    _TituloSeccion(paso: 1, titulo: 'Tipo de cuenta', total: _totalPasos),
                     const SizedBox(height: 12),
                     IntrinsicHeight(
                       child: Row(
@@ -207,6 +212,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
                       ),
                     ),
+                    ],
                     // Google solo crea cuentas de cliente: el conductor necesita
                     // cédula, placa y documentos del formulario.
                     if (!_esConductor) ...[
@@ -215,7 +221,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SeparadorAuth(texto: 'o con tu correo'),
                     ] else
                       const SizedBox(height: 26),
-                    _TituloSeccion(paso: 2, titulo: 'Datos personales', total: _esConductor ? 3 : 2),
+                    _TituloSeccion(paso: 2 - _sinPaso, titulo: 'Datos personales', total: _totalPasos),
                     const SizedBox(height: 12),
                     TarjetaAuth(
                       child: AutofillGroup(
@@ -290,7 +296,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     if (_esConductor) ...[
                       const SizedBox(height: 26),
-                      const _TituloSeccion(paso: 3, titulo: 'Conductor y vehículo', total: 3),
+                      _TituloSeccion(paso: 3 - _sinPaso, titulo: 'Conductor y vehículo', total: _totalPasos),
                       const SizedBox(height: 12),
                       TarjetaAuth(
                         child: Column(

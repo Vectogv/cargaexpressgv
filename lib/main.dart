@@ -51,7 +51,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Widget _homeScreenByRole() {
   final destino = homeDestinoForSession();
   // Entró con Google y cerró la app antes de dar teléfono y edad.
-  if (!ApiClient.instance.perfilCompleto && destino != HomeDestino.ninguno) {
+  if (!ApiClient.instance.perfilCompleto && errorDeDestino(destino) == null) {
     return CompletarPerfilScreen(destino: destino, nombre: ApiClient.instance.nombre);
   }
   return homeScreenFor(destino);

@@ -66,11 +66,12 @@ class _LoginScreenState extends State<LoginScreen> {
         rol: auth.rol,
         esModerador: auth.esModerador,
       );
-      if (destino == HomeDestino.ninguno) {
-        // Rol sin pantalla en la app: no dejar una sesión "colgada".
+      final error = errorDeDestino(destino);
+      if (error != null) {
+        // Rol sin pantalla en esta app: no dejar una sesión "colgada".
         await ApiClient.instance.logout();
         if (!mounted) return;
-        setState(() => _error = 'Tu cuenta no tiene un rol habilitado en la app. Contacta a soporte.');
+        setState(() => _error = error);
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bienvenido ${auth.nombre}')));

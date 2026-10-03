@@ -48,9 +48,10 @@ class _BotonGoogleAuthState extends State<BotonGoogleAuth> {
         return;
       }
       final destino = homeDestinoFor(rol: auth.rol, esModerador: auth.esModerador);
-      if (destino == HomeDestino.ninguno) {
+      final error = errorDeDestino(destino);
+      if (error != null) {
         await ApiClient.instance.logout();
-        if (mounted) setState(() => _error = 'Tu cuenta no tiene un rol habilitado en la app. Contacta a soporte.');
+        if (mounted) setState(() => _error = error);
         return;
       }
       if (auth.perfilCompleto) {

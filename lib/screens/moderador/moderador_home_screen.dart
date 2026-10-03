@@ -238,7 +238,7 @@ class _ModeradorHomeScreenState extends State<ModeradorHomeScreen> {
             ],
           ),
           actions: [
-            if (cuentaPropia != HomeDestino.ninguno)
+            if (errorDeDestino(cuentaPropia) == null)
               IconButton(
                 tooltip: cuentaPropia == HomeDestino.conductor
                     ? 'Ir a mi cuenta de conductor'

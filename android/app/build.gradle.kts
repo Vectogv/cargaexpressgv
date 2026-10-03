@@ -37,6 +37,21 @@ android {
         versionName = flutter.versionName
     }
 
+    // Dos apps del mismo código: `flutter build apk --flavor cliente|conductor`.
+    flavorDimensions += "app"
+    productFlavors {
+        create("cliente") {
+            dimension = "app"
+            applicationId = "co.cargaexpress.app"
+            manifestPlaceholders["appName"] = "CargaExpress"
+        }
+        create("conductor") {
+            dimension = "app"
+            applicationId = "co.cargaexpress.conductor"
+            manifestPlaceholders["appName"] = "CargaExpress Conductor"
+        }
+    }
+
     signingConfigs {
         if (keyProps.isNotEmpty()) {
             create("release") {
