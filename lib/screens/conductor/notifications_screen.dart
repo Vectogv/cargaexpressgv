@@ -138,7 +138,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             const Text(
               'Sin notificaciones',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: ColoresApp.textoSecundario),
+              style: TextStyle(fontSize: 15, color: ColoresApp.textoSecundario),
             ),
           ],
         ),
@@ -247,7 +247,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     Text(
                       notif['titulo'] as String? ?? '',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: leido ? FontWeight.w500 : FontWeight.w700,
                         color: ColoresApp.textoOscuro,
                         height: 1.4,
@@ -262,7 +262,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                     const SizedBox(height: 4),
                     Text(_hora(notif['createdAt'] as String?),
-                        style: const TextStyle(fontSize: 11, color: ColoresApp.textoSecundario)),
+                        style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
                   ],
                 ),
               ),
