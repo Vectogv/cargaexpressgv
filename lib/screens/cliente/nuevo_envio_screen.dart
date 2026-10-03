@@ -318,7 +318,8 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       if (o != null && d != null && _distanciaKm(o, d) > 0.05) {
         _mapCtrl.fitCamera(CameraFit.bounds(
           bounds: LatLngBounds.fromPoints([o, d]),
-          padding: const EdgeInsets.fromLTRB(40, 50, 60, 40),
+          // Abajo deja libre el aviso "Toca el mapa para marcar un punto".
+          padding: const EdgeInsets.fromLTRB(40, 50, 60, 80),
         ));
       } else {
         _mapCtrl.move(ultimo, 15);
