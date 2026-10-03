@@ -10,6 +10,7 @@ import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import '../../widgets/media_image.dart';
+import '../shared/accesos_perfil.dart';
 import '../shared/ui_compartida.dart';
 import '../user/auth_estilos.dart';
 import '../user/auth_screen.dart';
@@ -393,6 +394,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
         _fila(Icons.credit_card, 'Pagos', _abrirPagos, destacado: _suspendidoPorPago ? 'Pendiente' : null),
       _fila(Icons.settings_outlined, 'Ajustes',
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen()))),
+      _fila(Icons.emergency_outlined, 'Número de emergencia', () async {
+        if (await mostrarDialogoEmergencia(context, _profile, obligatorio: false)) _loadProfile();
+      }),
+      _fila(Icons.info_outline, 'Acerca de nosotros', () => mostrarAcercaDe(context)),
     ];
     return TarjetaBlanca(
       padding: EdgeInsets.zero,

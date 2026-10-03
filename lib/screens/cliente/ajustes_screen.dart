@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/accesos_perfil.dart';
 import '../shared/cambiar_password.dart';
 import '../shared/tickets/nuevo_ticket_screen.dart';
 import 'soporte_screen.dart';
@@ -61,12 +62,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
               );
             }),
             _buildLinkItem(Icons.info_outline, 'Acerca de', () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'CargaExpress',
-                applicationVersion: '1.0.0',
-                children: const [Text('Envíos de carga con conductores verificados.')],
-              );
+              mostrarAcercaDe(context);
             }),
           ]),
         ],

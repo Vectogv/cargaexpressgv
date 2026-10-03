@@ -11,6 +11,7 @@ import '../shared/ui_compartida.dart'
     show BotonPrincipal, BotonSecundario, ColoresApp, DialogoApp, TarjetaBlanca, TituloHoja, cifrasTabulares, mostrarHojaApp;
 import '../user/auth_estilos.dart' show AvisoErrorAuth;
 import '../user/auth_screen.dart';
+import '../shared/accesos_perfil.dart';
 import 'documents_screen.dart';
 import 'grupo_conductores_screen.dart';
 import 'mis_reservas_screen.dart';
@@ -377,7 +378,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuItem(Icons.event_available_outlined, 'Mis reservas', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisReservasScreen()))),
           _buildMenuItem(Icons.groups_outlined, 'Grupo de conductores', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GrupoConductoresScreen()))),
           _buildMenuItem(Icons.headset_mic_outlined, 'Soporte', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
-          _buildMenuItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), divisor: false),
+          _buildMenuItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+          _buildMenuItem(Icons.emergency_outlined, 'Número de emergencia', () async {
+            if (await mostrarDialogoEmergencia(context, _profile, obligatorio: true)) _loadProfile();
+          }),
+          _buildMenuItem(Icons.info_outline, 'Acerca de nosotros', () => mostrarAcercaDe(context), divisor: false),
         ],
       ),
     );
