@@ -200,12 +200,9 @@ class DriverLocationService {
       var status = await Permission.location.status;
       if (status.isGranted) return true;
       status = await Permission.location.request();
-      if (status.isGranted) return true;
-
-      if (await Permission.locationAlways.request().isGranted) return true;
-      if (await Permission.location.isGranted) return true;
-
-      return false;
+      // Basta "mientras se usa la app": el servicio en primer plano sigue
+      // enviando la ubicación con la pantalla apagada, sin ACCESS_BACKGROUND_LOCATION.
+      return status.isGranted;
     } catch (e) {
       LoggerService.instance.error('DriverLocationService permission error', e);
       return false;
