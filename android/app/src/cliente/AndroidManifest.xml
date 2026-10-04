@@ -8,5 +8,10 @@
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             tools:node="remove" />
+        <!-- Lo mete el plugin geolocator con tipo "location"; la app no lo usa
+             y Play pide por él el formulario de servicio en primer plano. -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            tools:node="remove" />
     </application>
 </manifest>
