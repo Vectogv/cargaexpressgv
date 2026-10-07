@@ -4,14 +4,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cargaexpress/models/trip.dart';
 import 'package:cargaexpress/screens/cliente/busqueda_conductor_view.dart';
 
-Trip _trip() => Trip.fromJson({
+Trip _trip({Map<String, dynamic>? busqueda}) => Trip.fromJson({
       '_id': 't1',
       'estado': 'buscando',
       'origen': {'direccion': 'Calle 10 # 43-20, Medellín', 'lat': 6.2, 'lng': -75.5},
       'destino': {'direccion': 'Carrera 70, Envigado', 'lat': 6.17, 'lng': -75.59},
       'descripcion': '3 cajas medianas',
       'precioEstimado': 150000,
+      if (busqueda != null) 'busqueda': busqueda,
     });
+
+const _textoFijo = 'Enviamos tu solicitud a los conductores cercanos. Te avisaremos apenas alguno te haga una oferta.';
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -20,6 +23,10 @@ Future<void> _pump(
   bool cancelando = false,
   VoidCallback? onVerOfertas,
   VoidCallback? onCancelar,
+  Map<String, dynamic>? busqueda,
+  ValueChanged<int>? onSubirPrecio,
+  VoidCallback? onSeguirEsperando,
+  VoidCallback? onProgramar,
   Size size = const Size(360, 640),
 }) async {
   tester.view.physicalSize = size * 3;
@@ -30,7 +37,7 @@ Future<void> _pump(
   await tester.pumpWidget(MaterialApp(
     home: Scaffold(
       body: BusquedaConductorView(
-        trip: _trip(),
+        trip: _trip(busqueda: busqueda),
         mapa: const ColoredBox(color: Colors.grey, key: Key('mapa')),
         vehiculosCercanos: cercanos,
         ofertas: ofertas,
@@ -38,6 +45,9 @@ Future<void> _pump(
         inicioBusqueda: DateTime.now().subtract(const Duration(minutes: 2, seconds: 5)),
         onVerOfertas: onVerOfertas ?? () {},
         onCancelar: onCancelar ?? () {},
+        onSubirPrecio: onSubirPrecio,
+        onSeguirEsperando: onSeguirEsperando,
+        onProgramar: onProgramar,
       ),
     ),
   ));
@@ -155,5 +165,83 @@ void main() {
     expect(find.text('Cancelando…'), findsOneWidget);
     final btn = tester.widget<OutlinedButton>(find.byKey(const Key('btn_cancelar_busqueda')));
     expect(btn.onPressed, isNull);
+  });
+
+  // ---- Escalera de acompañamiento (objeto `busqueda` que arma el servidor) ----
+
+  testWidgets('sin busqueda se ve el texto fijo de siempre', (tester) async {
+    await _pump(tester);
+    expect(find.text(_textoFijo), findsOneWidget);
+    expect(find.byKey(const Key('btn_subir_precio')), findsNothing);
+    expect(find.byKey(const Key('btn_seguir_esperando')), findsNothing);
+  });
+
+  testWidgets('el encabezado muestra el mensaje de cada etapa', (tester) async {
+    for (final etapa in ['publicado', 'ampliada', 'sugerencia', 'cierre']) {
+      await _pump(tester, busqueda: {
+        'etapa': etapa,
+        'mensaje': 'Mensaje de $etapa',
+        'precioSugerido': etapa == 'sugerencia' ? {'min': 170000, 'max': 190000} : null,
+        'cierreHasta': null,
+      });
+      expect(find.text('Mensaje de $etapa'), findsOneWidget, reason: etapa);
+      expect(find.text(_textoFijo), findsNothing, reason: etapa);
+    }
+  });
+
+  testWidgets('con ofertas, el conteo de ofertas gana al mensaje de la etapa', (tester) async {
+    await _pump(tester, ofertas: 2, busqueda: {'etapa': 'ampliada', 'mensaje': 'Ampliando'});
+    expect(find.text('Ampliando'), findsNothing);
+    expect(find.textContaining('2 ofertas'), findsOneWidget);
+  });
+
+  testWidgets('sugerencia: Subir a \$X manda el mínimo y Mantener oculta la tarjeta', (tester) async {
+    final subidas = <int>[];
+    await _pump(tester, onSubirPrecio: subidas.add, busqueda: {
+      'etapa': 'sugerencia',
+      'mensaje': 'Los conductores piden un poco más',
+      'precioSugerido': {'min': 170000, 'max': 190000},
+    });
+    expect(find.text('Los viajes parecidos se pagan entre \$170.000 y \$190.000'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('btn_subir_precio')));
+    await tester.pumpAndSettle();
+    expect(find.text('Subir a \$170.000'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('btn_subir_precio')));
+    expect(subidas, [170000]);
+
+    await tester.tap(find.byKey(const Key('btn_mantener_precio')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('btn_subir_precio')), findsNothing);
+    // El mensaje del encabezado sigue: solo se oculta la tarjeta.
+    expect(find.text('Los conductores piden un poco más'), findsOneWidget);
+  });
+
+  testWidgets('cierre: los tres botones llaman a sus callbacks', (tester) async {
+    int seguir = 0, programar = 0, cancelar = 0;
+    await _pump(
+      tester,
+      onSeguirEsperando: () => seguir++,
+      onProgramar: () => programar++,
+      onCancelar: () => cancelar++,
+      busqueda: {'etapa': 'cierre', 'mensaje': 'Aún no hay conductor', 'cierreHasta': '2026-10-07T20:00:00.000Z'},
+    );
+    expect(find.text('¿Qué quieres hacer?'), findsOneWidget);
+
+    for (final k in ['btn_seguir_esperando', 'btn_programar_mas_tarde', 'btn_cancelar_sin_costo']) {
+      await tester.ensureVisible(find.byKey(Key(k)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key(k)));
+    }
+    expect([seguir, programar, cancelar], [1, 1, 1]);
+  });
+
+  testWidgets('mientras hay una acción en curso, los botones de la escalera se deshabilitan', (tester) async {
+    await _pump(tester, cancelando: true, onSeguirEsperando: () {}, busqueda: {'etapa': 'cierre', 'mensaje': 'x'});
+    // "Cancelando…" tiene un spinner infinito: nada de pumpAndSettle.
+    await tester.ensureVisible(find.byKey(const Key('btn_seguir_esperando')));
+    await tester.pump();
+    final boton = find.descendant(of: find.byKey(const Key('btn_seguir_esperando')), matching: find.byType(FilledButton));
+    expect(tester.widget<FilledButton>(boton).onPressed, isNull);
   });
 }

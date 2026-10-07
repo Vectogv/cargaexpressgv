@@ -40,6 +40,14 @@ class BusquedaConductorView extends StatelessWidget {
   final String titulo;
   final List<Widget> acciones;
 
+  /// Escalera de acompañamiento (`trip.busqueda`): mensaje por etapa, precio
+  /// sugerido y, en el cierre, qué hacer. Una acción en curso deshabilita las
+  /// demás ([accionando]).
+  final bool accionando;
+  final ValueChanged<int>? onSubirPrecio;
+  final VoidCallback? onSeguirEsperando;
+  final VoidCallback? onProgramar;
+
   const BusquedaConductorView({
     super.key,
     required this.trip,
@@ -53,7 +61,24 @@ class BusquedaConductorView extends StatelessWidget {
     this.radioKm = 2,
     this.titulo = 'Buscando conductor',
     this.acciones = const [],
+    this.accionando = false,
+    this.onSubirPrecio,
+    this.onSeguirEsperando,
+    this.onProgramar,
   });
+
+  Map<String, dynamic>? get _busqueda => trip?.busqueda;
+  String? get _etapa => _busqueda?['etapa'] as String?;
+
+  /// `{min, max}` del servidor; null si no sugirió nada.
+  ({int min, int max})? get _precioSugerido {
+    final p = _busqueda?['precioSugerido'];
+    if (p is! Map) return null;
+    final min = (p['min'] as num?)?.toInt();
+    final max = (p['max'] as num?)?.toInt();
+    if (min == null || max == null) return null;
+    return (min: min, max: max);
+  }
 
   /// Fracción de la altura que la tarjeta inferior puede ocupar como máximo.
   static const double fraccionTarjeta = 0.62;
@@ -105,7 +130,26 @@ class BusquedaConductorView extends StatelessWidget {
                               _Encabezado(
                                 ofertas: ofertas,
                                 inicio: inicioBusqueda,
+                                mensaje: _busqueda?['mensaje'] as String?,
                               ),
+                              if (_etapa == 'sugerencia' && _precioSugerido != null) ...[
+                                const SizedBox(height: 14),
+                                _SugerenciaCard(
+                                  rango: _precioSugerido!,
+                                  ocupado: accionando,
+                                  onSubir: onSubirPrecio,
+                                ),
+                              ],
+                              if (_etapa == 'cierre') ...[
+                                const SizedBox(height: 14),
+                                _CierreCard(
+                                  hasta: _busqueda?['cierreHasta'] as String?,
+                                  ocupado: accionando || cancelando,
+                                  onSeguir: onSeguirEsperando,
+                                  onProgramar: onProgramar,
+                                  onCancelar: onCancelar,
+                                ),
+                              ],
                               if (ofertas > 0) ...[
                                 const SizedBox(height: 14),
                                 _OfertasCard(
@@ -386,11 +430,19 @@ class _LineaCercanos extends StatelessWidget {
 class _Encabezado extends StatelessWidget {
   final int ofertas;
   final DateTime inicio;
-  const _Encabezado({required this.ofertas, required this.inicio});
+
+  /// Mensaje de la etapa actual (`busqueda.mensaje`); sin él, el texto fijo.
+  final String? mensaje;
+  const _Encabezado({required this.ofertas, required this.inicio, this.mensaje});
 
   @override
   Widget build(BuildContext context) {
     final hayOfertas = ofertas > 0;
+    final texto = hayOfertas
+        ? 'Revisa las ofertas y acepta la que prefieras. Seguimos recibiendo más.'
+        : (mensaje?.trim().isNotEmpty == true
+            ? mensaje!.trim()
+            : 'Enviamos tu solicitud a los conductores cercanos. Te avisaremos apenas alguno te haga una oferta.');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -424,12 +476,205 @@ class _Encabezado extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          hayOfertas
-              ? 'Revisa las ofertas y acepta la que prefieras. Seguimos recibiendo más.'
-              : 'Enviamos tu solicitud a los conductores cercanos. Te avisaremos apenas alguno te haga una oferta.',
+          texto,
+          key: const Key('texto_etapa_busqueda'),
           style: const TextStyle(fontSize: 14, color: _kGris, height: 1.35),
         ),
       ],
+    );
+  }
+}
+
+/// Etapa `sugerencia`: rango de precio de viajes parecidos con [Subir a $X]
+/// (el mínimo del rango) y [Mantener mi precio], que solo oculta la tarjeta
+/// en esta pantalla (al reabrirla vuelve a salir: el servidor sigue sugiriendo).
+class _SugerenciaCard extends StatefulWidget {
+  final ({int min, int max}) rango;
+  final bool ocupado;
+  final ValueChanged<int>? onSubir;
+  const _SugerenciaCard({required this.rango, required this.ocupado, required this.onSubir});
+
+  @override
+  State<_SugerenciaCard> createState() => _SugerenciaCardState();
+}
+
+class _SugerenciaCardState extends State<_SugerenciaCard> {
+  bool _oculta = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_oculta) return const SizedBox.shrink();
+    final r = widget.rango;
+    return _TarjetaEscalera(
+      color: const Color(0xFFFFFBEB),
+      borde: const Color(0xFFFDE68A),
+      icono: Icons.lightbulb_outline_rounded,
+      colorIcono: const Color(0xFFD97706),
+      titulo: 'Los viajes parecidos se pagan entre ${formatearPesos(r.min)} y ${formatearPesos(r.max)}',
+      detalle: 'Subir tu precio ayuda a que un conductor acepte más rápido.',
+      acciones: [
+        _BotonEscalera(
+          key: const Key('btn_subir_precio'),
+          texto: 'Subir a ${formatearPesos(r.min)}',
+          relleno: true,
+          onPressed: widget.ocupado || widget.onSubir == null ? null : () => widget.onSubir!(r.min),
+        ),
+        _BotonEscalera(
+          key: const Key('btn_mantener_precio'),
+          texto: 'Mantener mi precio',
+          onPressed: widget.ocupado ? null : () => setState(() => _oculta = true),
+        ),
+      ],
+    );
+  }
+}
+
+/// Etapa `cierre`: nadie ofertó; el cliente decide antes de que se cancele.
+class _CierreCard extends StatelessWidget {
+  final String? hasta;
+  final bool ocupado;
+  final VoidCallback? onSeguir;
+  final VoidCallback? onProgramar;
+  final VoidCallback onCancelar;
+  const _CierreCard({
+    required this.hasta,
+    required this.ocupado,
+    required this.onSeguir,
+    required this.onProgramar,
+    required this.onCancelar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final limite = DateTime.tryParse(hasta ?? '')?.toLocal();
+    final hora = limite == null
+        ? null
+        : '${limite.hour.toString().padLeft(2, '0')}:${limite.minute.toString().padLeft(2, '0')}';
+    return _TarjetaEscalera(
+      color: const Color(0xFFFFF1F2),
+      borde: const Color(0xFFFECDD3),
+      icono: Icons.hourglass_bottom_rounded,
+      colorIcono: _kRojo,
+      titulo: '¿Qué quieres hacer?',
+      detalle: hora == null
+          ? 'Si no eliges, la búsqueda se cancela sola sin costo.'
+          : 'Si no eliges antes de las $hora, la búsqueda se cancela sola sin costo.',
+      acciones: [
+        _BotonEscalera(
+          key: const Key('btn_seguir_esperando'),
+          texto: 'Seguir esperando',
+          relleno: true,
+          onPressed: ocupado || onSeguir == null ? null : onSeguir,
+        ),
+        _BotonEscalera(
+          key: const Key('btn_programar_mas_tarde'),
+          texto: 'Programar para más tarde',
+          onPressed: ocupado || onProgramar == null ? null : onProgramar,
+        ),
+        _BotonEscalera(
+          key: const Key('btn_cancelar_sin_costo'),
+          texto: 'Cancelar sin costo',
+          color: _kRojo,
+          onPressed: ocupado ? null : onCancelar,
+        ),
+      ],
+    );
+  }
+}
+
+class _TarjetaEscalera extends StatelessWidget {
+  final Color color;
+  final Color borde;
+  final IconData icono;
+  final Color colorIcono;
+  final String titulo;
+  final String detalle;
+  final List<Widget> acciones;
+  const _TarjetaEscalera({
+    required this.color,
+    required this.borde,
+    required this.icono,
+    required this.colorIcono,
+    required this.titulo,
+    required this.detalle,
+    required this.acciones,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borde),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icono, size: 20, color: colorIcono),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _kTexto, height: 1.3),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(detalle, style: const TextStyle(fontSize: 13, color: _kGris, height: 1.35)),
+          const SizedBox(height: 10),
+          for (var i = 0; i < acciones.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            acciones[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BotonEscalera extends StatelessWidget {
+  final String texto;
+  final bool relleno;
+  final Color color;
+  final VoidCallback? onPressed;
+  const _BotonEscalera({
+    super.key,
+    required this.texto,
+    required this.onPressed,
+    this.relleno = false,
+    this.color = _kPrimary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final forma = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    const estiloTexto = TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
+    final hijo = Text(texto, maxLines: 1, overflow: TextOverflow.ellipsis);
+    return SizedBox(
+      height: 44,
+      child: relleno
+          ? FilledButton(
+              onPressed: onPressed,
+              style: FilledButton.styleFrom(backgroundColor: color, shape: forma, textStyle: estiloTexto),
+              child: hijo,
+            )
+          : OutlinedButton(
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: color,
+                backgroundColor: Colors.white,
+                side: BorderSide(color: color.withValues(alpha: 0.45)),
+                shape: forma,
+                textStyle: estiloTexto,
+              ),
+              child: hijo,
+            ),
     );
   }
 }

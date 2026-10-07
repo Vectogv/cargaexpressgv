@@ -26,6 +26,7 @@ import '../../widgets/capa_vehiculos.dart';
 import '../../widgets/mapa_viaje.dart';
 import '../../widgets/vehiculo_mapa.dart';
 import '../shared/action_key.dart';
+import '../shared/ui_compartida.dart' show DialogoApp;
 import 'busqueda_conductor_view.dart';
 import 'cancel_trip_screen.dart';
 import 'nuevo_envio_screen.dart';
@@ -70,6 +71,8 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   String _status = TripStatus.buscando;
   bool _loading = false;
   bool _cancelling = false;
+  /// Subir precio / seguir esperando (escalera) en curso.
+  bool _accionBusqueda = false;
   bool _hasOffers = false;
   bool _offerAcceptedShown = false;
   // Celebración "¡Oferta aceptada!" abierta encima del rastreo.
@@ -466,6 +469,18 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   void _setupSocketListeners() {
     _tripStatusSub = SocketServiceClient.instance.onTripStatus.listen((data) {
       final newStatus = (data['estado'] ?? data['status']) as String?;
+      // La escalera de acompañamiento no cambia el estado: solo llega un
+      // `busqueda` nuevo en el mismo `trip:status_changed`.
+      final busqueda = data['busqueda'];
+      if (newStatus == _status && busqueda is Map && _trip != null && mounted) {
+        _trasFrame(() {
+          if (!mounted || _trip == null) return;
+          setState(() {
+            _trip = Trip.fromJson({..._trip!.toJson(), 'busqueda': Map<String, dynamic>.from(busqueda)});
+          });
+        });
+        return;
+      }
       if (newStatus != null && newStatus != _status && mounted) {
         _trasFrame(() {
           if (!mounted) return;
@@ -1501,11 +1516,72 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
   /// "Intentar de nuevo": abre un envío nuevo. `NuevoEnvioScreen` recupera
   /// origen/destino/carga del borrador que se guarda mientras se escribe
   /// (no se borró al solicitar este viaje), así que quedan precargados.
-  void _reintentarEnvio() {
+  void _reintentarEnvio({bool programar = false}) {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const NuevoEnvioScreen()),
+      MaterialPageRoute(builder: (_) => NuevoEnvioScreen(programar: programar)),
     );
+  }
+
+  // ── Escalera de acompañamiento (sin ofertas) ────────────────────────────
+
+  /// Relee el viaje tras una acción: el sondeo de 5 s también lo haría, pero
+  /// así la tarjeta cambia de inmediato.
+  Future<void> _accionEscalera(Future<void> Function() accion, String error) async {
+    if (_accionBusqueda || _trip == null) return;
+    setState(() => _accionBusqueda = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await accion();
+      final trip = await TripService.getActiveTrip();
+      if (trip != null && mounted) setState(() => _trip = Trip.fromJson(trip));
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message.isNotEmpty ? e.message : error)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+    } finally {
+      if (mounted) setState(() => _accionBusqueda = false);
+    }
+  }
+
+  void _subirPrecio(int precio) => _accionEscalera(
+        () => TripService.subirPrecio(_trip!.id, precio),
+        'No se pudo cambiar el precio',
+      );
+
+  void _seguirEsperando() => _accionEscalera(
+        () => TripService.seguirEsperando(_trip!.id),
+        'No se pudo extender la búsqueda',
+      );
+
+  /// Cancela esta búsqueda (sin costo: nadie ofertó) y abre un envío nuevo
+  /// con el borrador, pidiendo fecha y hora.
+  Future<void> _programarMasTarde() async {
+    if (_cancelling || _trip == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DialogoApp(
+        icono: Icons.event_available,
+        titulo: 'Programar para más tarde',
+        cuerpo: 'Cancelamos esta búsqueda sin costo y eliges la fecha y la hora de tu envío.',
+        textoPrincipal: 'Sí, programar',
+        onPrincipal: () => Navigator.pop(ctx, true),
+        textoSecundario: 'Volver',
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _cancelling = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await TripService.cancelTrip(_trip!.id, motivo: 'Programar para más tarde');
+      if (mounted) _reintentarEnvio(programar: true);
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error al cancelar: ${e.toString().replaceFirst("Exception: ", "")}')),
+      );
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
   }
 
   Widget _buildDeliveryContent() {
@@ -1709,6 +1785,10 @@ class _RastreoScreenState extends State<RastreoScreen> with WidgetsBindingObserv
       onCancelar: _cancelarBusqueda,
       titulo: _getAppBarTitle(),
       acciones: _accionesBusqueda(),
+      accionando: _accionBusqueda,
+      onSubirPrecio: _subirPrecio,
+      onSeguirEsperando: _seguirEsperando,
+      onProgramar: _programarMasTarde,
     );
   }
 

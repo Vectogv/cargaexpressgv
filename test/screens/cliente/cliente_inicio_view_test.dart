@@ -109,6 +109,20 @@ void main() {
     expect(l.seguimiento, 1);
   });
 
+  testWidgets('buscando conductor: el mensaje de la escalera va bajo el subtítulo', (tester) async {
+    await _pump(tester, activo: {
+      ..._viaje('b1', 'buscando_conductor'),
+      'busqueda': {'etapa': 'ampliada', 'mensaje': ' Estamos ampliando la búsqueda '},
+    });
+    expect(find.byKey(const Key('mensaje_busqueda_inicio')), findsOneWidget);
+    expect(find.text('Estamos ampliando la búsqueda'), findsOneWidget);
+  });
+
+  testWidgets('buscando conductor sin busqueda: no hay línea extra', (tester) async {
+    await _pump(tester, activo: _viaje('b1', 'buscando_conductor'));
+    expect(find.byKey(const Key('mensaje_busqueda_inicio')), findsNothing);
+  });
+
   testWidgets('entrega por confirmar: aviso, sin PIN, y los dos botones', (tester) async {
     final l = await _pump(tester, activo: {
       ..._viaje('p1', 'pendiente_confirmacion'),

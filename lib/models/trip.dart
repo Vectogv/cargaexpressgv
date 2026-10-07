@@ -40,6 +40,10 @@ class Trip {
   /// Vehículo que el cliente pidió para este envío (informativo: no oculta
   /// el viaje a conductores con otro vehículo). null si no especificó.
   final String? tipoVehiculoRequerido;
+  /// Escalera de acompañamiento mientras se busca conductor (lo arma el
+  /// servidor): `{etapa, mensaje, precioSugerido: {min, max}|null, cierreHasta}`.
+  /// null fuera de la búsqueda o en respuestas viejas.
+  final Map<String, dynamic>? busqueda;
 
   Trip({
     required this.id,
@@ -65,6 +69,7 @@ class Trip {
     this.receptorNombre,
     this.receptorTelefono,
     this.tipoVehiculoRequerido,
+    this.busqueda,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {

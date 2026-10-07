@@ -172,6 +172,15 @@ class ClienteInicioView extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(_subtitulo(estado), style: const TextStyle(fontSize: 15, color: _kGris)),
+          // Escalera de acompañamiento: la etapa de la búsqueda, en una línea.
+          if (_buscando(estado) && (activo?['busqueda']?['mensaje'] as String?)?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 6),
+            Text(
+              (activo!['busqueda']['mensaje'] as String).trim(),
+              key: const Key('mensaje_busqueda_inicio'),
+              style: const TextStyle(fontSize: 13, color: ColoresApp.azul, fontWeight: FontWeight.w500, height: 1.35),
+            ),
+          ],
           const SizedBox(height: 20),
           if (cargando)
             const _CargandoCard()

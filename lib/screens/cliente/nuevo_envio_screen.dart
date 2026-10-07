@@ -36,7 +36,11 @@ class NuevoEnvioScreen extends StatefulWidget {
   /// En pruebas se omite el mapa (descarga tiles de la red).
   final bool mostrarMapa;
 
-  const NuevoEnvioScreen({super.key, this.geoClient, this.mostrarMapa = true});
+  /// Abre pidiendo fecha y hora ("Programar para más tarde" desde la búsqueda
+  /// sin ofertas); el borrador del envío ya viene precargado.
+  final bool programar;
+
+  const NuevoEnvioScreen({super.key, this.geoClient, this.mostrarMapa = true, this.programar = false});
 
   @override
   State<NuevoEnvioScreen> createState() => _NuevoEnvioScreenState();
@@ -140,6 +144,11 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   void initState() {
     super.initState();
     _init();
+    if (widget.programar) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _elegirFechaHora();
+      });
+    }
   }
 
   /// Zonas de cobertura; null si no se pudieron cargar (no se avisa nada y

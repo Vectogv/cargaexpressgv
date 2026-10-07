@@ -107,6 +107,16 @@ class TripService {
     return HttpClient.post('/api/trips/$id/cancel', body: body, auth: true);
   }
 
+  /// Escalera de acompañamiento: el cliente sube su precio al sugerido.
+  static Future<Map<String, dynamic>> subirPrecio(dynamic id, int precio) {
+    return HttpClient.put('/api/trips/$id/precio', body: {'precio': precio}, auth: true);
+  }
+
+  /// Etapa de cierre: el cliente pide seguir buscando otros minutos.
+  static Future<Map<String, dynamic>> seguirEsperando(dynamic id) {
+    return HttpClient.post('/api/trips/$id/seguir-esperando', auth: true);
+  }
+
   /// El conductor pide más tiempo en una reserva (una sola vez por reserva).
   static Future<Map<String, dynamic>> requestMorePlazo(dynamic id, int minutos) async {
     return HttpClient.post('/api/trips/$id/plazo', body: {'minutos': minutos}, auth: true);
