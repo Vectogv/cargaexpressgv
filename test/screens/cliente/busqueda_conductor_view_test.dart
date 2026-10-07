@@ -202,7 +202,7 @@ void main() {
       'mensaje': 'Los conductores piden un poco más',
       'precioSugerido': {'min': 170000, 'max': 190000},
     });
-    expect(find.text('Los viajes parecidos se pagan entre \$170.000 y \$190.000'), findsOneWidget);
+    expect(find.text('Valor sugerido: \$170.000'), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(const Key('btn_subir_precio')));
     await tester.pumpAndSettle();

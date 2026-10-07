@@ -517,8 +517,9 @@ class _SugerenciaCardState extends State<_SugerenciaCard> {
       borde: const Color(0xFFFDE68A),
       icono: Icons.lightbulb_outline_rounded,
       colorIcono: const Color(0xFFD97706),
-      titulo: 'Los viajes parecidos se pagan entre ${formatearPesos(r.min)} y ${formatearPesos(r.max)}',
-      detalle: 'Subir tu precio ayuda a que un conductor acepte más rápido.',
+      titulo: 'Valor sugerido: ${formatearPesos(r.min)}',
+      // El servidor lo calcula: km del viaje × valor del km que fija gerencia.
+      detalle: 'Calculado por los kilómetros del viaje. Subir tu precio ayuda a que un conductor acepte más rápido.',
       acciones: [
         _BotonEscalera(
           key: const Key('btn_subir_precio'),
