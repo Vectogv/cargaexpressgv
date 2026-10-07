@@ -47,6 +47,8 @@ class _ReferidosScreenState extends State<ReferidosScreen> {
 
   List<Map<String, dynamic>> _lista(String k) => (_data?[k] as List?)?.whereType<Map<String, dynamic>>().toList() ?? const [];
 
+  String _conPct(Object? p) => p == 0 ? 'sin comisión' : 'con $p % de comisión';
+
   String get _codigo => '${_data?['codigo'] ?? ''}';
 
   Future<void> _compartir() {
@@ -111,9 +113,9 @@ class _ReferidosScreenState extends State<ReferidosScreen> {
       ),
       _titulo('Cómo funciona'),
       Text(
-        'Quien se registre con tu código paga ${inv['pct']} % de comisión en sus primeros ${inv['viajes']} viajes, '
-        'si hace ${r['viajesMeta']} viajes en ${r['diasMeta']} días.\n'
-        'Tú pagas ${ref['pct']} % de comisión en ${ref['viajes']} viajes durante ${ref['diasUso']} días.',
+        'Quien se registre con tu código trabaja ${_conPct(inv['pct'])} en sus primeros ${inv['viajes']} viajes.\n'
+        'Cuando haga ${r['viajesMeta']} viajes${r['clientesDistintos'] == true ? ' con clientes distintos' : ''} en ${r['diasMeta']} días, '
+        'tú trabajas ${_conPct(ref['pct'])} en ${ref['viajes']} viajes (tienes ${ref['diasUso']} días para usarlos).',
         style: const TextStyle(fontSize: 13, height: 1.4, color: ColoresApp.textoSecundario),
       ),
       if (prog != null) ...[
@@ -133,7 +135,7 @@ class _ReferidosScreenState extends State<ReferidosScreen> {
             child: TarjetaBlanca(
               child: Row(children: [
                 Expanded(
-                  child: Text('${c['pct']} % de comisión · ${c['usosRestantes']} viajes', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  child: Text('${c['pct'] == 0 ? 'Sin comisión' : '${c['pct']} % de comisión'} · quedan ${c['usosRestantes']} viajes', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 ),
                 Text('hasta ${_fecha(c['venceEn'])}', style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
               ]),
