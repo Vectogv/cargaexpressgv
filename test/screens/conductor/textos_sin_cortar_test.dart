@@ -51,6 +51,24 @@ void main() {
     });
   });
 
+  testWidgets('Ganancias: la tabla Resumen muestra los 4 periodos sin desbordar a 360 dp', (tester) async {
+    pantalla360(tester);
+    final p = {'montoBruto': 12500000, 'montoNeto': 11250000, 'comision': 1250000};
+    await conApiFalsa(
+      (r) => jsonResp(r.url.path == '/api/drivers/earnings' ? {'hoy': p, 'semana': p, 'mes': p, 'total': p} : {}),
+      () async {
+        await tester.pumpWidget(app(const EarningsScreen()));
+        await avanzar(tester, 1);
+        await tester.scrollUntilVisible(find.text('Resumen'), 200);
+        await tester.pump();
+        for (final t in ['Periodo', 'Bruto', 'Comisión', 'Neto', 'Hoy', 'Mes', 'Total']) {
+          expect(find.descendant(of: find.byType(Table), matching: find.text(t)), findsOneWidget, reason: t);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  });
+
   testWidgets('Inicio desconectado: "Estás desconectado" no se parte y "Conectarme" tiene acción', (tester) async {
     pantalla360(tester);
     var toques = 0;

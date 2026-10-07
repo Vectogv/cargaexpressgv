@@ -246,9 +246,10 @@ class _EarningsScreenState extends State<EarningsScreen> {
                           const SizedBox(height: 8),
                           _buildSemanaCard(),
                           const SizedBox(height: 12),
-                          _buildPeriodRow(),
-                          const SizedBox(height: 12),
-                          _buildTotalRow(),
+                          const SizedBox(height: 4),
+                          _buildSectionTitle('Resumen'),
+                          const SizedBox(height: 8),
+                          _buildResumenTabla(),
                           const SizedBox(height: 16),
                           _buildSectionTitle('Historial de ganancias'),
                           const SizedBox(height: 8),
@@ -382,6 +383,13 @@ class _EarningsScreenState extends State<EarningsScreen> {
                   ),
               ],
             ),
+          if (maximo > 0) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Mejor día: ${const ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][porDia.indexOf(maximo)]} · ${_pesos(maximo)}',
+              style: const TextStyle(fontSize: 13, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares),
+            ),
+          ],
         ],
       ),
     );
@@ -397,80 +405,62 @@ class _EarningsScreenState extends State<EarningsScreen> {
     };
   }
 
-  Widget _buildPeriodRow() {
-    final hoy = _periodo(_earnings?['hoy'] as Map<String, dynamic>?);
-    final semana = _periodo(_earnings?['semana'] as Map<String, dynamic>?);
-    final mes = _periodo(_earnings?['mes'] as Map<String, dynamic>?);
-    return Row(
-      children: [
-        Expanded(child: _buildPeriodCard('Hoy', hoy)),
-        const SizedBox(width: 8),
-        Expanded(child: _buildPeriodCard('Semana', semana)),
-        const SizedBox(width: 8),
-        Expanded(child: _buildPeriodCard('Mes', mes)),
-      ],
-    );
-  }
-
-  Widget _buildPeriodCard(String label, Map<String, dynamic> p) {
+  /// Tabla Hoy/Semana/Mes/Total con bruto, comisión y neto a lo ancho: antes
+  /// eran 3 tarjetas angostas que encogían los montos hasta no leerse.
+  Widget _buildResumenTabla() {
+    final viajes = (_stats?['viajes'] as num?)?.toInt() ?? 0;
+    final filas = [
+      ('Hoy', _periodo(_earnings?['hoy'] as Map<String, dynamic>?)),
+      ('Semana', _periodo(_earnings?['semana'] as Map<String, dynamic>?)),
+      ('Mes', _periodo(_earnings?['mes'] as Map<String, dynamic>?)),
+      ('Total', _periodo(_earnings?['total'] as Map<String, dynamic>?)),
+    ];
+    const encabezado = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ColoresApp.textoSecundario);
+    Widget celda(String t, TextStyle estilo, {bool izquierda = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: izquierda ? Alignment.centerLeft : Alignment.centerRight,
+            child: Text(t, maxLines: 1, style: estilo),
+          ),
+        );
     return TarjetaBlanca(
       radio: 14,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Montos grandes en columnas angostas: se encogen, nunca se parten ni
-          // se truncan (un monto truncado se lee como otra cifra).
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(_pesos(p['neto']), maxLines: 1, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.azulOscuro, fontFeatures: cifrasTabulares)),
+          Table(
+            columnWidths: const {0: FlexColumnWidth(0.9), 1: FlexColumnWidth(1.2), 2: FlexColumnWidth(1.1), 3: FlexColumnWidth(1.3)},
+            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+            children: [
+              TableRow(
+                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.borde))),
+                children: [
+                  celda('Periodo', encabezado, izquierda: true),
+                  celda('Bruto', encabezado),
+                  celda('Comisión', encabezado),
+                  celda('Neto', encabezado),
+                ],
+              ),
+              for (final (i, (nombre, p)) in filas.indexed)
+                TableRow(
+                  decoration: i < filas.length - 1
+                      ? const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.borde)))
+                      : const BoxDecoration(color: ColoresApp.azulTenue),
+                  children: [
+                    celda(nombre, const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.textoOscuro), izquierda: true),
+                    celda(_pesos(p['bruto']), const TextStyle(fontSize: 14, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
+                    celda('-${_pesos(p['comision'])}', TextStyle(fontSize: 14, color: Colors.red.shade400, fontFeatures: cifrasTabulares)),
+                    celda(_pesos(p['neto']), const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ColoresApp.azulOscuro, fontFeatures: cifrasTabulares)),
+                  ],
+                ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text('neto', style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text('Bruto ${_pesos(p['bruto'])}', maxLines: 1, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario, fontFeatures: cifrasTabulares)),
-          ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text('Comisión -${_pesos(p['comision'])}', maxLines: 1, style: TextStyle(fontSize: 12, color: Colors.red.shade400, fontFeatures: cifrasTabulares)),
-          ),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 10),
+          Text('$viajes viajes completados en total', style: const TextStyle(fontSize: 12, color: ColoresApp.textoSecundario)),
         ],
       ),
     );
-  }
-
-  Widget _buildTotalRow() {
-    final viajes = (_stats?['viajes'] as num?)?.toInt() ?? 0;
-    final calificacion = (_stats?['calificacion'] as num?) ?? 0;
-    final total = _periodo(_earnings?['total'] as Map<String, dynamic>?);
-    return TarjetaBlanca(
-      radio: 14,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _statItem(Icons.route_outlined, '$viajes', 'Viajes\ncompletados'),
-          _statItem(Icons.star_rounded, calificacion > 0 ? calificacion.toStringAsFixed(1) : '--', 'Calificación'),
-          _statItem(Icons.monetization_on_outlined, _pesos(total['neto']), 'Total\nacumulado'),
-        ],
-      ),
-    );
-  }
-
-  Widget _statItem(IconData icon, String value, String label) {
-    // Expanded: sin ancho fijo el FittedBox de abajo no tendría contra qué encogerse.
-    return Expanded(child: Column(children: [
-      Icon(icon, color: ColoresApp.azulOscuro, size: 22),
-      const SizedBox(height: 6),
-      FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(value, maxLines: 1, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: ColoresApp.textoOscuro, fontFeatures: cifrasTabulares)),
-      ),
-      const SizedBox(height: 2),
-      Text(label, style: TextStyle(fontSize: 12, color: ColoresApp.textoSecundario), textAlign: TextAlign.center),
-    ]));
   }
 
   Widget _buildHistoryCard() {
