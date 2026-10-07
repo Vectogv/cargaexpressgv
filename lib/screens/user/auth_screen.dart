@@ -17,77 +17,70 @@ class AuthScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _Cabecera(),
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
-                      child: Column(
-                        children: [
-                          _Beneficio(
-                            icono: Icons.sell_outlined,
-                            titulo: 'Tú propones el precio',
-                            texto: 'Publica tu envío y recibe ofertas de conductores.',
-                          ),
-                          SizedBox(height: 14),
-                          _Beneficio(
-                            icono: Icons.near_me_outlined,
-                            titulo: 'Conductores cerca de ti',
-                            texto: 'Motos, camionetas y camiones listos para recoger.',
-                          ),
-                          SizedBox(height: 14),
-                          _Beneficio(
-                            icono: Icons.verified_user_outlined,
-                            titulo: 'Seguimiento en vivo',
-                            texto: 'Mira dónde va tu carga y confirma la entrega.',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    SafeArea(
-                      top: false,
-                      minimum: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          BotonPrincipalAuth(
-                            key: const Key('btn_ir_login'),
-                            texto: 'Iniciar sesión',
-                            textoCargando: '',
-                            cargando: false,
-                            onPressed: () => _abrir(context, const LoginScreen()),
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton(
-                            key: const Key('btn_ir_registro'),
-                            onPressed: () => _abrir(context, pantallaDeRegistro()),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AuthColores.primario,
-                              minimumSize: const Size.fromHeight(52),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              side: const BorderSide(color: AuthColores.primario, width: 1.4),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                            ),
-                            child: const Text('Crear cuenta', textAlign: TextAlign.center),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+      // Botones fijos abajo: en pantallas pequeñas "Crear cuenta" quedaba
+      // escondido debajo del scroll.
+      body: const SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Cabecera(),
+            Padding(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
+              child: Column(
+                children: [
+                  _Beneficio(
+                    icono: Icons.sell_outlined,
+                    titulo: 'Tú propones el precio',
+                    texto: 'Publica tu envío y recibe ofertas de conductores.',
+                  ),
+                  SizedBox(height: 14),
+                  _Beneficio(
+                    icono: Icons.near_me_outlined,
+                    titulo: 'Conductores cerca de ti',
+                    texto: 'Motos, camionetas y camiones listos para recoger.',
+                  ),
+                  SizedBox(height: 14),
+                  _Beneficio(
+                    icono: Icons.verified_user_outlined,
+                    titulo: 'Seguimiento en vivo',
+                    texto: 'Mira dónde va tu carga y confirma la entrega.',
+                  ),
+                ],
               ),
             ),
-          );
-        },
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BotonPrincipalAuth(
+              key: const Key('btn_ir_login'),
+              texto: 'Iniciar sesión',
+              textoCargando: '',
+              cargando: false,
+              onPressed: () => _abrir(context, const LoginScreen()),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const Key('btn_ir_registro'),
+              onPressed: () => _abrir(context, pantallaDeRegistro()),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AuthColores.primario,
+                minimumSize: const Size.fromHeight(52),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                side: const BorderSide(color: AuthColores.primario, width: 1.4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              child: const Text('Crear cuenta', textAlign: TextAlign.center),
+            ),
+          ],
+        ),
       ),
     );
   }
