@@ -425,8 +425,8 @@ void main() {
     expect(tiempoRelativoTicket(ahora.subtract(const Duration(hours: 3)), ahora: ahora), 'Hace 3 h');
     expect(tiempoRelativoTicket(ahora.subtract(const Duration(days: 1)), ahora: ahora), 'Ayer');
     expect(tiempoRelativoTicket(ahora.subtract(const Duration(days: 10)), ahora: ahora), '16/09/2026');
-    expect(horaMensajeTicket(DateTime(2026, 9, 26, 9, 5), ahora: ahora), '09:05');
-    expect(horaMensajeTicket(DateTime(2026, 9, 20, 9, 5), ahora: ahora), '20/09 09:05');
+    expect(horaMensajeTicket(DateTime(2026, 9, 26, 9, 5), ahora: ahora), '9:05 a. m.');
+    expect(horaMensajeTicket(DateTime(2026, 9, 20, 9, 5), ahora: ahora), '20/09 9:05 a. m.');
     expect(resumenViajeTicket({'id': 5, 'origenDireccion': 'A', 'destinoDireccion': 'B'}), 'Viaje #5 · A → B');
     expect(resumenViajeTicket({'_id': '6'}), 'Viaje #6');
     expect(TicketSoporte.etiquetaEstado('en_proceso'), 'En proceso');

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/ticket_soporte.dart';
 import '../ui_compartida.dart';
+import '../../../core/formato_hora.dart';
 
 /// Piezas comunes de las pantallas de tickets de soporte (lista, nuevo y
 /// detalle): color e icono por estado/categoría, chip de estado, tiempos
@@ -81,7 +82,7 @@ String fechaCortaTicket(DateTime d) => '${_dos(d.day)}/${_dos(d.month)}/${d.year
 String horaMensajeTicket(DateTime? d, {DateTime? ahora}) {
   if (d == null) return '';
   final now = ahora ?? DateTime.now();
-  final hora = '${_dos(d.hour)}:${_dos(d.minute)}';
+  final hora = hora12(d);
   final hoy = d.year == now.year && d.month == now.month && d.day == now.day;
   return hoy ? hora : '${_dos(d.day)}/${_dos(d.month)} $hora';
 }

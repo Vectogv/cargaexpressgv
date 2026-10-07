@@ -8,6 +8,7 @@ import 'cancel_trip_screen.dart' show componerMotivoCancelacion;
 
 import 'rastreo_ui.dart';
 import '../../core/formato_dinero.dart';
+import '../../core/formato_hora.dart';
 
 const Color _kPrimary = RastreoColores.primario;
 const Color _kTexto = RastreoColores.texto;
@@ -80,6 +81,13 @@ class BusquedaConductorView extends StatelessWidget {
     return (min: min, max: max);
   }
 
+  /// El servidor sigue en `sugerencia` después de subir el precio: la tarjeta
+  /// solo tiene sentido mientras el precio esté por debajo del mínimo.
+  bool get _mostrarSugerencia =>
+      _etapa == 'sugerencia' &&
+      _precioSugerido != null &&
+      (trip?.precioEstimado ?? 0) < _precioSugerido!.min;
+
   /// Fracción de la altura que la tarjeta inferior puede ocupar como máximo.
   static const double fraccionTarjeta = 0.62;
 
@@ -132,7 +140,7 @@ class BusquedaConductorView extends StatelessWidget {
                                 inicio: inicioBusqueda,
                                 mensaje: _busqueda?['mensaje'] as String?,
                               ),
-                              if (_etapa == 'sugerencia' && _precioSugerido != null) ...[
+                              if (_mostrarSugerencia) ...[
                                 const SizedBox(height: 14),
                                 _SugerenciaCard(
                                   rango: _precioSugerido!,
@@ -147,7 +155,6 @@ class BusquedaConductorView extends StatelessWidget {
                                   ocupado: accionando || cancelando,
                                   onSeguir: onSeguirEsperando,
                                   onProgramar: onProgramar,
-                                  onCancelar: onCancelar,
                                 ),
                               ],
                               if (ofertas > 0) ...[
@@ -535,13 +542,11 @@ class _CierreCard extends StatelessWidget {
   final bool ocupado;
   final VoidCallback? onSeguir;
   final VoidCallback? onProgramar;
-  final VoidCallback onCancelar;
   const _CierreCard({
     required this.hasta,
     required this.ocupado,
     required this.onSeguir,
     required this.onProgramar,
-    required this.onCancelar,
   });
 
   @override
@@ -549,7 +554,7 @@ class _CierreCard extends StatelessWidget {
     final limite = DateTime.tryParse(hasta ?? '')?.toLocal();
     final hora = limite == null
         ? null
-        : '${limite.hour.toString().padLeft(2, '0')}:${limite.minute.toString().padLeft(2, '0')}';
+        : hora12(limite);
     return _TarjetaEscalera(
       color: const Color(0xFFFFF1F2),
       borde: const Color(0xFFFECDD3),
@@ -570,12 +575,6 @@ class _CierreCard extends StatelessWidget {
           key: const Key('btn_programar_mas_tarde'),
           texto: 'Programar para más tarde',
           onPressed: ocupado || onProgramar == null ? null : onProgramar,
-        ),
-        _BotonEscalera(
-          key: const Key('btn_cancelar_sin_costo'),
-          texto: 'Cancelar sin costo',
-          color: _kRojo,
-          onPressed: ocupado ? null : onCancelar,
         ),
       ],
     );
@@ -641,14 +640,12 @@ class _TarjetaEscalera extends StatelessWidget {
 class _BotonEscalera extends StatelessWidget {
   final String texto;
   final bool relleno;
-  final Color color;
   final VoidCallback? onPressed;
   const _BotonEscalera({
     super.key,
     required this.texto,
     required this.onPressed,
     this.relleno = false,
-    this.color = _kPrimary,
   });
 
   @override
@@ -661,15 +658,15 @@ class _BotonEscalera extends StatelessWidget {
       child: relleno
           ? FilledButton(
               onPressed: onPressed,
-              style: FilledButton.styleFrom(backgroundColor: color, shape: forma, textStyle: estiloTexto),
+              style: FilledButton.styleFrom(backgroundColor: _kPrimary, shape: forma, textStyle: estiloTexto),
               child: hijo,
             )
           : OutlinedButton(
               onPressed: onPressed,
               style: OutlinedButton.styleFrom(
-                foregroundColor: color,
+                foregroundColor: _kPrimary,
                 backgroundColor: Colors.white,
-                side: BorderSide(color: color.withValues(alpha: 0.45)),
+                side: BorderSide(color: _kPrimary.withValues(alpha: 0.45)),
                 shape: forma,
                 textStyle: estiloTexto,
               ),

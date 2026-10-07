@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/socket_service_client.dart';
 import '../../widgets/error_carga.dart';
+import '../../core/formato_hora.dart';
 
 class ChatThreadScreen extends StatefulWidget {
   final String titulo;
@@ -158,7 +159,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   String _hora(dynamic ts) {
     final dt = DateTime.tryParse(ts?.toString() ?? '');
     if (dt == null) return '';
-    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return hora12(dt);
   }
 
   void _scrollDown() {

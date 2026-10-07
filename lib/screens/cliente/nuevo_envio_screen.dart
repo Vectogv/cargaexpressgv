@@ -23,6 +23,7 @@ import '../../widgets/vehiculo_mapa.dart';
 import 'elegir_punto_mapa_screen.dart';
 import 'rastreo_screen.dart';
 import 'viaje_detalle_screen.dart';
+import '../../core/formato_hora.dart';
 
 const Color _kPrimary = Color(0xFF2563EB);
 const Color _kOrigen = Color(0xFF16A34A);
@@ -1353,7 +1354,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${_diasSemana[programada.weekday - 1]} ${_formatFecha(programada)} ${_formatHora(programada)}',
+                  '${_diasSemana[programada.weekday - 1]} ${_formatFecha(programada)} ${hora12(programada)}',
                   style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                 ),
               ),

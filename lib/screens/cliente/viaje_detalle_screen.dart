@@ -18,6 +18,7 @@ import 'chat_screen.dart';
 import 'ofertas_recibidas_screen.dart' show intervaloSondeoOfertas;
 import 'rastreo_screen.dart';
 import '../../core/formato_dinero.dart';
+import '../../core/formato_hora.dart';
 
 class ViajeDetalleScreen extends StatefulWidget {
   final dynamic tripId;
@@ -142,7 +143,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     if (expira != null && expira.isBefore(DateTime.now())) return;
     final antesDe = expira == null
         ? ''
-        : ' Responde antes de las ${expira.hour.toString().padLeft(2, '0')}:${expira.minute.toString().padLeft(2, '0')}.';
+        : ' Responde antes de las ${hora12(expira)}.';
     _dialogoPlazoAbierto = true;
     final aceptar = await showDialog<bool>(
       context: context,
@@ -330,7 +331,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
     if (iso == null) return '';
     try {
       final dt = DateTime.parse(iso);
-      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+      return '${dt.day}/${dt.month}/${dt.year} ${hora12(dt)}';
     } catch (_) {
       return '';
     }

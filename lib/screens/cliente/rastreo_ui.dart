@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formato_hora.dart';
 
 /// Piezas visuales compartidas por las vistas a pantalla completa del
 /// rastreo del cliente (buscando conductor y viaje en curso). Mismo lenguaje
@@ -27,9 +28,7 @@ String? formatoFechaHoraReserva(String? fecha, String? hora) {
   if (fecha == null || hora == null) return null;
   final dt = DateTime.tryParse('${fecha}T$hora:00');
   if (dt == null) return null;
-  final h12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-  final ampm = dt.hour < 12 ? 'a. m.' : 'p. m.';
-  return '${dt.day} ${_mesesCortos[dt.month - 1]}, $h12:${dt.minute.toString().padLeft(2, '0')} $ampm';
+  return '${dt.day} ${_mesesCortos[dt.month - 1]}, ${hora12(dt)}';
 }
 
 /// Barra superior flotante sobre el mapa: atrás (si hay a dónde volver),

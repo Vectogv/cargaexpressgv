@@ -217,23 +217,24 @@ void main() {
     expect(find.text('Los conductores piden un poco más'), findsOneWidget);
   });
 
-  testWidgets('cierre: los tres botones llaman a sus callbacks', (tester) async {
-    int seguir = 0, programar = 0, cancelar = 0;
+  testWidgets('cierre: los dos botones llaman a sus callbacks', (tester) async {
+    int seguir = 0, programar = 0;
     await _pump(
       tester,
       onSeguirEsperando: () => seguir++,
       onProgramar: () => programar++,
-      onCancelar: () => cancelar++,
       busqueda: {'etapa': 'cierre', 'mensaje': 'Aún no hay conductor', 'cierreHasta': '2026-10-07T20:00:00.000Z'},
     );
     expect(find.text('¿Qué quieres hacer?'), findsOneWidget);
 
-    for (final k in ['btn_seguir_esperando', 'btn_programar_mas_tarde', 'btn_cancelar_sin_costo']) {
+    for (final k in ['btn_seguir_esperando', 'btn_programar_mas_tarde']) {
       await tester.ensureVisible(find.byKey(Key(k)));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(Key(k)));
     }
-    expect([seguir, programar, cancelar], [1, 1, 1]);
+    expect([seguir, programar], [1, 1]);
+    // Cancelar ya está abajo ("Cancelar búsqueda"): la tarjeta no lo repite.
+    expect(find.byKey(const Key('btn_cancelar_sin_costo')), findsNothing);
   });
 
   testWidgets('mientras hay una acción en curso, los botones de la escalera se deshabilitan', (tester) async {

@@ -3,6 +3,7 @@ import '../../services/notification_service.dart';
 import '../../widgets/error_carga.dart';
 import '../shared/tickets/ticket_detalle_screen.dart';
 import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
+import '../../core/formato_hora.dart';
 
 /// Bandeja de avisos (cliente y conductor): agrupada por día, con ícono y
 /// color por categoría, no leídas resaltadas y "Marcar todas como leídas".
@@ -330,7 +331,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'Ahora';
     if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    return '$h:${dt.minute.toString().padLeft(2, '0')} ${dt.hour < 12 ? 'a. m.' : 'p. m.'}';
+    return hora12(dt);
   }
 }

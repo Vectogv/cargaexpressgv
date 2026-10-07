@@ -11,6 +11,7 @@ import 'aviso_cuenta_pago.dart' show TransicionAlDia, deudaTrasPagoConfirmado, f
 import '../../core/formato_dinero.dart';
 import '../shared/ui_compartida.dart';
 import '../../widgets/error_carga.dart';
+import '../../core/formato_hora.dart';
 
 class EarningsScreen extends StatefulWidget {
   const EarningsScreen({super.key});
@@ -502,8 +503,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
         final dt = DateTime.tryParse(fecha);
         if (dt != null) {
           final d = dt.toLocal();
-          fechaTxt = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} · '
-              '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+          fechaTxt = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} · ${hora12(d)}';
         }
       } catch (_) {}
     }

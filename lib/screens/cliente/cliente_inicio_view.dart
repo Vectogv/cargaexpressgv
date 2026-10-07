@@ -8,6 +8,7 @@ import '../../services/config_cliente_service.dart';
 import '../../widgets/media_image.dart';
 import '../shared/ui_compartida.dart';
 import 'confirmar_entrega_screen.dart' show avisoConfirmacionPendiente;
+import '../../core/formato_hora.dart';
 
 const Color _kPrimary = ColoresApp.azul;
 const Color _kTexto = ColoresApp.textoOscuro;
@@ -87,7 +88,7 @@ const _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 String _fecha(String? iso) {
   final dt = DateTime.tryParse(iso ?? '')?.toLocal();
   if (dt == null) return '';
-  return '${dt.day} ${_meses[dt.month - 1]} · ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  return '${dt.day} ${_meses[dt.month - 1]} · ${hora12(dt)}';
 }
 
 // precioFinal es el monto real (el aceptado con la oferta); mientras no

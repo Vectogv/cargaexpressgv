@@ -4,6 +4,7 @@ import '../../services/api_client.dart';
 import '../../services/cache_service.dart';
 import '../../services/socket_service_client.dart';
 import '../../widgets/error_carga.dart';
+import '../../core/formato_hora.dart';
 
 class ChatScreen extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -254,13 +255,13 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   String _now() {
     final n = DateTime.now();
-    return '${n.hour.toString().padLeft(2, '0')}:${n.minute.toString().padLeft(2, '0')}';
+    return hora12(n);
   }
 
   String _formatTime(dynamic ts) {
     final dt = DateTime.tryParse(ts?.toString() ?? '');
     if (dt == null) return _now();
-    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return hora12(dt);
   }
 
   @override
