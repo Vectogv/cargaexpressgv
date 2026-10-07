@@ -53,7 +53,7 @@ class _Foto {
 }
 
 class _RegistroConductorScreenState extends State<RegistroConductorScreen> with PasosComunesRegistro {
-  static const _conBorrador = [...PasosComunesRegistro.camposBorrador, 'modelo', 'placa', 'capacidad'];
+  static const _conBorrador = [...PasosComunesRegistro.camposBorrador, 'modelo', 'placa', 'capacidad', 'codigoReferido'];
   static const _borradorStore = BorradorRegistro(claveBorradorRegistroConductor);
 
   int _i = 0;
@@ -283,6 +283,7 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
         'ciudad': _zona,
         'modeloVehiculo': texto('modelo'),
         'aceptaTerminos': true,
+        if (texto('codigoReferido').isNotEmpty) 'codigoReferido': texto('codigoReferido').toUpperCase(),
       };
 
   Future<void> _enviar() async {
@@ -331,6 +332,7 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
               'EMAIL_DUPLICADO' => google == null ? 'email' : 'resumen',
               'PLACA_DUPLICADA' => 'placa',
               'CEDULA_DUPLICADA' => 'cedula',
+              'CODIGO_INVALIDO' => 'zona',
               _ => null,
             };
       setState(() {
@@ -492,6 +494,13 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
           ),
           const SizedBox(height: 8),
         ],
+      const SizedBox(height: 8),
+      TextField(
+        key: const Key('campo_codigo_referido'),
+        controller: ctrl('codigoReferido'),
+        textCapitalization: TextCapitalization.characters,
+        decoration: decoracionCampoAuth(label: 'Código de quien te invitó (opcional)', icono: Icons.person_add_alt_1_outlined),
+      ),
       if (error != null) ...[const SizedBox(height: 6), AvisoErrorAuth(mensaje: error!)],
     ]);
   }

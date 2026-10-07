@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/environment.dart';
 import 'auth_response.dart';
 import 'api/auth_service.dart';
-import 'api/http_client.dart' show ApiException;
+import 'api/http_client.dart' show ApiException, HttpClient;
 import 'api/trip_service.dart';
 import 'api/offer_service.dart';
 import 'api/chat_service.dart';
@@ -363,6 +363,8 @@ class ApiClient {
   Future<Map<String, dynamic>> getDebt() => DriverService.getDebt();
   Future<Map<String, dynamic>> getEarningsHistory({String periodo = 'todo', int page = 1, int limit = 20}) => DriverService.getEarningsHistory(periodo: periodo, page: page, limit: limit);
   Future<List<int>> getEarningsPdf({String periodo = 'todo'}) => DriverService.getEarningsPdf(periodo: periodo);
+
+  Future<Map<String, dynamic>> getReferidos() => HttpClient.get('/api/drivers/referidos', auth: true);
 
   // --- Settings ---
 

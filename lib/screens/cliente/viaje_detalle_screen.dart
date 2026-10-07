@@ -646,7 +646,7 @@ class _ViajeDetalleScreenState extends State<ViajeDetalleScreen> {
   Widget _buildGananciasSection() {
     final precio = (_trip!['precioFinal'] ?? _trip!['precioEstimado']) as num? ?? 0;
     // Comisión de la plataforma: 10 % del precio final (misma regla del backend).
-    final comision = (precio * 0.1 * 100).round() / 100;
+    final comision = (_trip!['comision'] as num?) ?? (precio * 0.1 * 100).round() / 100;
     return _tarjeta('Tus ganancias', [
       _infoRow('Precio del viaje', formatearPesos(precio)),
       _infoRow('Comisión (10 %)', '- ${formatearPesos(comision)}'),

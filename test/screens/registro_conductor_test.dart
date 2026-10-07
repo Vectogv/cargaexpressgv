@@ -63,7 +63,7 @@ Future<void> _escribir(WidgetTester tester, String paso, String texto) async {
 }
 
 /// Pasos comunes a los dos métodos, desde la edad hasta "Crear mi cuenta".
-Future<void> _desdeEdadHastaEnviar(WidgetTester tester) async {
+Future<void> _desdeEdadHastaEnviar(WidgetTester tester, {String? codigo}) async {
   await _escribir(tester, 'edad', '30');
   await _escribir(tester, 'cedula', '123456');
 
@@ -93,6 +93,7 @@ Future<void> _desdeEdadHastaEnviar(WidgetTester tester) async {
   await avanzar(tester, 0.5);
   await tester.tap(find.byKey(const Key('zona_popayan')));
   await tester.pump();
+  if (codigo != null) await tester.enterText(find.byKey(const Key('campo_codigo_referido')), codigo);
   expect(find.text('Crear mi cuenta'), findsOneWidget);
   await _siguiente(tester);
   await avanzar(tester, 1);
@@ -192,12 +193,13 @@ void main() {
       await _escribir(tester, 'telefono', '3001234567');
       // Sin pantallas de correo ni contraseña.
       expect(find.byKey(const Key('campo_password')), findsNothing);
-      await _desdeEdadHastaEnviar(tester);
+      await _desdeEdadHastaEnviar(tester, codigo: ' ab12cd ');
       expect(find.text('Registro completado'), findsOneWidget);
       await _limpiar(tester);
     }, log: log);
 
     final body = jsonDecode(log.singleWhere((r) => r.url.path == '/api/auth/register').body) as Map<String, dynamic>;
+    expect(body['codigoReferido'], 'AB12CD', reason: 'recortado y en mayúsculas; el test del correo prueba que sin escribirlo no se manda');
     expect(body['idToken'], _idToken);
     expect(body.containsKey('password'), isFalse);
     expect(body['email'], 'ana@gmail.com');

@@ -203,7 +203,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                   ),
                   if (estado == 'finalizado')
                     Text(
-                      'Neto: ${formatearPesos(precio - (precio * 0.1 * 100).round() / 100)}',
+                      'Neto: ${formatearPesos(precio - ((t['comision'] as num?) ?? (precio * 0.1 * 100).round() / 100))}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,

@@ -14,6 +14,7 @@ import '../user/auth_screen.dart';
 import '../shared/accesos_perfil.dart';
 import 'documents_screen.dart';
 import 'grupo_conductores_screen.dart';
+import 'referidos_screen.dart';
 import 'mis_reservas_screen.dart';
 import 'offers_screen.dart';
 import 'settings_screen.dart';
@@ -377,6 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildMenuItem(Icons.local_offer_outlined, 'Mis ofertas', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OffersScreen()))),
           _buildMenuItem(Icons.event_available_outlined, 'Mis reservas', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MisReservasScreen()))),
           _buildMenuItem(Icons.groups_outlined, 'Grupo de conductores', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GrupoConductoresScreen()))),
+          _buildMenuItem(Icons.person_add_alt_1_outlined, 'Invita a un colega', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferidosScreen()))),
           _buildMenuItem(Icons.headset_mic_outlined, 'Soporte', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
           _buildMenuItem(Icons.settings_outlined, 'Ajustes', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
           _buildMenuItem(Icons.emergency_outlined, 'Número de emergencia', () async {
