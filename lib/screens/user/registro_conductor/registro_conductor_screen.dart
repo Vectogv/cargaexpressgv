@@ -499,7 +499,7 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
         key: const Key('campo_codigo_referido'),
         controller: ctrl('codigoReferido'),
         textCapitalization: TextCapitalization.characters,
-        decoration: decoracionCampoAuth(label: 'Código de quien te invitó (opcional)', icono: Icons.person_add_alt_1_outlined),
+        decoration: decoracionCampoAuth(label: 'Código de invitación (opcional)', icono: Icons.person_add_alt_1_outlined),
       ),
       if (error != null) ...[const SizedBox(height: 6), AvisoErrorAuth(mensaje: error!)],
     ]);
