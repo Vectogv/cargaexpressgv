@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/navegador_global.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../widgets/media_image.dart';
@@ -8,9 +9,21 @@ import '../../widgets/error_carga.dart';
 import '../../services/socket_service_client.dart';
 import '../shared/ui_compartida.dart' show BotonPrincipal, CajaAviso, CajaIcono, ChipEstado, ColoresApp, TarjetaBlanca;
 
-/// SOAT apagado por decisión de gerencia (2026-10-03): no se pide ni se muestra.
-/// Para volver a pedirlo, ponerlo en true (el servidor también debe exigirlo).
-const bool soatActivo = false;
+/// SOAT obligatorio otra vez (2026-10-08; el servidor también lo exige con
+/// `SOAT_OBLIGATORIO`). En false no se pide ni se muestra.
+const bool soatActivo = true;
+
+/// Un push o aviso de la bandeja `documentos_faltantes` abre Documentos.
+void abrirDocumentosGlobal({int intentos = 20}) {
+  if (ApiClient.instance.token == null) return;
+  final nav = navegadorGlobal.currentState;
+  if (nav == null) {
+    if (intentos <= 0) return;
+    Timer(const Duration(milliseconds: 500), () => abrirDocumentosGlobal(intentos: intentos - 1));
+    return;
+  }
+  nav.push(MaterialPageRoute(builder: (_) => const DocumentsScreen()));
+}
 
 /// Foto guardada de un documento del conductor (clave de `conductor` del perfil).
 String? fotoDocumento(Map<String, dynamic>? conductor, String tipo) {
@@ -67,9 +80,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   String? _uploadingDoc;
   StreamSubscription<Map<String, dynamic>>? _verificationSub;
 
+  // La foto de la cédula ya no se pide (2026-10-08): basta el número, que se
+  // da al registrarse y se muestra arriba de la lista.
   final List<_DocItem> _docs = [
-    _DocItem('cedula', 'Cédula (frente)', Icons.badge_outlined),
-    _DocItem('cedula_reverso', 'Cédula (reverso)', Icons.badge_outlined),
     _DocItem('licencia', 'Licencia de conducción', Icons.credit_card_outlined),
     _DocItem('foto_vehiculo', 'Foto del vehículo', Icons.directions_car_outlined),
     _DocItem('tarjeta_propiedad', 'Tarjeta de propiedad', Icons.description_outlined),
@@ -206,9 +219,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         setState(() => _uploadingDoc = docType);
         try {
           switch (docType) {
-            case 'cedula':
-              await ApiClient.instance.uploadDocumentCedula(bytes, filename);
-              break;
             case 'licencia':
               await ApiClient.instance.uploadDocumentLicencia(bytes, filename);
               break;
@@ -219,7 +229,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               await ApiClient.instance.uploadDocumentDriverPhoto(bytes, filename);
               break;
             default:
-              // cedula_reverso, tarjeta_propiedad, tecnomecanica, soat
+              // tarjeta_propiedad, tecnomecanica, soat
               await ApiClient.instance.uploadDocumento(docType.replaceAll('_', '-'), bytes, filename, vence: vence);
           }
           await _loadStatus();
@@ -394,6 +404,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      _buildCedula(),
                       for (final doc in _docs) ...[
                         _buildDocCard(doc),
                         if (doc.type == 'soat') _buildExcepcionSoat(),
@@ -446,6 +457,34 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       );
     }
     return const SizedBox.shrink();
+  }
+
+  /// Número de cédula (solo lectura: se da al registrarse; cambiarlo es con soporte).
+  Widget _buildCedula() {
+    final cedula = _conductor?['cedula']?.toString() ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TarjetaBlanca(
+        radio: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            const CajaIcono(icono: Icons.badge_outlined),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Número de cédula', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(cedula.isEmpty ? 'Sin registrar: escribe a soporte' : cedula,
+                      style: TextStyle(fontSize: 13, color: cedula.isEmpty ? ColoresApp.rojo : ColoresApp.textoSecundario)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildDocCard(_DocItem doc) {

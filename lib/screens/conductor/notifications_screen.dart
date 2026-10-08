@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/error_carga.dart';
 import '../shared/tickets/ticket_detalle_screen.dart';
+import 'documents_screen.dart';
 import '../shared/ui_compartida.dart' show TarjetaBlanca, ColoresApp;
 import '../../core/formato_hora.dart';
 
@@ -98,7 +99,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'mensaje':
       case 'conversacion_mensaje':
         return Icons.chat_bubble_outline;
-      case 'documentacion': return Icons.description_outlined;
+      case 'documentacion':
+      case 'documentos_faltantes': return Icons.description_outlined;
       case 'disputa_resuelta': return Icons.gavel_rounded;
       case 'suspension_por_pago': return Icons.money_off_rounded;
       case 'busqueda_sin_conductor': return Icons.search_off_rounded;
@@ -306,6 +308,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final ticketId = notif['ticketId']?.toString();
     if (NotificationService.esTipoTicket(notif['tipo']?.toString()) && ticketId != null && ticketId.isNotEmpty) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => TicketDetalleScreen(ticketId: ticketId)));
+      return;
+    }
+    if (notif['tipo'] == 'documentos_faltantes') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()));
       return;
     }
     // Aviso de un viaje: el mismo destino que al tocar el push (solo cliente).

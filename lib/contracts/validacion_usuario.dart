@@ -21,6 +21,16 @@ class LimitesUsuario {
 
 final RegExp _email = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
 final RegExp _telefono = RegExp(r'^\+?[0-9]{7,15}$');
+final RegExp _cedula = RegExp(r'^[0-9]{5,20}$');
+
+/// Número de cédula: solo dígitos, 5 a 20 (`validators/auth.ts`). Con
+/// [opcional] en true, el campo vacío es válido (cliente).
+String? validarCedula(String valor, {bool opcional = false}) {
+  final v = valor.trim();
+  if (v.isEmpty) return opcional ? null : 'Este campo es obligatorio';
+  if (!_cedula.hasMatch(v)) return 'La cédula debe tener entre 5 y 20 dígitos';
+  return null;
+}
 
 /// null si el correo es válido; si no, el mensaje para el usuario.
 String? validarEmail(String valor) {

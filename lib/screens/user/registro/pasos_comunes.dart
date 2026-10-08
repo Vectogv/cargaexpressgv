@@ -67,7 +67,7 @@ mixin PasosComunesRegistro<T extends StatefulWidget> on State<T> {
       case 'apellido':
         return v.isEmpty ? 'Este campo es obligatorio' : null;
       case 'cedula':
-        return v.isEmpty && !cedulaOpcional ? 'Este campo es obligatorio' : null;
+        return validarCedula(v, opcional: cedulaOpcional);
       case 'resumen':
         return texto('nombre').isEmpty || texto('apellido').isEmpty ? 'Escribe tu nombre y apellido' : null;
       case 'telefono':

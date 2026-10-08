@@ -28,15 +28,20 @@ void main() {
 
   testWidgets('muestra las tarjetas nuevas y la solicitud de validación del SOAT la deja en validación', skip: !soatActivo, (tester) async {
     pantallaAlta(tester);
-    conductor = {'estadoVerificacion': 'pendiente', 'fotoSoat': null, 'fotoLicencia': '/storage/lic.png', 'excepcionSoatEstado': null};
+    conductor = {'estadoVerificacion': 'pendiente', 'cedula': '10203040', 'fotoSoat': null, 'fotoLicencia': '/storage/lic.png', 'excepcionSoatEstado': null};
     final log = <http.Request>[];
     await conApiFalsa(backend, () async {
       await tester.pumpWidget(const MaterialApp(home: DocumentsScreen()));
       await avanzar(tester, 1);
 
-      for (final titulo in ['Cédula (frente)', 'Cédula (reverso)', 'Tarjeta de propiedad', 'Revisión técnico-mecánica', 'SOAT']) {
+      for (final titulo in ['Licencia de conducción', 'Foto del vehículo', 'Tarjeta de propiedad', 'Revisión técnico-mecánica', 'SOAT', 'Foto del conductor']) {
         expect(find.text(titulo), findsOneWidget, reason: titulo);
       }
+      // La foto de la cédula ya no se pide: solo se muestra el número.
+      expect(find.text('Cédula (frente)'), findsNothing);
+      expect(find.text('Cédula (reverso)'), findsNothing);
+      expect(find.text('Número de cédula'), findsOneWidget);
+      expect(find.text('10203040'), findsOneWidget);
       // Sin foto: chip "Pendiente" + Subir; con foto y verificación global pendiente: "En validación".
       expect(find.text('Pendiente'), findsWidgets);
       expect(find.text('En validación'), findsOneWidget);

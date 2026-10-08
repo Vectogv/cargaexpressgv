@@ -59,6 +59,10 @@ class NotificationService {
   /// `conversacionId`): abre la conversación. Lo conecta `main.dart`.
   void Function(String conversacionId)? abrirConversacion;
 
+  /// Push del moderador con los documentos que faltan
+  /// (`tipo: documentos_faltantes`): abre Documentos del conductor.
+  void Function()? abrirDocumentos;
+
   static bool esTipoViaje(String? tipo) =>
       tipo == 'viaje_estado' || tipo == 'viaje_cancelado' || tipo == 'disputa_resuelta' || tipo == 'reserva' || tipo == 'reserva_plazo';
 
@@ -533,6 +537,17 @@ class NotificationService {
           abrir(conversacionId);
         } catch (e) {
           LoggerService.instance.error('NotificationService.abrirConversacion error', e);
+        }
+      }
+    }
+    if (data['tipo'] == 'documentos_faltantes') {
+      entry['__navigate'] = 'documentos';
+      final abrir = abrirDocumentos;
+      if (abrir != null && hasSession()) {
+        try {
+          abrir();
+        } catch (e) {
+          LoggerService.instance.error('NotificationService.abrirDocumentos error', e);
         }
       }
     }

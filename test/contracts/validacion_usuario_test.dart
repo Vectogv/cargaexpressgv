@@ -51,6 +51,16 @@ void main() {
       expect(validarTelefono('abc1234567'), isNotNull);
     });
 
+    test('cédula: solo dígitos, 5 a 20; vacía solo si es opcional', () {
+      expect(validarCedula(''), 'Este campo es obligatorio');
+      expect(validarCedula('', opcional: true), isNull);
+      expect(validarCedula('1234'), 'La cédula debe tener entre 5 y 20 dígitos');
+      expect(validarCedula('12345'), isNull);
+      expect(validarCedula('1' * 20), isNull);
+      expect(validarCedula('1' * 21), isNotNull);
+      expect(validarCedula('12.345'), isNotNull);
+    });
+
     test('edad: 18 a 120', () {
       expect(validarEdad(''), 'La edad es obligatoria');
       expect(validarEdad('17'), isNotNull);

@@ -27,6 +27,7 @@ http.Response _backend(http.Request req) {
   if (p == '/api/auth/register') return jsonResp({'token': 'tk', 'refreshToken': 'rt', 'id': 'u9', 'nombre': 'Luis', 'rol': 'conductor'});
   if (p == '/api/drivers/driver-photo') return jsonResp({'fotoConductor': '/f.png'});
   if (p == '/api/drivers/verification/vehiculo') return jsonResp({'fotoVehiculo': '/v.png'});
+  if (p.startsWith('/api/drivers/verification/')) return jsonResp({});
   if (p == '/api/auth/google') {
     return jsonResp({
       'message': 'No tienes cuenta',
@@ -63,8 +64,29 @@ Future<void> _escribir(WidgetTester tester, String paso, String texto) async {
 }
 
 /// Pasos comunes a los dos métodos, desde la edad hasta "Crear mi cuenta".
+/// Documento con foto (y fecha de vencimiento si el paso la pide).
+Future<void> _foto(WidgetTester tester, String titulo, {bool vence = false}) async {
+  expect(find.text(titulo), findsOneWidget, reason: 'debería estar en el paso $titulo');
+  await tester.tap(find.byKey(const Key('btn_camara')));
+  await avanzar(tester, 0.5);
+  if (vence) {
+    // Sin fecha no avanza.
+    await _siguiente(tester);
+    expect(find.text('Indica la fecha de vencimiento'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('btn_vence')));
+    await avanzar(tester, 0.5);
+    await tester.tap(find.text('OK'));
+    await avanzar(tester, 0.5);
+    expect(find.textContaining('Vence el '), findsOneWidget);
+  }
+  await _siguiente(tester);
+}
+
 Future<void> _desdeEdadHastaEnviar(WidgetTester tester, {String? codigo}) async {
   await _escribir(tester, 'edad', '30');
+  // Cédula: solo el número, 5 a 20 dígitos (la foto ya no se pide).
+  await _escribir(tester, 'cedula', '1234');
+  expect(find.text('La cédula debe tener entre 5 y 20 dígitos'), findsOneWidget);
   await _escribir(tester, 'cedula', '123456');
 
   // Foto del conductor: obligatoria, con vista previa.
@@ -76,6 +98,7 @@ Future<void> _desdeEdadHastaEnviar(WidgetTester tester, {String? codigo}) async 
   expect(find.byKey(const Key('foto_previa')), findsOneWidget);
   await _siguiente(tester);
 
+  await _foto(tester, 'Licencia de conducción');
   expect(find.text('Cuéntanos sobre tu vehículo'), findsOneWidget);
   await _escribir(tester, 'modelo', 'Chevrolet NHR 2018');
 
@@ -85,9 +108,10 @@ Future<void> _desdeEdadHastaEnviar(WidgetTester tester, {String? codigo}) async 
 
   await _escribir(tester, 'placa', 'abc123');
 
-  await tester.tap(find.byKey(const Key('btn_camara')));
-  await avanzar(tester, 0.5);
-  await _siguiente(tester);
+  await _foto(tester, 'Foto del vehículo');
+  await _foto(tester, 'Tarjeta de propiedad');
+  await _foto(tester, 'Revisión técnico-mecánica', vence: true);
+  await _foto(tester, 'SOAT', vence: true);
 
   expect(find.text('¿En qué zona vas a trabajar?'), findsOneWidget);
   await avanzar(tester, 0.5);
@@ -169,10 +193,27 @@ void main() {
       'modeloVehiculo': 'Chevrolet NHR 2018',
       'aceptaTerminos': true,
     });
-    // Las fotos se suben después del alta, con la sesión nueva.
+    // Las fotos se suben después del alta, con la sesión nueva: los 6 documentos,
+    // sin la foto de la cédula y con la tarjeta de propiedad.
     final fotos = log.where((r) => r.url.path.startsWith('/api/drivers/')).map((r) => r.url.path).toList();
-    expect(fotos, ['/api/drivers/driver-photo', '/api/drivers/verification/vehiculo']);
+    expect(fotos, [
+      '/api/drivers/driver-photo',
+      '/api/drivers/verification/licencia',
+      '/api/drivers/verification/vehiculo',
+      '/api/drivers/verification/tarjeta-propiedad',
+      '/api/drivers/verification/tecnomecanica',
+      '/api/drivers/verification/soat',
+    ]);
+    expect(fotos, isNot(contains('/api/drivers/verification/cedula')));
     expect(log.firstWhere((r) => r.url.path == '/api/drivers/driver-photo').headers['Authorization'], 'Bearer tk');
+    final hoy = DateTime.now().toIso8601String().substring(0, 10);
+    for (final doc in ['tecnomecanica', 'soat']) {
+      final req = log.firstWhere((r) => r.url.path == '/api/drivers/verification/$doc');
+      // multipart con bytes de imagen: no es UTF-8 válido, se lee como latin1.
+      final cuerpo = latin1.decode(req.bodyBytes);
+      expect(cuerpo, contains('name="vence"'), reason: doc);
+      expect(cuerpo, contains(hoy), reason: doc);
+    }
   });
 
   testWidgets('con Google (404 CUENTA_NO_EXISTE): no vuelve a pedir nombre, apellido ni correo y manda idToken sin contraseña', (tester) async {
@@ -231,7 +272,9 @@ void main() {
 
       // Corrige la placa y sigue hasta el final sin volver a subir fotos ni elegir zona.
       await _escribir(tester, 'placa', 'xyz789');
-      await _siguiente(tester); // foto del vehículo ya elegida
+      for (var k = 0; k < 4; k++) {
+        await _siguiente(tester); // foto del vehículo, tarjeta, tecnomecánica y SOAT ya elegidas
+      }
       await _siguiente(tester); // zona ya elegida
       await avanzar(tester, 1);
       expect(find.text('Registro completado'), findsOneWidget);

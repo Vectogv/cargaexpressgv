@@ -60,12 +60,12 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
   String _tipoVehiculo = tiposVehiculoRegistro.first;
   String? _zona;
   List<Map<String, dynamic>>? _zonas;
-  _Foto? _fotoConductor;
-  _Foto? _fotoVehiculo;
+  /// Fotos por paso (ver [_pasosFoto]); [_vence] solo para tecnomecánica y SOAT.
+  final Map<String, _Foto> _fotos = {};
+  final Map<String, String> _vence = {};
+  final Set<String> _subidas = {};
   bool _enviando = false;
   bool _registrado = false;
-  bool _fotoConductorSubida = false;
-  bool _fotoVehiculoSubida = false;
   /// null: aún no se leyó SharedPreferences; vacío: sin borrador.
   Map<String, dynamic>? _borrador;
   bool _borradorLeido = false;
@@ -74,8 +74,21 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
         'bienvenida',
         'politicas',
         ...(google == null ? PasosComunesRegistro.pasosCorreo : PasosComunesRegistro.pasosGoogle),
-        'edad', 'cedula', 'foto_conductor', 'modelo', 'tipo', 'placa', 'foto_vehiculo', 'zona', 'enviando', 'listo',
+        'edad', 'cedula', 'foto_conductor', 'licencia', 'modelo', 'tipo', 'placa', 'foto_vehiculo',
+        'tarjeta_propiedad', 'tecnomecanica', 'soat', 'zona', 'enviando', 'listo',
       ];
+
+  /// Documentos con foto que exige el servidor para aprobar (ya no la foto de la cédula).
+  static const _pasosFoto = ['foto_conductor', 'licencia', 'foto_vehiculo', 'tarjeta_propiedad', 'tecnomecanica', 'soat'];
+  static const _conVence = ['tecnomecanica', 'soat'];
+  static const _textoFoto = {
+    'foto_conductor': ('Ahora necesitamos conocerte', 'Sube una foto tuya para validar tu identidad.', Icons.person_outline_rounded),
+    'licencia': ('Licencia de conducción', 'Que se lean bien tus datos y la categoría.', Icons.credit_card_outlined),
+    'foto_vehiculo': ('Foto del vehículo', 'Que se vea completo y con la placa legible.', Icons.local_shipping_outlined),
+    'tarjeta_propiedad': ('Tarjeta de propiedad', 'La del vehículo que registraste.', Icons.description_outlined),
+    'tecnomecanica': ('Revisión técnico-mecánica', 'Sube el certificado vigente y su fecha de vencimiento.', Icons.build_outlined),
+    'soat': ('SOAT', 'Sube el SOAT vigente y su fecha de vencimiento. Si no tienes, podrás pedir una excepción desde Documentos.', Icons.health_and_safety_outlined),
+  };
 
   String get _paso => _pasos[_i];
 
@@ -120,8 +133,8 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
       'campos': {for (final p in _conBorrador) p: ctrl(p).text},
       'tipo': _tipoVehiculo,
       'zona': _zona,
-      'fotoConductor': _fotoConductor?.ruta,
-      'fotoVehiculo': _fotoVehiculo?.ruta,
+      'fotos': {for (final e in _fotos.entries) if (e.value.ruta != null) e.key: e.value.ruta},
+      'vence': _vence,
       'google': google,
     });
   }
@@ -145,8 +158,15 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
     google = b['metodo'] == 'google' && g is Map ? Map<String, dynamic>.from(g) : null;
     _tipoVehiculo = tiposVehiculoRegistro.contains(b['tipo']) ? b['tipo'] as String : _tipoVehiculo;
     _zona = b['zona'] as String?;
-    _fotoConductor = await _fotoDesdeRuta(b['fotoConductor']);
-    _fotoVehiculo = await _fotoDesdeRuta(b['fotoVehiculo']);
+    final fotos = (b['fotos'] as Map?) ?? {};
+    for (final p in _pasosFoto) {
+      final f = await _fotoDesdeRuta(fotos[p]);
+      if (f != null) _fotos[p] = f;
+    }
+    final vence = (b['vence'] as Map?) ?? {};
+    for (final p in _conVence) {
+      if (vence[p] is String) _vence[p] = vence[p] as String;
+    }
     if (!mounted) return;
     // Primer paso incompleto (la contraseña nunca se guarda, así que se vuelve a pedir).
     final pasos = _pasos;
@@ -180,9 +200,15 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
       case 'tipo':
         return texto('capacidad').isEmpty ? 'Indica la capacidad de carga' : null;
       case 'foto_conductor':
-        return _fotoConductor == null ? 'Sube una foto tuya para continuar' : null;
+        return _fotos[paso] == null ? 'Sube una foto tuya para continuar' : null;
       case 'foto_vehiculo':
-        return _fotoVehiculo == null ? 'Sube una foto del vehículo para continuar' : null;
+        return _fotos[paso] == null ? 'Sube una foto del vehículo para continuar' : null;
+      case 'licencia':
+      case 'tarjeta_propiedad':
+      case 'tecnomecanica':
+      case 'soat':
+        if (_fotos[paso] == null) return 'Sube la foto del documento para continuar';
+        return _conVence.contains(paso) && _vence[paso] == null ? 'Indica la fecha de vencimiento' : null;
       case 'zona':
         return _zona == null ? 'Elige la zona donde vas a trabajar' : null;
     }
@@ -255,13 +281,26 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
     if (foto == null || !mounted) return;
     setState(() {
       error = null;
-      if (_paso == 'foto_conductor') {
-        _fotoConductor = foto;
-        _fotoConductorSubida = false;
-      } else {
-        _fotoVehiculo = foto;
-        _fotoVehiculoSubida = false;
-      }
+      _fotos[_paso] = foto!;
+      _subidas.remove(_paso);
+    });
+    _guardarBorrador();
+  }
+
+  Future<void> _elegirVence() async {
+    final hoy = DateTime.now();
+    final fecha = await showDatePicker(
+      context: context,
+      initialDate: hoy,
+      firstDate: hoy,
+      lastDate: DateTime(hoy.year + 10),
+      helpText: 'Fecha de vencimiento',
+    );
+    if (fecha == null || !mounted) return;
+    setState(() {
+      error = null;
+      _vence[_paso] = fecha.toIso8601String().substring(0, 10);
+      _subidas.remove(_paso);
     });
     _guardarBorrador();
   }
@@ -315,13 +354,21 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
         await _borradorStore.borrar();
       }
       final ts = DateTime.now().millisecondsSinceEpoch;
-      if (!_fotoConductorSubida) {
-        await ApiClient.instance.uploadDocumentDriverPhoto(_fotoConductor!.bytes, 'foto_conductor_$ts.jpg');
-        _fotoConductorSubida = true;
-      }
-      if (!_fotoVehiculoSubida) {
-        await ApiClient.instance.uploadDocumentVehiculo(_fotoVehiculo!.bytes, 'foto_vehiculo_$ts.jpg');
-        _fotoVehiculoSubida = true;
+      for (final p in _pasosFoto) {
+        if (_subidas.contains(p)) continue;
+        final bytes = _fotos[p]!.bytes;
+        final nombre = '${p}_$ts.jpg';
+        switch (p) {
+          case 'foto_conductor':
+            await ApiClient.instance.uploadDocumentDriverPhoto(bytes, nombre);
+          case 'foto_vehiculo':
+            await ApiClient.instance.uploadDocumentVehiculo(bytes, nombre);
+          case 'licencia':
+            await ApiClient.instance.uploadDocumentLicencia(bytes, nombre);
+          default:
+            await ApiClient.instance.uploadDocumento(p.replaceAll('_', '-'), bytes, nombre, vence: _vence[p]);
+        }
+        _subidas.add(p);
       }
       if (mounted) setState(() => _i = _pasos.indexOf('listo'));
     } on ApiException catch (e) {
@@ -392,8 +439,6 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
         );
       case 'politicas':
         return vistaPoliticasRegistro('Antes de comenzar', 'Lee las condiciones para trabajar con Carga Express.', politicasConductor);
-      case 'foto_conductor':
-        return _vistaFoto('Ahora necesitamos conocerte', 'Sube una foto tuya para validar tu identidad.', _fotoConductor, Icons.person_outline_rounded);
       case 'modelo':
         return pantallaPaso('Cuéntanos sobre tu vehículo', '¿Qué marca y modelo es? Ejemplo: Chevrolet NHR 2018.', [
           campo(paso, label: 'Marca y modelo', icono: Icons.directions_car_outlined, capitalizacion: TextCapitalization.words, maxLength: 100),
@@ -404,8 +449,6 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
         return pantallaPaso('Placa del vehículo', 'Como aparece en la tarjeta de propiedad.', [
           campo(paso, label: 'Placa', icono: Icons.pin_outlined, capitalizacion: TextCapitalization.characters, maxLength: LimitesUsuario.placa, ayuda: 'Ejemplo: ABC123'),
         ]);
-      case 'foto_vehiculo':
-        return _vistaFoto('Foto del vehículo', 'Que se vea completo y con la placa legible.', _fotoVehiculo, Icons.local_shipping_outlined);
       case 'zona':
         return _vistaZona();
       case 'enviando':
@@ -413,10 +456,14 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
       case 'listo':
         return _vistaListo();
     }
+    if (_textoFoto.containsKey(paso)) return _vistaFoto(paso);
     return contenidoComun(paso) ?? const SizedBox.shrink();
   }
 
-  Widget _vistaFoto(String titulo, String detalle, _Foto? foto, IconData icono) {
+  Widget _vistaFoto(String paso) {
+    final (titulo, detalle, icono) = _textoFoto[paso]!;
+    final foto = _fotos[paso];
+    final vence = _vence[paso];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -452,6 +499,17 @@ class _RegistroConductorScreenState extends State<RegistroConductorScreen> with 
                 colorBorde: AuthColores.borde,
                 onPressed: () => _elegirFoto(ImageSource.gallery),
               ),
+              if (_conVence.contains(paso)) ...[
+                const SizedBox(height: 10),
+                BotonSecundario(
+                  key: const Key('btn_vence'),
+                  texto: vence == null ? 'Fecha de vencimiento' : 'Vence el ${vence.substring(8, 10)}/${vence.substring(5, 7)}/${vence.substring(0, 4)}',
+                  icono: Icons.event_outlined,
+                  color: vence == null ? AuthColores.texto : ColoresApp.verde,
+                  colorBorde: AuthColores.borde,
+                  onPressed: _elegirVence,
+                ),
+              ],
               if (error != null) ...[const SizedBox(height: 12), AvisoErrorAuth(mensaje: error!)],
             ],
           ),

@@ -216,6 +216,19 @@ void main() {
     expect(abiertos, ['51', '52', '53', '56']);
   });
 
+  test('tocar un push "Faltan documentos" del moderador abre Documentos', () {
+    var abiertos = 0;
+    service.abrirDocumentos = () => abiertos++;
+    addTearDown(() => service.abrirDocumentos = null);
+
+    service.manejarToqueDePush({'tipo': 'documentos_faltantes'}, titulo: 'Faltan documentos');
+    expect(abiertos, 1);
+    service.manejarToqueDePush({'tipo': 'viaje_estado'});
+    sesion = false;
+    service.manejarToqueDePush({'tipo': 'documentos_faltantes'});
+    expect(abiertos, 1);
+  });
+
   test('normalizar saca el ticketId de la raíz o de data/datos (notification:new)', () {
     expect(NotificationService.normalizar({'id': 'n1', 'tipo': 'ticket_estado', 'ticketId': 12})['ticketId'], '12');
     expect(NotificationService.normalizar({'id': 'n2', 'tipo': 'ticket_mensaje', 'data': {'ticketId': '15'}})['ticketId'], '15');
