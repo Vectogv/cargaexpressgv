@@ -15,6 +15,9 @@ import '../shared/ui_compartida.dart';
 import '../user/auth_estilos.dart';
 import '../user/auth_screen.dart';
 import 'ajustes_screen.dart';
+import 'empresa/mi_empresa_screen.dart';
+import 'empresa/registrar_empresa_screen.dart';
+import 'empresa/unirse_empresa_dialog.dart';
 import 'pagos_screen.dart';
 
 /// Portada del perfil, elegida en "Editar perfil" y guardada solo en el
@@ -396,6 +399,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
     final filas = <Widget>[
       if (_tieneDeuda)
         _fila(Icons.credit_card, 'Pagos', _abrirPagos, destacado: _suspendidoPorPago ? 'Pendiente' : null),
+      if (_profile?['empresa'] is Map)
+        _fila(Icons.business_outlined, 'Mi empresa', () async {
+          await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const MiEmpresaScreen()));
+          if (mounted) _loadProfile();
+        })
+      else if (_profile != null) ...[
+        _fila(Icons.add_business_outlined, 'Registrar mi empresa', () async {
+          final ok = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const RegistrarEmpresaScreen()));
+          if (mounted && ok == true) _loadProfile();
+        }),
+        _fila(Icons.group_add_outlined, 'Unirme a una empresa', () async {
+          if (await mostrarUnirseEmpresa(context) && mounted) _loadProfile();
+        }),
+      ],
       _fila(Icons.settings_outlined, 'Ajustes',
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AjustesScreen()))),
       _fila(Icons.emergency_outlined, 'Número de emergencia', () async {

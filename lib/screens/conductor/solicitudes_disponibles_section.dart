@@ -326,6 +326,9 @@ class SolicitudDisponibleCard extends StatelessWidget {
     final vehiculoRequerido = v['tipoVehiculoRequerido']?.toString().trim();
     final oferta = solicitud.oferta;
 
+    final cli = v['cliente'];
+    final empresaRaw = cli is Map ? cli['empresa'] : null;
+    final empresaCliente = empresaRaw is Map && '${empresaRaw['nombre'] ?? ''}'.isNotEmpty ? '${empresaRaw['nombre']}' : null;
     final tieneVehiculo = vehiculoRequerido != null && vehiculoRequerido.isNotEmpty;
 
     return TarjetaBlanca(
@@ -349,6 +352,13 @@ class SolicitudDisponibleCard extends StatelessWidget {
                 _chip(Icons.timer_off_outlined, 'Por vencer', color: ColoresApp.rojo),
             ],
           ),
+          if (empresaCliente != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _chip(Icons.verified, 'Empresa verificada · $empresaCliente', color: ColoresApp.verde),
+            ),
+          ],
           if (programada) ...[
             const SizedBox(height: 8),
             Row(children: [
@@ -496,7 +506,7 @@ class SolicitudDisponibleCard extends StatelessWidget {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 5),
-          Text(texto, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+          Flexible(child: Text(texto, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color))),
         ]),
       );
 

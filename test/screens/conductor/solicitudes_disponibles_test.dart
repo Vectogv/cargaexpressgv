@@ -17,7 +17,7 @@ void main() {
   late List<Map<String, dynamic>> cercanos;
   late List<Map<String, dynamic>> ofertas;
 
-  Map<String, dynamic> viaje(String id, {int precio = 60000, String? origen, String? tipoVehiculoRequerido}) => {
+  Map<String, dynamic> viaje(String id, {int precio = 60000, String? origen, String? tipoVehiculoRequerido, String? empresa}) => {
         'id': id,
         '_id': id,
         'estado': 'buscando_conductor',
@@ -27,7 +27,7 @@ void main() {
         'carga': 'Cajas de archivo',
         'descripcion': 'Cajas de archivo',
         'createdAt': ahora.subtract(const Duration(seconds: 40)).toIso8601String(),
-        'cliente': {'id': '2', 'nombre': 'Ana'},
+        'cliente': {'id': '2', 'nombre': 'Ana', if (empresa != null) 'empresa': {'nombre': empresa}},
         'origen': {'direccion': origen ?? 'Calle 10 #5-20', 'lat': 4.6, 'lng': -74.0},
         'destino': {'direccion': 'Carrera 7 #80-15', 'lat': 4.7, 'lng': -74.1},
         if (tipoVehiculoRequerido != null) 'tipoVehiculoRequerido': tipoVehiculoRequerido,
@@ -125,6 +125,16 @@ void main() {
       await avanzar(tester, 10);
       expect(tarjeta5, findsOneWidget);
       expect(find.text('Nueva solicitud'), findsNothing);
+      await cerrar(tester);
+    });
+  });
+
+  testWidgets('solicitud de una empresa: chip "Empresa verificada"', (tester) async {
+    cercanos = [viaje('5', empresa: 'Ferretería Cauca')];
+    await conApiFalsa(backend, () async {
+      await abrir(tester);
+      await ignorarAviso(tester);
+      expect(find.text('Empresa verificada · Ferretería Cauca'), findsOneWidget);
       await cerrar(tester);
     });
   });

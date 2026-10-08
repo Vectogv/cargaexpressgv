@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_client.dart';
 import '../../services/api/http_client.dart' show ApiException;
 import '../../services/api/payment_service.dart';
 import '../../services/socket_service_client.dart';
 import 'aviso_cuenta_pago.dart' show TransicionAlDia, deudaTrasPagoConfirmado, formatoDinero, numeroDe;
 import '../../core/formato_dinero.dart';
+import '../../core/guardar_descargas.dart';
 import '../shared/ui_compartida.dart';
 import '../../widgets/error_carga.dart';
 import '../../core/formato_hora.dart';
@@ -116,20 +115,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
     }
   }
 
-  /// Descargas pública de Android: en 11+ se crea sin permiso, en 10 lo
-  /// permite `requestLegacyExternalStorage` y en 9 o menos pide el permiso.
-  Future<void> _guardarEnDescargas(String nombre, List<int> bytes) async {
-    final file = File('/storage/emulated/0/Download/$nombre');
-    try {
-      await file.writeAsBytes(bytes, flush: true);
-    } on FileSystemException {
-      if (!await Permission.storage.request().isGranted) {
-        throw Exception('Permite el acceso al almacenamiento para guardar el PDF en Descargas');
-      }
-      await file.writeAsBytes(bytes, flush: true);
-    }
-  }
-
   Future<void> _downloadPdf(String periodo, String label) async {
     if (_downloadingPdf) return;
     setState(() => _downloadingPdf = true);
@@ -138,7 +123,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
       final a = DateTime.now();
       String dd(int n) => n.toString().padLeft(2, '0');
       final nombre = 'CargaExpress_ganancias_${periodo}_${a.year}-${dd(a.month)}-${dd(a.day)}_${dd(a.hour)}${dd(a.minute)}.pdf';
-      await _guardarEnDescargas(nombre, bytes);
+      await guardarEnDescargas(nombre, bytes);
       if (mounted) {
         showDialog<void>(
           context: context,

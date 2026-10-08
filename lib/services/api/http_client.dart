@@ -302,8 +302,9 @@ class HttpClient {
     int maxBytes = defaultMaxUploadBytes,
     String method = 'POST',
     Map<String, String>? fields,
+    List<({String fieldName, List<int> bytes, String filename})> extraFiles = const [],
   }) async {
-    if (bytes.length > maxBytes) {
+    if (bytes.length > maxBytes || extraFiles.any((f) => f.bytes.length > maxBytes)) {
       final mb = (maxBytes / (1024 * 1024)).round();
       throw ApiException(
         'La imagen supera $mb MB. Intenta con otra foto.',
@@ -326,6 +327,10 @@ class HttpClient {
         filename: filename,
         contentType: contentType,
       ));
+      for (final f in extraFiles) {
+        request.files.add(http.MultipartFile.fromBytes(f.fieldName, f.bytes,
+            filename: f.filename, contentType: mediaTypeForFilename(f.filename)));
+      }
       final streamed = await request.send();
       return http.Response.fromStream(streamed);
     }, path, auth: auth, timeout: _uploadTimeout);
